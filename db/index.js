@@ -45,7 +45,7 @@ function openDb() {
       "SELECT id, email, password_hash, role FROM users WHERE email = ?"
     ),
     selectUserById: db.prepare(
-      "SELECT id, email, role FROM users WHERE id = ?"
+      "SELECT id, email, role, created_at FROM users WHERE id = ?"
     ),
     insertUser: db.prepare(
       "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)"

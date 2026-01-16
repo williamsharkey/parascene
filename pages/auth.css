@@ -1,5 +1,38 @@
 /* Page-specific styles for auth.html */
 
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.auth-logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.auth-logo .logo {
+  display: block;
+}
+
+.auth-logo .logo-text {
+  font-family: "Montserrat", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 36px;
+  font-weight: 700;
+  font-style: italic;
+  fill: var(--text);
+  letter-spacing: -0.02em;
+}
+
+main {
+  max-width: 420px;
+  width: 100%;
+  margin: 0;
+  padding: 24px 20px;
+}
+
 section[id] {
   display: none;
 }

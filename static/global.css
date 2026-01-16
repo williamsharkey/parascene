@@ -47,9 +47,30 @@ body {
 }
 
 header {
-  padding: 28px 20px 12px;
+  padding: 12px 0px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+header .header-content {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+header .header-logo {
+  flex-shrink: 0;
+}
+
+header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
 }
 
 header h1,
@@ -68,10 +89,28 @@ header p {
   color: var(--text-muted);
 }
 
+header .logo {
+  display: block;
+}
+
+header .logo-text {
+  font-family: "Montserrat", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  font-style: italic;
+  fill: var(--text);
+  letter-spacing: -0.02em;
+}
+
 main {
+  position: relative;
   max-width: 960px;
   margin: 0 auto;
   padding: 24px 20px 48px;
+}
+
+main > section:first-of-type {
+  margin-top: 16px;
 }
 
 section {
@@ -124,6 +163,19 @@ input {
   color: inherit;
 }
 
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset !important;
+  box-shadow: 0 0 0px 1000px var(--input-bg) inset !important;
+  font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 button {
   align-self: start;
   padding: 10px 16px;
@@ -141,6 +193,44 @@ button:hover {
 
 button:active {
   transform: translateY(1px);
+}
+
+/* Secondary button style */
+.btn-secondary,
+a.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: background-color 0.2s, border-color 0.2s;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  font: inherit;
+}
+
+.btn-secondary:hover,
+a.btn-secondary:hover {
+  background: var(--surface-strong);
+  border-color: var(--accent);
+}
+
+.btn-secondary:focus-visible,
+a.btn-secondary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.btn-secondary .icon,
+a.btn-secondary .icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 input:focus-visible,
@@ -176,4 +266,23 @@ button,
 select,
 textarea {
   font: inherit;
+}
+
+/* Field display styles */
+.field {
+  margin: 12px 0;
+}
+
+.field label,
+.field .label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.field .value {
+  font-size: 1rem;
+  color: var(--text);
 }

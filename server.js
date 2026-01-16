@@ -105,6 +105,19 @@ app.get("/me", (req, res) => {
   res.json({ userId: req.session.userId || null });
 });
 
+app.get("/api/profile", (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const user = queries.selectUserById.get(req.session.userId);
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  return res.json(user);
+});
+
 app.get("/admin/users", (req, res) => {
   const users = queries.selectUsers.all();
   res.json({ users });
