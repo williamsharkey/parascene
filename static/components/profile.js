@@ -2,24 +2,27 @@ class AppProfile extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.handleHashChange = this.handleHashChange.bind(this);
+    this._isOpen = false;
     this.handleEscape = this.handleEscape.bind(this);
+    this.handleOpenEvent = this.handleOpenEvent.bind(this);
+    this.handleCloseEvent = this.handleCloseEvent.bind(this);
   }
 
   connectedCallback() {
     this.render();
     this.setupEventListeners();
-    this.handleHashChange();
   }
 
   disconnectedCallback() {
-    window.removeEventListener('hashchange', this.handleHashChange);
     document.removeEventListener('keydown', this.handleEscape);
+    document.removeEventListener('open-profile', this.handleOpenEvent);
+    document.removeEventListener('close-profile', this.handleCloseEvent);
   }
 
   setupEventListeners() {
-    window.addEventListener('hashchange', this.handleHashChange);
     document.addEventListener('keydown', this.handleEscape);
+    document.addEventListener('open-profile', this.handleOpenEvent);
+    document.addEventListener('close-profile', this.handleCloseEvent);
 
     const overlay = this.shadowRoot.querySelector('.profile-overlay');
     const closeButton = this.shadowRoot.querySelector('.profile-close');
@@ -39,12 +42,12 @@ class AppProfile extends HTMLElement {
     }
   }
 
-  handleHashChange() {
-    if (window.location.hash === '#profile') {
-      this.open();
-    } else {
-      this.close();
-    }
+  handleOpenEvent() {
+    this.open();
+  }
+
+  handleCloseEvent() {
+    this.close();
   }
 
   handleEscape(e) {
@@ -54,25 +57,27 @@ class AppProfile extends HTMLElement {
   }
 
   isOpen() {
-    const overlay = this.shadowRoot.querySelector('.profile-overlay');
-    return overlay && overlay.classList.contains('open');
+    return this._isOpen;
   }
 
   open() {
+    if (this._isOpen) return;
+    this._isOpen = true;
     const overlay = this.shadowRoot.querySelector('.profile-overlay');
     if (overlay) {
       overlay.classList.add('open');
       this.loadProfile();
     }
+    // Dispatch event to close notifications if open
+    document.dispatchEvent(new CustomEvent('close-notifications'));
   }
 
   close() {
+    if (!this._isOpen) return;
+    this._isOpen = false;
     const overlay = this.shadowRoot.querySelector('.profile-overlay');
     if (overlay) {
       overlay.classList.remove('open');
-    }
-    if (window.location.hash === '#profile') {
-      window.history.replaceState(null, '', window.location.pathname);
     }
   }
 
@@ -158,7 +163,7 @@ class AppProfile extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 10000;
+          z-index: 99999;
           opacity: 0;
           visibility: hidden;
           transition: opacity 0.2s, visibility 0.2s;

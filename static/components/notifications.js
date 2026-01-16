@@ -2,24 +2,27 @@ class AppNotifications extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.handleHashChange = this.handleHashChange.bind(this);
+    this._isOpen = false;
     this.handleEscape = this.handleEscape.bind(this);
+    this.handleOpenEvent = this.handleOpenEvent.bind(this);
+    this.handleCloseEvent = this.handleCloseEvent.bind(this);
   }
 
   connectedCallback() {
     this.render();
     this.setupEventListeners();
-    this.handleHashChange();
   }
 
   disconnectedCallback() {
-    window.removeEventListener('hashchange', this.handleHashChange);
     document.removeEventListener('keydown', this.handleEscape);
+    document.removeEventListener('open-notifications', this.handleOpenEvent);
+    document.removeEventListener('close-notifications', this.handleCloseEvent);
   }
 
   setupEventListeners() {
-    window.addEventListener('hashchange', this.handleHashChange);
     document.addEventListener('keydown', this.handleEscape);
+    document.addEventListener('open-notifications', this.handleOpenEvent);
+    document.addEventListener('close-notifications', this.handleCloseEvent);
 
     const overlay = this.shadowRoot.querySelector('.notifications-overlay');
     const closeButton = this.shadowRoot.querySelector('.notifications-close');
@@ -39,12 +42,12 @@ class AppNotifications extends HTMLElement {
     }
   }
 
-  handleHashChange() {
-    if (window.location.hash === '#notifications') {
-      this.open();
-    } else {
-      this.close();
-    }
+  handleOpenEvent() {
+    this.open();
+  }
+
+  handleCloseEvent() {
+    this.close();
   }
 
   handleEscape(e) {
@@ -54,25 +57,27 @@ class AppNotifications extends HTMLElement {
   }
 
   isOpen() {
-    const overlay = this.shadowRoot.querySelector('.notifications-overlay');
-    return overlay && overlay.classList.contains('open');
+    return this._isOpen;
   }
 
   open() {
+    if (this._isOpen) return;
+    this._isOpen = true;
     const overlay = this.shadowRoot.querySelector('.notifications-overlay');
     if (overlay) {
       overlay.classList.add('open');
       this.loadNotifications();
     }
+    // Dispatch event to close profile if open
+    document.dispatchEvent(new CustomEvent('close-profile'));
   }
 
   close() {
+    if (!this._isOpen) return;
+    this._isOpen = false;
     const overlay = this.shadowRoot.querySelector('.notifications-overlay');
     if (overlay) {
       overlay.classList.remove('open');
-    }
-    if (window.location.hash === '#notifications') {
-      window.history.replaceState(null, '', window.location.pathname);
     }
   }
 
@@ -140,7 +145,7 @@ class AppNotifications extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          z-index: 10000;
+          z-index: 99999;
           opacity: 0;
           visibility: hidden;
           transition: opacity 0.2s, visibility 0.2s;

@@ -14,18 +14,36 @@
     <script type="module" src="/global.js"></script>
   </head>
   <body>
-    <app-header show-notifications show-profile></app-header>
+    <app-header show-notifications show-profile default-route="status">
+      <a data-route="status">Status</a>
+      <a data-route="metrics">Metrics</a>
+      <a data-route="grants">Grants</a>
+      <a data-route="templates-hosted">Templates</a>
+    </app-header>
     <app-profile></app-profile>
     <app-notifications></app-notifications>
 
     <main>
-      <section>
-        <ul>
-          <li>status</li>
-          <li>metrics</li>
-          <li>grants</li>
-          <li>templates hosted</li>
-        </ul>
+      <section class="section-wip">
+        <div data-route-content="status">
+          <h3>Status</h3>
+          <p>Status content goes here...</p>
+        </div>
+        
+        <div data-route-content="metrics">
+          <h3>Metrics</h3>
+          <p>Metrics content goes here...</p>
+        </div>
+        
+        <div data-route-content="grants">
+          <h3>Grants</h3>
+          <p>Grants content goes here...</p>
+        </div>
+        
+        <div data-route-content="templates-hosted">
+          <h3>Templates</h3>
+          <p>Templates hosted content goes here...</p>
+        </div>
       </section>
     </main>
 

@@ -14,35 +14,50 @@
     <script type="module" src="/global.js"></script>
   </head>
   <body>
-    <app-header show-notifications show-profile></app-header>
+    <app-header show-notifications show-profile default-route="users">
+      <a data-route="users">Users</a>
+      <a data-route="moderation">Moderation</a>
+      <a data-route="provider-registry">Providers</a>
+      <a data-route="policy-knobs">Policies</a>
+    </app-header>
     <app-profile></app-profile>
     <app-notifications></app-notifications>
 
     <main>
-      <section>
-        <ul>
-          <li>moderation</li>
-          <li>provider registry</li>
-          <li>policy knobs</li>
-        </ul>
-      </section>
-      <section>
-        <h3>Users</h3>
-        <table id="users-table" border="1" cellpadding="6">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colspan="4">Loading...</td>
-            </tr>
-          </tbody>
-        </table>
+      <section class="section-wip">
+        <div data-route-content="moderation">
+          <h3>Moderation</h3>
+          <p>Moderation content goes here...</p>
+        </div>
+        
+        <div data-route-content="provider-registry">
+          <h3>Providers</h3>
+          <p>Provider registry content goes here...</p>
+        </div>
+        
+        <div data-route-content="policy-knobs">
+          <h3>Policies</h3>
+          <p>Policy knobs content goes here...</p>
+        </div>
+        
+        <div data-route-content="users">
+          <h3>Users</h3>
+          <table id="users-table" border="1" cellpadding="6">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="4">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
 

@@ -37,6 +37,10 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -46,18 +50,90 @@ body {
   color: var(--text);
 }
 
+/* Hide content until page is fully loaded */
+body:not(.loaded) {
+  visibility: hidden;
+  opacity: 0;
+}
+
+body.loaded {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s ease-in;
+}
+
 header {
-  padding: 12px 0px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 8px 0px;
+  background: linear-gradient(
+    to bottom,
+    rgba(246, 247, 251, 1) 0%,
+    rgba(246, 247, 251, 0.95) 20%,
+    rgba(246, 247, 251, 0.8) 50%,
+    rgba(246, 247, 251, 0.4) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.3);
+  overflow: visible;
+}
+
+@media (prefers-color-scheme: dark) {
+  header {
+    background: linear-gradient(
+      to bottom,
+      rgba(17, 24, 39, 1) 0%,
+      rgba(17, 24, 39, 0.95) 20%,
+      rgba(17, 24, 39, 0.8) 50%,
+      rgba(17, 24, 39, 0.4) 100%
+    );
+    border-bottom: 1px solid rgba(39, 50, 74, 0.3);
+  }
+}
+
+/* Subtle gradient overlay for additional depth */
+header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 30%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  header::before {
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.02) 30%,
+      transparent 100%
+    );
+  }
+}
+
+/* Ensure header content is above the gradient overlay */
+header .header-content {
+  position: relative;
+  z-index: 1;
 }
 
 header .header-content {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
+  padding: 0 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
 }
 
@@ -65,12 +141,40 @@ header .header-logo {
   flex-shrink: 0;
 }
 
+header .header-nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+header .header-nav a {
+  display: block;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+header .header-nav a:hover {
+  color: var(--text);
+}
+
+header .header-nav a.active {
+  color: var(--text);
+  font-weight: 700;
+}
+
 header .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
   position: relative;
+  flex-shrink: 0;
 }
 
 header h1,
@@ -104,21 +208,30 @@ header .logo-text {
 
 main {
   position: relative;
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 24px 24px 48px;
 }
 
 main > section:first-of-type {
   margin-top: 16px;
 }
 
-section {
+/* section {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 18px 20px;
   box-shadow: var(--shadow);
+} */
+
+.section-wip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+  min-height: 300vh;
 }
 
 section + section {
@@ -285,4 +398,63 @@ textarea {
 .field .value {
   font-size: 1rem;
   color: var(--text);
+}
+
+/* Navigation bar with active indicator */
+app-nav-bar {
+  display: block;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-bar {
+  display: flex;
+  gap: 0;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.nav-bar ul {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.nav-bar li {
+  margin: 0;
+}
+
+.nav-bar a {
+  display: block;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  position: relative;
+  transition: color 0.2s, border-color 0.2s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.nav-bar a:hover {
+  color: var(--text);
+}
+
+.nav-bar a.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* Route content sections */
+[data-route-content] {
+  display: none;
+}
+
+[data-route-content].active {
+  display: block;
 }

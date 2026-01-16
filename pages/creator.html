@@ -14,17 +14,47 @@
     <script type="module" src="/global.js"></script>
   </head>
   <body>
-    <app-header show-notifications show-profile></app-header>
+    <app-header show-notifications show-profile show-generate default-route="feed">
+      <a data-route="feed">Feed</a>
+      <a data-route="explore">Explore</a>
+      <a data-route="servers">Servers</a>
+      <a data-route="posts">Posts</a>
+      <a data-route="templates">Templates</a>
+    </app-header>
     <app-profile></app-profile>
     <app-notifications></app-notifications>
 
     <main>
-      <section>
-        <ul>
-          <li>template creation</li>
-          <li>template stats</li>
-          <li>drafts</li>
-        </ul>
+      <section class="section-wip">
+        <div data-route-content="feed">
+          <h3>Feed</h3>
+          <p>Feed content goes here...</p>
+        </div>
+        
+        <div data-route-content="explore">
+          <h3>Explore</h3>
+          <p>Explore content goes here...</p>
+        </div>
+        
+        <div data-route-content="servers">
+          <h3>Servers</h3>
+          <p>Servers content goes here...</p>
+        </div>
+        
+        <div data-route-content="posts">
+          <h3>Posts</h3>
+          <p>Posts content goes here...</p>
+        </div>
+        
+        <div data-route-content="templates">
+          <h3>Templates</h3>
+          <p>Templates content goes here...</p>
+        </div>
+        
+        <div data-route-content="generate">
+          <h3>Generate</h3>
+          <p>Generate content goes here...</p>
+        </div>
       </section>
     </main>
 
