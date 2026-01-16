@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { clearAuthCookie } from "./auth.js";
 
 function getPageForUser(user) {
   const roleToPage = {
@@ -15,15 +16,15 @@ export default function createPageRoutes({ queries, pagesDir }) {
   const router = express.Router();
 
   router.get("/", (req, res) => {
-    if (!req.session.userId) {
+    const userId = req.auth?.userId;
+    if (!userId) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(userId);
     if (!user) {
-      req.session.destroy(() => {
-        res.sendFile(path.join(pagesDir, "auth.html"));
-      });
+      clearAuthCookie(res);
+      res.sendFile(path.join(pagesDir, "auth.html"));
       return;
     }
 
@@ -47,15 +48,15 @@ export default function createPageRoutes({ queries, pagesDir }) {
 
     // Check if it's a static file request (Express static middleware handles this)
     // If we get here, it's likely a route that should serve the page
-    if (!req.session.userId) {
+    const userId = req.auth?.userId;
+    if (!userId) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(userId);
     if (!user) {
-      req.session.destroy(() => {
-        res.sendFile(path.join(pagesDir, "auth.html"));
-      });
+      clearAuthCookie(res);
+      res.sendFile(path.join(pagesDir, "auth.html"));
       return;
     }
 

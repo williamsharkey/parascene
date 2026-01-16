@@ -1,5 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { clearAuthCookie, getJwtSecret, setAuthCookie } from "./auth.js";
 
 export default function createProfileRoutes({ queries }) {
   const router = express.Router();
@@ -20,7 +22,12 @@ export default function createProfileRoutes({ queries }) {
 
     const passwordHash = bcrypt.hashSync(password, 12);
     const info = queries.insertUser.run(email, passwordHash, "consumer");
-    req.session.userId = info.lastInsertRowid;
+    const token = jwt.sign(
+      { userId: info.lastInsertRowid },
+      getJwtSecret(),
+      { expiresIn: "7d" }
+    );
+    setAuthCookie(res, token);
 
     return res.redirect("/");
   });
@@ -40,26 +47,28 @@ export default function createProfileRoutes({ queries }) {
       return res.redirect("/#auth-fail");
     }
 
-    req.session.userId = user.id;
+    const token = jwt.sign({ userId: user.id }, getJwtSecret(), {
+      expiresIn: "7d"
+    });
+    setAuthCookie(res, token);
     return res.redirect("/");
   });
 
   router.post("/logout", (req, res) => {
-    req.session.destroy(() => {
-      res.redirect("/");
-    });
+    clearAuthCookie(res);
+    res.redirect("/");
   });
 
   router.get("/me", (req, res) => {
-    res.json({ userId: req.session.userId || null });
+    res.json({ userId: req.auth?.userId || null });
   });
 
   router.get("/api/profile", (req, res) => {
-    if (!req.session.userId) {
+    if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -68,11 +77,11 @@ export default function createProfileRoutes({ queries }) {
   });
 
   router.get("/api/notifications", (req, res) => {
-    if (!req.session.userId) {
+    if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -85,11 +94,11 @@ export default function createProfileRoutes({ queries }) {
   });
 
   router.get("/api/notifications/unread-count", (req, res) => {
-    if (!req.session.userId) {
+    if (!req.auth?.userId) {
       return res.json({ count: 0 });
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.json({ count: 0 });
     }
@@ -102,11 +111,11 @@ export default function createProfileRoutes({ queries }) {
   });
 
   router.post("/api/notifications/acknowledge", (req, res) => {
-    if (!req.session.userId) {
+    if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.session.userId);
+    const user = queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
