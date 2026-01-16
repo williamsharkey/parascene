@@ -4,22 +4,22 @@ import { openDb } from "./index.js";
 const SEED_USERS = [
   {
     email: "consumer@example.com",
-    password: "password123@#",
+    password: "p123@#",
     role: "consumer"
   },
   {
     email: "creator@example.com",
-    password: "password123@#",
+    password: "p123@#",
     role: "creator"
   },
   {
     email: "provider@example.com",
-    password: "password123@#",
+    password: "p123@#",
     role: "provider"
   },
   {
     email: "admin@example.com",
-    password: "password123@#",
+    password: "p123@#",
     role: "admin"
   }
 ];

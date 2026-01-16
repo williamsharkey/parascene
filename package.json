@@ -4,8 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js",
+    "watch": "PORT=2367 node --watch server.js",
     "reset": "node db/reset.js"
   },
   "dependencies": {
