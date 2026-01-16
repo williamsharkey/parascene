@@ -24,41 +24,26 @@
     <app-notifications></app-notifications>
 
     <main>
-      <section class="section-wip">
-        <div data-route-content="moderation">
-          <h3>Moderation</h3>
-          <p>Moderation content goes here...</p>
-        </div>
-        
-        <div data-route-content="provider-registry">
-          <h3>Providers</h3>
-          <p>Provider registry content goes here...</p>
-        </div>
-        
-        <div data-route-content="policy-knobs">
-          <h3>Policies</h3>
-          <p>Policy knobs content goes here...</p>
-        </div>
-        
-        <div data-route-content="users">
-          <h3>Users</h3>
-          <table id="users-table" border="1" cellpadding="6">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colspan="4">Loading...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <section class="section-wip" data-route-content="moderation">
+        <h3>Moderation</h3>
+        <p>Moderation content goes here...</p>
       </section>
+      
+      <section class="section-wip" data-route-content="provider-registry">
+        <h3>Providers</h3>
+        <p>Provider registry content goes here...</p>
+      </section>
+      
+      <section class="section-wip" data-route-content="policy-knobs">
+        <h3>Policies</h3>
+        <p>Policy knobs content goes here...</p>
+      </section>
+      
+      <div data-route-content="users">
+        <div id="users-container" class="users-cards">
+          <div class="users-loading">Loading...</div>
+        </div>
+      </div>
     </main>
 
     <script src="/admin.js" defer></script>

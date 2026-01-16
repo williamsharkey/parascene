@@ -3,6 +3,7 @@ class AppHeader extends HTMLElement {
     super();
     this.profileMenuOpen = false;
     this.notificationsMenuOpen = false;
+    this.mobileMenuOpen = false;
     this.handleDocumentClick = this.handleDocumentClick.bind(this);
     this.handleRouteChange = this.handleRouteChange.bind(this);
     this.routes = [];
@@ -92,27 +93,29 @@ class AppHeader extends HTMLElement {
   }
 
   updateGenerateButtonState() {
-    const generateButton = this.querySelector('.generate-button');
-    if (!generateButton) return;
+    const generateButtons = this.querySelectorAll('.generate-button');
+    if (generateButtons.length === 0) return;
     
     const pathname = window.location.pathname;
     const currentRoute = pathname === '/' || pathname === '' ? this.defaultRoute : pathname.slice(1);
     const isGenerateRoute = currentRoute === 'generate';
     
-    generateButton.disabled = isGenerateRoute;
-    if (isGenerateRoute) {
-      generateButton.style.background = 'var(--surface-strong)';
-      generateButton.style.color = 'var(--text)';
-      generateButton.style.borderColor = 'var(--border)';
-      generateButton.style.cursor = 'not-allowed';
-      generateButton.style.fontWeight = '700';
-    } else {
-      generateButton.style.background = 'var(--accent)';
-      generateButton.style.color = 'var(--accent-text)';
-      generateButton.style.borderColor = 'var(--accent)';
-      generateButton.style.cursor = 'pointer';
-      generateButton.style.fontWeight = '500';
-    }
+    generateButtons.forEach(generateButton => {
+      generateButton.disabled = isGenerateRoute;
+      if (isGenerateRoute) {
+        generateButton.style.background = 'var(--surface-strong)';
+        generateButton.style.color = 'var(--text)';
+        generateButton.style.borderColor = 'var(--border)';
+        generateButton.style.cursor = 'not-allowed';
+        generateButton.style.fontWeight = '700';
+      } else {
+        generateButton.style.background = 'var(--accent)';
+        generateButton.style.color = 'var(--accent-text)';
+        generateButton.style.borderColor = 'var(--accent)';
+        generateButton.style.cursor = 'pointer';
+        generateButton.style.fontWeight = '500';
+      }
+    });
   }
 
   handleRouteChange() {
@@ -125,8 +128,8 @@ class AppHeader extends HTMLElement {
       window.history.replaceState({ route: currentRoute }, '', `/${currentRoute}`);
     }
     
-    // Update active nav link
-    const navLinks = this.querySelectorAll('.header-nav .nav-link');
+    // Update active nav link (both desktop and mobile)
+    const navLinks = this.querySelectorAll('.header-nav .nav-link, .mobile-menu .nav-link');
     navLinks.forEach(link => {
       const isActive = link.getAttribute('data-route') === currentRoute;
       link.classList.toggle('active', isActive);
@@ -150,7 +153,12 @@ class AppHeader extends HTMLElement {
     }));
   }
 
-  handleDocumentClick() {
+  handleDocumentClick(e) {
+    // Don't close menus if clicking inside the mobile menu
+    if (this.mobileMenuOpen && this.querySelector('.mobile-menu')?.contains(e.target)) {
+      return;
+    }
+    
     if (this.profileMenuOpen) {
       this.closeProfileMenu();
     }
@@ -160,6 +168,58 @@ class AppHeader extends HTMLElement {
   }
 
   setupEventListeners() {
+    const hamburgerButton = this.querySelector('.hamburger-button');
+    if (hamburgerButton) {
+      hamburgerButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleMobileMenu();
+      });
+    }
+
+    const mobileMenuClose = this.querySelector('.mobile-menu-close');
+    if (mobileMenuClose) {
+      mobileMenuClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.closeMobileMenu();
+      });
+    }
+
+    const mobileMenuBackdrop = this.querySelector('.mobile-menu-backdrop');
+    if (mobileMenuBackdrop) {
+      mobileMenuBackdrop.addEventListener('click', () => {
+        this.closeMobileMenu();
+      });
+    }
+
+    // Handle mobile menu navigation clicks
+    const mobileNavLinks = this.querySelectorAll('.mobile-menu .nav-link');
+    mobileNavLinks.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const route = link.getAttribute('data-route');
+        this.closeMobileMenu();
+        if (route) {
+          window.history.pushState({ route }, '', `/${route}`);
+          this.handleRouteChange();
+        }
+      });
+    });
+
+    // Handle mobile menu action clicks
+    const mobileGenerateButton = this.querySelector('.mobile-menu .generate-button');
+    if (mobileGenerateButton) {
+      mobileGenerateButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (mobileGenerateButton.disabled) return;
+        this.closeMobileMenu();
+        window.history.pushState({ route: 'generate' }, '', '/generate');
+        this.handleRouteChange();
+      });
+    }
+
+
     const generateButton = this.querySelector('.generate-button');
     if (generateButton) {
       generateButton.addEventListener('click', (e) => {
@@ -257,6 +317,42 @@ class AppHeader extends HTMLElement {
       menu.classList.remove('open');
     }
   }
+
+  toggleMobileMenu() {
+    this.mobileMenuOpen = !this.mobileMenuOpen;
+    const menu = this.querySelector('.mobile-menu');
+    const backdrop = this.querySelector('.mobile-menu-backdrop');
+    const hamburger = this.querySelector('.hamburger-button');
+    if (menu) {
+      menu.classList.toggle('open', this.mobileMenuOpen);
+    }
+    if (backdrop) {
+      backdrop.classList.toggle('open', this.mobileMenuOpen);
+    }
+    if (hamburger) {
+      hamburger.classList.toggle('active', this.mobileMenuOpen);
+    }
+    // Prevent body scroll when menu is open
+    document.body.style.overflow = this.mobileMenuOpen ? 'hidden' : '';
+  }
+
+  closeMobileMenu() {
+    this.mobileMenuOpen = false;
+    const menu = this.querySelector('.mobile-menu');
+    const backdrop = this.querySelector('.mobile-menu-backdrop');
+    const hamburger = this.querySelector('.hamburger-button');
+    if (menu) {
+      menu.classList.remove('open');
+    }
+    if (backdrop) {
+      backdrop.classList.remove('open');
+    }
+    if (hamburger) {
+      hamburger.classList.remove('active');
+    }
+    document.body.style.overflow = '';
+  }
+
 
   render() {
     const showNotifications = this.hasAttribute('show-notifications');
@@ -400,12 +496,298 @@ class AppHeader extends HTMLElement {
           background: var(--border);
           margin: 4px 0;
         }
+        /* Hamburger button */
+        header .hamburger-button {
+          display: none;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          width: 24px;
+          height: 24px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          margin-block: auto;
+          margin-inline: 0;
+          z-index: 1001;
+          position: relative;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        header .hamburger-button span {
+          width: 20px;
+          height: 2px;
+          background: var(--text);
+          border-radius: 1px;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          transform-origin: center;
+          display: block;
+        }
+        header .hamburger-button.active span:nth-child(1) {
+          transform: rotate(45deg) translate(5px, 5px);
+        }
+        header .hamburger-button.active span:nth-child(2) {
+          opacity: 0;
+          transform: scale(0);
+        }
+        header .hamburger-button.active span:nth-child(3) {
+          transform: rotate(-45deg) translate(5px, -5px);
+        }
+        /* Mobile menu overlay */
+        .mobile-menu {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          width: 330px;
+          max-width: 85vw;
+          height: 100vh;
+          background: var(--surface);
+          z-index: 1001;
+          transform: translateX(-100%);
+          transition: transform 0.3s ease;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        }
+        .mobile-menu.open {
+          transform: translateX(0);
+        }
+        .mobile-menu-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 1000;
+          opacity: 0;
+          visibility: hidden;
+          transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .mobile-menu-backdrop.open {
+          opacity: 1;
+          visibility: visible;
+        }
+        @media (min-width: 769px) {
+          .mobile-menu {
+            display: none;
+          }
+          .mobile-menu-backdrop {
+            display: none;
+          }
+        }
+        .mobile-menu-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 5px 0 25px;
+          border-bottom: 1px solid var(--border);
+          flex-shrink: 0;
+          min-height: 57px;
+        }
+        .mobile-menu-header .header-logo {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          line-height: 0;
+          margin: 0;
+          padding: 0;
+        }
+        .mobile-menu-header .logo {
+          height: 36px;
+          width: auto;
+          display: block;
+        }
+        .mobile-menu-header .logo-text {
+          font-family: "Montserrat", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          font-size: 24px;
+          font-weight: 700;
+          font-style: italic;
+          fill: var(--text);
+          letter-spacing: -0.02em;
+        }
+        .mobile-menu-close {
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          padding: 6px;
+          color: var(--text);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 6px;
+          transition: background-color 0.2s;
+          margin: auto;
+        }
+        .mobile-menu-close:hover {
+          background: var(--surface-strong);
+        }
+        .mobile-menu-close svg {
+          width: 25px;
+          height: 25px;
+        }
+        .mobile-menu-content {
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+        .mobile-menu-nav {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          margin-bottom: 20px;
+        }
+        .mobile-menu-nav .nav-link {
+          display: block;
+          padding: 14px 16px;
+          text-decoration: none;
+          color: var(--text-muted);
+          font-size: 0.95rem;
+          font-weight: 500;
+          border-radius: 8px;
+          transition: background-color 0.2s, color 0.2s;
+        }
+        .mobile-menu-nav .nav-link:hover {
+          background: var(--surface-strong);
+          color: var(--text);
+        }
+        .mobile-menu-nav .nav-link.active {
+          color: var(--text);
+          font-weight: 600;
+          background: var(--surface-strong);
+        }
+        .mobile-menu-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          margin-top: 20px;
+        }
+        .mobile-menu-actions .generate-button {
+          width: 100%;
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-size: 0.95rem;
+          font-weight: 600;
+        }
+        .mobile-menu-actions .action-item {
+          display: block;
+          width: 100%;
+          padding: 14px 16px;
+          text-decoration: none;
+          color: var(--text-muted);
+          font-size: 0.95rem;
+          font-weight: 500;
+          border-radius: 8px;
+          transition: background-color 0.2s, color 0.2s;
+          border: none;
+          background: transparent;
+          text-align: left;
+          cursor: pointer;
+          font: inherit;
+        }
+        .mobile-menu-actions .action-item:hover {
+          background: var(--surface-strong);
+          color: var(--text);
+        }
+        .mobile-menu-profile {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .mobile-menu-profile-item {
+          display: block;
+          padding: 14px 16px;
+          text-decoration: none;
+          color: var(--text-muted);
+          border-radius: 8px;
+          background: transparent;
+          text-align: left;
+          font-size: 0.95rem;
+          font-weight: 500;
+          transition: background-color 0.2s, color 0.2s;
+          border: none;
+          cursor: pointer;
+          font: inherit;
+        }
+        .mobile-menu-profile-item:hover {
+          background: var(--surface-strong);
+          color: var(--text);
+        }
+        .mobile-menu-profile button[type="submit"].mobile-menu-profile-item {
+          background: var(--surface-strong);
+          color: var(--text);
+          text-align: center;
+          margin-top: 8px;
+        }
+        .mobile-menu-profile button[type="submit"].mobile-menu-profile-item:hover {
+          background: var(--border);
+        }
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+          header .hamburger-button,
+          header .action-item,
+          header .header-nav a,
+          .mobile-menu .nav-link,
+          .mobile-menu .action-item,
+          .mobile-menu-close {
+            -webkit-tap-highlight-color: transparent;
+          }
+          header .hamburger-button {
+            display: flex;
+            margin-right: 12px;
+            margin-left: 0;
+            flex-shrink: 0;
+          }
+          header .header-nav {
+            display: none;
+          }
+          header .header-actions {
+            display: flex;
+            gap: 4px;
+          }
+          header .header-actions .generate-button {
+            display: none;
+          }
+          header .header-content {
+            padding: 0 16px;
+            gap: 0;
+            align-items: center;
+            min-height: 48px;
+          }
+          header .header-logo {
+            margin: 0;
+            height: 36px;
+            display: flex;
+            align-items: center;
+          }
+          header .header-logo .logo {
+            height: 36px;
+            width: auto;
+          }
+          header .header-actions {
+            margin-left: auto;
+          }
+        }
+        @media (min-width: 769px) {
+          header .hamburger-button {
+            display: none;
+          }
+        }
       </style>
       <header>
         <div class="header-content">
+          <button class="hamburger-button" aria-label="Toggle menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
           <div class="header-logo">
             <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
-              <text x="2" y="30" class="logo-text">
+              <text x="2" y="27" class="logo-text">
                 <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
               </text>
             </svg>
@@ -461,6 +843,40 @@ class AppHeader extends HTMLElement {
           </div>
         </div>
       </header>
+      <div class="mobile-menu-backdrop"></div>
+      <div class="mobile-menu">
+        <div class="mobile-menu-header">
+          <div class="header-logo">
+            <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
+              <text x="2" y="27" class="logo-text">
+                <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
+              </text>
+            </svg>
+          </div>
+          <button class="mobile-menu-close" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="mobile-menu-content">
+          <nav class="mobile-menu-nav">
+            ${(this.routes || []).map(route => {
+              const routeId = route.id;
+              const routeLabel = route.label;
+              return `<a href="/${routeId}" class="nav-link" data-route="${routeId}">${routeLabel}</a>`;
+            }).join('')}
+          </nav>
+          <div class="mobile-menu-actions">
+            ${showGenerate ? `
+              <button class="action-item generate-button" style="background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 500;">
+                Generate
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
     `;
   }
 }

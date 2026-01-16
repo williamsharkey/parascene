@@ -171,10 +171,45 @@ header .header-content {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-height: 56px;
+}
+
+app-header {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  app-header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  header {
+    padding: 4px 0px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  header .header-content {
+    min-height: 48px;
+  }
 }
 
 header .header-logo {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  margin: 0;
+  padding: 0;
+  height: 40px;
 }
 
 header .header-nav {
@@ -231,6 +266,7 @@ header p {
 
 header .logo {
   display: block;
+  margin: 0;
 }
 
 header .logo-text {
@@ -260,6 +296,10 @@ main > section:first-of-type {
   padding: 18px 20px;
   box-shadow: var(--shadow);
 } */
+
+section {
+  overflow-x: auto;
+}
 
 .section-wip {
   background: var(--surface);
