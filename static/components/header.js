@@ -3,8 +3,10 @@ class AppHeader extends HTMLElement {
     super();
     this.notificationsMenuOpen = false;
     this.mobileMenuOpen = false;
+    this.notificationsCount = 0;
     this.handleDocumentClick = this.handleDocumentClick.bind(this);
     this.handleRouteChange = this.handleRouteChange.bind(this);
+    this.handleNotificationsUpdated = this.handleNotificationsUpdated.bind(this);
     this.routes = [];
     this.defaultRoute = null;
     this.hasParsedRoutes = false;
@@ -26,6 +28,8 @@ class AppHeader extends HTMLElement {
     this.setupNavListeners();
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('popstate', this.handleRouteChange);
+    document.addEventListener('notifications-acknowledged', this.handleNotificationsUpdated);
+    this.loadNotificationCount();
     // Small delay to ensure DOM is ready for route change handler
     setTimeout(() => this.handleRouteChange(), 0);
   }
@@ -33,6 +37,7 @@ class AppHeader extends HTMLElement {
   disconnectedCallback() {
     document.removeEventListener('click', this.handleDocumentClick);
     window.removeEventListener('popstate', this.handleRouteChange);
+    document.removeEventListener('notifications-acknowledged', this.handleNotificationsUpdated);
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -51,6 +56,7 @@ class AppHeader extends HTMLElement {
       this.render();
       this.setupEventListeners();
       this.setupNavListeners();
+      this.loadNotificationCount();
     }
   }
   
@@ -115,6 +121,129 @@ class AppHeader extends HTMLElement {
         generateButton.style.fontWeight = '500';
       }
     });
+  }
+
+  async loadNotificationCount() {
+    if (!this.hasAttribute('show-notifications')) return;
+
+    try {
+      const response = await fetch('/api/notifications/unread-count');
+      if (!response.ok) throw new Error('Failed to load notifications count');
+      const data = await response.json();
+      const count = Number(data.count || 0);
+      this.updateNotificationsUI(count);
+    } catch {
+      this.updateNotificationsUI(0);
+    }
+  }
+
+  updateNotificationsUI(count) {
+    this.notificationsCount = count;
+    const badge = this.querySelector('.notifications-badge');
+    if (badge) {
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.style.display = 'inline-flex';
+      } else {
+        badge.textContent = '';
+        badge.style.display = 'none';
+      }
+    }
+
+    const status = this.querySelector('.notifications-status');
+    if (status) {
+      status.textContent =
+        count > 0
+          ? `${count} new notification${count === 1 ? '' : 's'}`
+          : 'No new notifications';
+    }
+  }
+
+  async loadNotificationPreview() {
+    if (!this.hasAttribute('show-notifications')) return;
+
+    const preview = this.querySelector('.notifications-preview');
+    if (!preview) return;
+
+    preview.innerHTML = `
+      <div class="notifications-menu-item notifications-loading">
+        Loading notifications...
+      </div>
+    `;
+
+    try {
+      const response = await fetch('/api/notifications');
+      if (response.status === 401) {
+        preview.innerHTML = `
+          <div class="notifications-menu-item notifications-loading">
+            Sign in to view notifications.
+          </div>
+        `;
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Failed to load notifications');
+      }
+      const data = await response.json();
+      const notifications = Array.isArray(data.notifications)
+        ? data.notifications.slice(0, 5)
+        : [];
+
+      preview.innerHTML = '';
+      if (notifications.length === 0) {
+        preview.innerHTML = `
+          <div class="notifications-menu-item notifications-loading">
+            No notifications yet.
+          </div>
+        `;
+        return;
+      }
+
+      for (const notification of notifications) {
+        const item = document.createElement('div');
+        item.className = 'notification-preview-item';
+        if (notification.acknowledged_at) {
+          item.classList.add('is-read');
+        } else {
+          item.classList.add('is-new');
+        }
+        item.setAttribute('role', 'button');
+        item.setAttribute('tabindex', '0');
+        item.addEventListener('click', () => {
+          document.dispatchEvent(new CustomEvent('open-notifications', {
+            detail: { notificationId: notification.id }
+          }));
+          this.closeNotificationsMenu();
+        });
+
+        const title = document.createElement('div');
+        title.className = 'notification-preview-title';
+        title.textContent = notification.title || 'Notification';
+
+        const message = document.createElement('div');
+        message.className = 'notification-preview-message';
+        message.textContent = notification.message || '';
+
+        const time = document.createElement('div');
+        time.className = 'notification-preview-time';
+        time.textContent = notification.created_at || '';
+
+        item.appendChild(title);
+        item.appendChild(message);
+        item.appendChild(time);
+        preview.appendChild(item);
+      }
+    } catch {
+      preview.innerHTML = `
+        <div class="notifications-menu-item notifications-loading">
+          Failed to load notifications.
+        </div>
+      `;
+    }
+  }
+
+  handleNotificationsUpdated() {
+    this.loadNotificationCount();
   }
 
   handleRouteChange() {
@@ -264,6 +393,9 @@ class AppHeader extends HTMLElement {
     const menu = this.querySelector('.notifications-menu');
     if (menu) {
       menu.classList.toggle('open', this.notificationsMenuOpen);
+      if (this.notificationsMenuOpen) {
+        this.loadNotificationPreview();
+      }
     }
   }
 
@@ -348,6 +480,27 @@ class AppHeader extends HTMLElement {
           flex-shrink: 0;
           display: block;
         }
+        header .notifications-button {
+          position: relative;
+        }
+        header .notifications-badge {
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          min-width: 16px;
+          height: 16px;
+          padding: 0 4px;
+          border-radius: 999px;
+          background: var(--accent);
+          color: var(--accent-text);
+          font-size: 0.65rem;
+          font-weight: 700;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid var(--surface);
+          box-sizing: border-box;
+        }
         header .header-actions > * {
           align-self: center;
         }
@@ -403,6 +556,49 @@ class AppHeader extends HTMLElement {
           height: 1px;
           background: var(--border);
           margin: 4px 0;
+        }
+        header .notifications-preview {
+          display: grid;
+          gap: 8px;
+          padding: 8px 0;
+        }
+        header .notification-preview-item {
+          display: grid;
+          gap: 4px;
+          padding: 10px 14px;
+          cursor: pointer;
+        }
+        header .notification-preview-item + .notification-preview-item {
+          border-top: 1px solid var(--border);
+        }
+        header .notification-preview-item.is-read {
+          opacity: 0.65;
+        }
+        header .notification-preview-item.is-new .notification-preview-title {
+          color: var(--text);
+        }
+        header .notification-preview-title {
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: var(--text);
+        }
+        header .notification-preview-message {
+          font-size: 0.85rem;
+          color: var(--text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        header .notification-preview-time {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+        header .notifications-loading {
+          padding: 8px 12px;
+          color: var(--text-muted);
+          font-size: 0.9rem;
         }
         /* Hamburger button */
         header .hamburger-button {
@@ -716,16 +912,15 @@ class AppHeader extends HTMLElement {
             ` : ''}
             ${showNotifications ? `
               <div style="position: relative;">
-                <button class="action-item notifications-button">
+                <button class="action-item notifications-button" aria-label="Open notifications">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                   </svg>
+                  <span class="notifications-badge" style="display: none;"></span>
                 </button>
                 <div class="notifications-menu">
-                  <div class="notifications-menu-item" style="color: var(--text-muted); cursor: default;">
-                    No new notifications
-                  </div>
+                  <div class="notifications-preview"></div>
                   <div class="notifications-menu-divider"></div>
                   <a href="#" data-action="notifications" class="notifications-menu-item">View All</a>
                 </div>

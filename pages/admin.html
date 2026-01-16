@@ -18,34 +18,40 @@
     <app-header show-notifications show-profile default-route="users">
       <a data-route="users">Users</a>
       <a data-route="moderation">Moderation</a>
-      <a data-route="provider-registry">Providers</a>
-      <a data-route="policy-knobs">Policies</a>
+      <a data-route="providers">Providers</a>
+      <a data-route="policies">Policies</a>
     </app-header>
     <app-profile></app-profile>
     <app-notifications></app-notifications>
 
     <main>
-      <section class="section-wip" data-route-content="moderation">
+      <section data-route-content="moderation">
         <h3>Moderation</h3>
-        <p>Moderation content goes here...</p>
+        <div id="moderation-container" class="admin-cards">
+          <div class="admin-loading">Loading...</div>
+        </div>
       </section>
       
-      <section class="section-wip" data-route-content="provider-registry">
+      <section data-route-content="providers">
         <h3>Providers</h3>
-        <p>You will see a list of all providers here that are registered with the system.</p>
+        <div id="providers-container" class="admin-cards">
+          <div class="admin-loading">Loading...</div>
+        </div>
       </section>
       
-      <section class="section-wip" data-route-content="policy-knobs">
+      <section data-route-content="policies">
         <h3>Policies</h3>
-        <p>You will see a list of all policies here that are configured for the system.</p>
+        <div id="policies-container" class="admin-cards">
+          <div class="admin-loading">Loading...</div>
+        </div>
       </section>
       
-      <div data-route-content="users">
+      <section data-route-content="users">
         <h3>Users</h3>
         <div id="users-container" class="users-cards">
           <div class="users-loading">Loading...</div>
         </div>
-      </div>
+      </section>
     </main>
 
     <script src="/admin.js" defer></script>
