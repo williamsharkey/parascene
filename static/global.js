@@ -3,6 +3,12 @@ import './components/header.js';
 import './components/profile.js';
 import './components/notifications.js';
 import './components/nav-bar.js';
+import './components/pages/feed.js';
+import './components/pages/explore.js';
+import './components/pages/servers.js';
+import './components/pages/posts.js';
+import './components/pages/generate.js';
+import './components/pages/templates.js';
 
 // Wait for DOM and custom elements to be ready before showing content
 async function initPage() {
@@ -14,7 +20,17 @@ async function initPage() {
   }
 
   // Wait for all custom elements to be defined
-  const customElementTags = ['app-header', 'app-profile', 'app-notifications'];
+  const customElementTags = [
+    'app-header',
+    'app-profile',
+    'app-notifications',
+    'app-route-feed',
+    'app-route-explore',
+    'app-route-servers',
+    'app-route-posts',
+    'app-route-generate',
+    'app-route-templates'
+  ];
   await Promise.all(
     customElementTags.map(tag => customElements.whenDefined(tag))
   );

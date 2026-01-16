@@ -220,6 +220,24 @@ class AppProfile extends HTMLElement {
         .profile-body {
           padding: 20px;
         }
+        .profile-actions {
+          display: flex;
+          justify-content: flex-end;
+          padding: 0 20px 20px;
+        }
+        .logout-button {
+          padding: 8px 14px;
+          border-radius: 10px;
+          border: 1px solid var(--border);
+          background: var(--surface-strong);
+          color: var(--text);
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .logout-button:hover {
+          border-color: var(--accent);
+          background: var(--surface);
+        }
         .field {
           margin: 12px 0;
         }
@@ -257,6 +275,11 @@ class AppProfile extends HTMLElement {
             <div class="profile-content">
               <p>Loading...</p>
             </div>
+          </div>
+          <div class="profile-actions">
+            <form action="/logout" method="post">
+              <button type="submit" class="logout-button">Logout</button>
+            </form>
           </div>
         </div>
       </div>

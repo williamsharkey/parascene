@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/global.css" />
     <link rel="stylesheet" href="/creator.css" />
     <script type="module" src="/global.js"></script>
@@ -17,8 +18,8 @@
     <app-header show-notifications show-profile show-generate default-route="feed">
       <a data-route="feed">Feed</a>
       <a data-route="explore">Explore</a>
-      <a data-route="servers">Servers</a>
       <a data-route="posts">Posts</a>
+      <a data-route="servers">Servers</a>
       <a data-route="templates">Templates</a>
     </app-header>
     <app-profile></app-profile>
@@ -26,35 +27,12 @@
 
     <main>
       <section class="section-wip">
-        <div data-route-content="feed">
-          <h3>Feed</h3>
-          <p>Feed content goes here...</p>
-        </div>
-        
-        <div data-route-content="explore">
-          <h3>Explore</h3>
-          <p>Explore content goes here...</p>
-        </div>
-        
-        <div data-route-content="servers">
-          <h3>Servers</h3>
-          <p>Servers content goes here...</p>
-        </div>
-        
-        <div data-route-content="posts">
-          <h3>Posts</h3>
-          <p>Posts content goes here...</p>
-        </div>
-        
-        <div data-route-content="templates">
-          <h3>Templates</h3>
-          <p>Templates content goes here...</p>
-        </div>
-        
-        <div data-route-content="generate">
-          <h3>Generate</h3>
-          <p>Generate content goes here...</p>
-        </div>
+        <app-route-feed data-route-content="feed"></app-route-feed>
+        <app-route-explore data-route-content="explore"></app-route-explore>
+        <app-route-posts data-route-content="posts"></app-route-posts>
+        <app-route-servers data-route-content="servers"></app-route-servers>
+        <app-route-templates data-route-content="templates"></app-route-templates>
+        <app-route-generate data-route-content="generate"></app-route-generate>
       </section>
     </main>
 

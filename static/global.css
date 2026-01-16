@@ -12,6 +12,9 @@
   --focus: #6d28d9;
   --shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
   --input-bg: #ffffff;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #b91c1c;
 }
 
 /* Original dark theme (commented out)
@@ -43,11 +46,15 @@
     --text: #ede9fe;
     --text-muted: #a78bfa;
     --border: #3d3552;
-    --accent: #7c3aed;
+    /* --accent: #7c3aed; */
+    --accent: #05c76f;
     --accent-text: #0f0d1a;
     --focus: #8b5cf6;
     --shadow: 0 16px 32px rgba(91, 33, 182, 0.2);
     --input-bg: #0f0d1a;
+    --error-bg: #2a1520;
+    --error-border: #5b1f35;
+    --error-text: #fda4af;
   }
 }
 
@@ -336,6 +343,28 @@ li {
 form {
   display: grid;
   gap: 12px;
+}
+
+.alert {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.alert p {
+  margin: 0;
+}
+
+.alert.error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-text);
+}
+
+.margin-bottom-1 {
+  margin-bottom: 8px;
 }
 
 label {

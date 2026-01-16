@@ -1,7 +1,6 @@
 class AppHeader extends HTMLElement {
   constructor() {
     super();
-    this.profileMenuOpen = false;
     this.notificationsMenuOpen = false;
     this.mobileMenuOpen = false;
     this.handleDocumentClick = this.handleDocumentClick.bind(this);
@@ -158,10 +157,6 @@ class AppHeader extends HTMLElement {
     if (this.mobileMenuOpen && this.querySelector('.mobile-menu')?.contains(e.target)) {
       return;
     }
-    
-    if (this.profileMenuOpen) {
-      this.closeProfileMenu();
-    }
     if (this.notificationsMenuOpen) {
       this.closeNotificationsMenu();
     }
@@ -236,7 +231,7 @@ class AppHeader extends HTMLElement {
     if (profileButton) {
       profileButton.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.toggleProfileMenu();
+        document.dispatchEvent(new CustomEvent('open-profile'));
       });
     }
 
@@ -245,22 +240,6 @@ class AppHeader extends HTMLElement {
       notificationsButton.addEventListener('click', (e) => {
         e.stopPropagation();
         this.toggleNotificationsMenu();
-      });
-    }
-
-    // Handle menu item clicks
-    const profileMenu = this.querySelector('.profile-menu');
-    if (profileMenu) {
-      profileMenu.addEventListener('click', (e) => {
-        const link = e.target.closest('a[data-action="profile"]');
-        if (link) {
-          e.preventDefault();
-          e.stopPropagation();
-          this.closeProfileMenu();
-          document.dispatchEvent(new CustomEvent('open-profile'));
-        } else {
-          e.stopPropagation();
-        }
       });
     }
 
@@ -280,30 +259,8 @@ class AppHeader extends HTMLElement {
     }
   }
 
-  toggleProfileMenu() {
-    this.profileMenuOpen = !this.profileMenuOpen;
-    if (this.profileMenuOpen) {
-      this.closeNotificationsMenu();
-    }
-    const menu = this.querySelector('.profile-menu');
-    if (menu) {
-      menu.classList.toggle('open', this.profileMenuOpen);
-    }
-  }
-
-  closeProfileMenu() {
-    this.profileMenuOpen = false;
-    const menu = this.querySelector('.profile-menu');
-    if (menu) {
-      menu.classList.remove('open');
-    }
-  }
-
   toggleNotificationsMenu() {
     this.notificationsMenuOpen = !this.notificationsMenuOpen;
-    if (this.notificationsMenuOpen) {
-      this.closeProfileMenu();
-    }
     const menu = this.querySelector('.notifications-menu');
     if (menu) {
       menu.classList.toggle('open', this.notificationsMenuOpen);
@@ -388,60 +345,6 @@ class AppHeader extends HTMLElement {
           width: 16px;
           height: 16px;
           flex-shrink: 0;
-        }
-        header .profile-menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          box-shadow: var(--shadow);
-          min-width: 180px;
-          width: 250px;
-          opacity: 0;
-          visibility: hidden;
-          transform: translateY(-8px);
-          transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
-          z-index: 1000;
-          overflow: hidden;
-        }
-        header .profile-menu.open {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(0);
-        }
-        header .profile-menu-item {
-          display: block;
-          width: 100%;
-          padding: 12px 16px;
-          text-decoration: none;
-          color: var(--text);
-          border: none;
-          background: transparent;
-          text-align: left;
-          font-size: 0.95rem;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          font: inherit;
-        }
-        header .profile-menu-item:first-child {
-          border-radius: 10px 10px 0 0;
-        }
-        header .profile-menu-item:last-child {
-          border-radius: 0 0 10px 10px;
-        }
-        header .profile-menu-item:hover {
-          background: var(--surface-strong);
-        }
-        header .profile-menu-item:focus-visible {
-          outline: 2px solid var(--focus);
-          outline-offset: -2px;
-        }
-        header .profile-menu-divider {
-          height: 1px;
-          background: var(--border);
-          margin: 4px 0;
         }
         header .notifications-menu {
           position: absolute;
@@ -824,21 +727,12 @@ class AppHeader extends HTMLElement {
               </div>
             ` : ''}
             ${showProfile ? `
-              <div style="position: relative;">
-                <button class="action-item profile-button">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                </button>
-                <div class="profile-menu">
-                  <a href="#" data-action="profile" class="profile-menu-item">Profile</a>
-                  <div class="profile-menu-divider"></div>
-                  <form action="/logout" method="post" style="margin: 0;">
-                    <button type="submit" class="profile-menu-item">Logout</button>
-                  </form>
-                </div>
-              </div>
+              <button class="action-item profile-button" aria-label="Open profile">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </button>
             ` : ''}
           </div>
         </div>
