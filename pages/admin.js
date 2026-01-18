@@ -37,7 +37,7 @@ async function loadUsers() {
 
     for (const user of data.users) {
       const card = document.createElement("div");
-      card.className = "user-card";
+      card.className = "card user-card";
 
       const email = document.createElement("div");
       email.className = "user-email";
@@ -87,7 +87,7 @@ async function loadModeration() {
 
     for (const item of data.items) {
       const card = document.createElement("div");
-      card.className = "admin-card";
+      card.className = "card admin-card";
 
       const title = document.createElement("div");
       title.className = "admin-title";
@@ -137,7 +137,7 @@ async function loadProviders() {
 
     for (const provider of data.providers) {
       const card = document.createElement("div");
-      card.className = "admin-card";
+      card.className = "card admin-card";
 
       const name = document.createElement("div");
       name.className = "admin-title";
@@ -187,7 +187,7 @@ async function loadPolicies() {
 
     for (const policy of data.policies) {
       const card = document.createElement("div");
-      card.className = "admin-card";
+      card.className = "card admin-card";
 
       const key = document.createElement("div");
       key.className = "admin-title";

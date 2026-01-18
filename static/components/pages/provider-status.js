@@ -2,36 +2,6 @@ class AppRouteProviderStatus extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
       <style>
-        .route-header {
-          margin-bottom: 12px;
-        }
-        .route-header p {
-          color: var(--text-muted);
-        }
-        .route-cards {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 12px;
-        }
-        .route-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 14px;
-          box-shadow: var(--shadow);
-          display: grid;
-          gap: 8px;
-        }
-        .route-title {
-          font-weight: 600;
-        }
-        .route-meta {
-          font-size: 0.85rem;
-          color: var(--text-muted);
-        }
-        .route-empty {
-          color: var(--text-muted);
-        }
         .status-pill {
           display: inline-flex;
           align-items: center;
@@ -44,9 +14,6 @@ class AppRouteProviderStatus extends HTMLElement {
           color: var(--text);
         }
         .route-stats {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
           font-size: 0.85rem;
         }
         .stat-label {
@@ -59,7 +26,7 @@ class AppRouteProviderStatus extends HTMLElement {
         <h3>Status</h3>
         <p>Live provider health checks and regional capacity snapshots.</p>
       </div>
-      <div class="route-cards" data-provider-status-container>
+      <div class="route-cards grid-auto-fit" data-provider-status-container>
         <div class="route-empty">Loading...</div>
       </div>
     `;
@@ -91,7 +58,7 @@ class AppRouteProviderStatus extends HTMLElement {
             <span class="status-pill">${status.status}</span>
             <span>• ${status.region}</span>
           </div>
-          <div class="route-stats">
+          <div class="grid-2-col route-stats">
             <div>
               <span class="stat-label">Uptime</span>
               ${Number(status.uptime_pct).toFixed(2)}%

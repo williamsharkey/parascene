@@ -21,18 +21,9 @@
   margin-top: 0;
 }
 
-.user-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.user-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+.user-card,
+.admin-card {
+  /* Extends .card from global.css */
 }
 
 .user-email {
@@ -51,13 +42,6 @@
 }
 
 .user-role {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--surface-strong);
-  color: var(--text);
-  font-size: 0.875rem;
-  font-weight: 600;
   text-transform: capitalize;
 }
 
@@ -73,24 +57,7 @@
   border-top: 1px solid var(--border);
 }
 
-.users-loading,
-.users-empty,
-.users-error {
-  text-align: center;
-  padding: 24px;
-  color: var(--text-muted);
-}
-
-.users-error {
-  color: var(--accent);
-}
-
 .admin-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-  box-shadow: var(--shadow);
   display: grid;
   gap: 10px;
 }
@@ -119,17 +86,6 @@
   border-top: 1px solid var(--border);
 }
 
-.admin-loading,
-.admin-empty,
-.admin-error {
-  text-align: center;
-  padding: 24px;
-  color: var(--text-muted);
-}
-
-.admin-error {
-  color: var(--accent);
-}
 
 @media (max-width: 768px) {
   .users-cards {

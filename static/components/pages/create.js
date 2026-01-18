@@ -2,16 +2,6 @@ class AppRouteCreate extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
       <style>
-        .create-route .route-header {
-          margin-bottom: 12px;
-        }
-        .create-route .route-header h3 {
-          margin: 0 0 8px 0;
-        }
-        .create-route .route-header p {
-          color: var(--text-muted);
-          margin: 0 0 16px 0;
-        }
         .create-route .create-controls {
           display: flex;
           gap: 12px;
@@ -98,7 +88,7 @@ class AppRouteCreate extends HTMLElement {
       }
 
       const image = await response.json();
-      status.textContent = "Image creation started!";
+      // status.textContent = "Image creation started!";
       status.className = "create-status";
       
       // Clear status after 2 seconds

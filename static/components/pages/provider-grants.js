@@ -2,36 +2,6 @@ class AppRouteProviderGrants extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
       <style>
-        .route-header {
-          margin-bottom: 12px;
-        }
-        .route-header p {
-          color: var(--text-muted);
-        }
-        .route-cards {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 12px;
-        }
-        .route-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 14px;
-          box-shadow: var(--shadow);
-          display: grid;
-          gap: 8px;
-        }
-        .route-title {
-          font-weight: 600;
-        }
-        .route-meta {
-          font-size: 0.85rem;
-          color: var(--text-muted);
-        }
-        .route-empty {
-          color: var(--text-muted);
-        }
         .grant-status {
           text-transform: capitalize;
         }
@@ -40,7 +10,7 @@ class AppRouteProviderGrants extends HTMLElement {
         <h3>Grants</h3>
         <p>Active funding programs and reporting milestones.</p>
       </div>
-      <div class="route-cards" data-provider-grants-container>
+      <div class="route-cards grid-auto-fit" data-provider-grants-container>
         <div class="route-empty">Loading...</div>
       </div>
     `;

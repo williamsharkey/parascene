@@ -1,43 +1,11 @@
 class AppRouteServers extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
-      <style>
-        .route-header {
-          margin-bottom: 12px;
-        }
-        .route-header p {
-          color: var(--text-muted);
-        }
-        .route-cards {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 12px;
-        }
-        .route-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 14px;
-          box-shadow: var(--shadow);
-          display: grid;
-          gap: 8px;
-        }
-        .route-title {
-          font-weight: 600;
-        }
-        .route-meta {
-          font-size: 0.85rem;
-          color: var(--text-muted);
-        }
-        .route-empty {
-          color: var(--text-muted);
-        }
-      </style>
       <div class="route-header">
         <h3>Servers</h3>
         <p>You will find a list of servers here that you can join as well as those you have already joined.</p>
       </div>
-      <div class="route-cards" data-servers-container>
+      <div class="route-cards grid-auto-fit" data-servers-container>
         <div class="route-empty">Loading...</div>
       </div>
     `;

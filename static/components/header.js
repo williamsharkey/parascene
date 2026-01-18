@@ -107,19 +107,6 @@ class AppHeader extends HTMLElement {
     
     createButtons.forEach(createButton => {
       createButton.disabled = isCreateRoute;
-      if (isCreateRoute) {
-        createButton.style.background = 'var(--surface-strong)';
-        createButton.style.color = 'var(--text)';
-        createButton.style.borderColor = 'var(--border)';
-        createButton.style.cursor = 'not-allowed';
-        createButton.style.fontWeight = '700';
-      } else {
-        createButton.style.background = 'var(--accent)';
-        createButton.style.color = 'var(--accent-text)';
-        createButton.style.borderColor = 'var(--accent)';
-        createButton.style.cursor = 'pointer';
-        createButton.style.fontWeight = '500';
-      }
     });
   }
 
@@ -143,10 +130,8 @@ class AppHeader extends HTMLElement {
     if (badge) {
       if (count > 0) {
         badge.textContent = count > 99 ? '99+' : String(count);
-        badge.style.display = 'inline-flex';
       } else {
         badge.textContent = '';
-        badge.style.display = 'none';
       }
     }
 
@@ -449,439 +434,6 @@ class AppHeader extends HTMLElement {
     const showCreate = this.hasAttribute('show-create');
 
     this.innerHTML = `
-      <style>
-        header .action-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          border-radius: 6px;
-          text-decoration: none;
-          color: var(--text);
-          background: transparent;
-          border: 1px solid transparent;
-          font-size: 0.875rem;
-          transition: background-color 0.2s, border-color 0.2s;
-          cursor: pointer;
-          font: inherit;
-          align-self: center;
-        }
-        header .action-item:hover {
-          background: var(--surface-strong);
-          border-color: var(--border);
-        }
-        header .action-item:focus-visible {
-          outline: 2px solid var(--focus);
-          outline-offset: 2px;
-        }
-        header .action-item .icon {
-          width: 16px;
-          height: 16px;
-          flex-shrink: 0;
-          display: block;
-        }
-        header .notifications-button {
-          position: relative;
-        }
-        header .notifications-badge {
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          min-width: 16px;
-          height: 16px;
-          padding: 0 4px;
-          border-radius: 999px;
-          background: var(--accent);
-          color: var(--accent-text);
-          font-size: 0.65rem;
-          font-weight: 700;
-          display: none;
-          align-items: center;
-          justify-content: center;
-          border: 2px solid var(--surface);
-          box-sizing: border-box;
-        }
-        header .header-actions > * {
-          align-self: center;
-        }
-        header .notifications-menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          box-shadow: var(--shadow);
-          width: 250px;
-          opacity: 0;
-          visibility: hidden;
-          transform: translateY(-8px);
-          transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
-          z-index: 1000;
-          overflow: hidden;
-        }
-        header .notifications-menu.open {
-          opacity: 1;
-          visibility: visible;
-          transform: translateY(0);
-        }
-        header .notifications-menu-item {
-          display: block;
-          width: 100%;
-          padding: 12px 16px;
-          text-decoration: none;
-          color: var(--text);
-          border: none;
-          background: transparent;
-          text-align: left;
-          font-size: 0.95rem;
-          cursor: pointer;
-          transition: background-color 0.2s;
-          font: inherit;
-        }
-        header .notifications-menu-item:first-child {
-          border-radius: 10px 10px 0 0;
-        }
-        header .notifications-menu-item:last-child {
-          border-radius: 0 0 10px 10px;
-        }
-        header .notifications-menu-item:hover {
-          background: var(--surface-strong);
-        }
-        header .notifications-menu-item:focus-visible {
-          outline: 2px solid var(--focus);
-          outline-offset: -2px;
-        }
-        header .notifications-menu-divider {
-          height: 1px;
-          background: var(--border);
-          margin: 4px 0;
-        }
-        header .notifications-preview {
-          display: grid;
-          gap: 8px;
-          padding: 8px 0;
-        }
-        header .notification-preview-item {
-          display: grid;
-          gap: 4px;
-          padding: 10px 14px;
-          cursor: pointer;
-        }
-        header .notification-preview-item + .notification-preview-item {
-          border-top: 1px solid var(--border);
-        }
-        header .notification-preview-item.is-read {
-          opacity: 0.65;
-        }
-        header .notification-preview-item.is-new .notification-preview-title {
-          color: var(--text);
-        }
-        header .notification-preview-title {
-          font-weight: 600;
-          font-size: 0.9rem;
-          color: var(--text);
-        }
-        header .notification-preview-message {
-          font-size: 0.85rem;
-          color: var(--text-muted);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          overflow-wrap: anywhere;
-          word-break: break-word;
-        }
-        header .notification-preview-time {
-          font-size: 0.75rem;
-          color: var(--text-muted);
-        }
-        header .notifications-loading {
-          padding: 8px 12px;
-          color: var(--text-muted);
-          font-size: 0.9rem;
-        }
-        /* Hamburger button */
-        header .hamburger-button {
-          display: none;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          width: 24px;
-          height: 24px;
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          margin-block: auto;
-          margin-inline: 0;
-          z-index: 1001;
-          position: relative;
-          gap: 4px;
-          flex-shrink: 0;
-        }
-        header .hamburger-button span {
-          width: 20px;
-          height: 2px;
-          background: var(--text);
-          border-radius: 1px;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          transform-origin: center;
-          display: block;
-        }
-        header .hamburger-button.active span:nth-child(1) {
-          transform: rotate(45deg) translate(5px, 5px);
-        }
-        header .hamburger-button.active span:nth-child(2) {
-          opacity: 0;
-          transform: scale(0);
-        }
-        header .hamburger-button.active span:nth-child(3) {
-          transform: rotate(-45deg) translate(5px, -5px);
-        }
-        /* Mobile menu overlay */
-        .mobile-menu {
-          position: fixed;
-          top: 0;
-          left: 0;
-          bottom: 0;
-          width: 330px;
-          max-width: 85vw;
-          height: 100vh;
-          background: var(--surface);
-          z-index: 1001;
-          transform: translateX(-100%);
-          transition: transform 0.3s ease;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
-        }
-        .mobile-menu.open {
-          transform: translateX(0);
-        }
-        .mobile-menu-backdrop {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          z-index: 1000;
-          opacity: 0;
-          visibility: hidden;
-          transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        .mobile-menu-backdrop.open {
-          opacity: 1;
-          visibility: visible;
-        }
-        @media (min-width: 769px) {
-          .mobile-menu {
-            display: none;
-          }
-          .mobile-menu-backdrop {
-            display: none;
-          }
-        }
-        .mobile-menu-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 5px 0 25px;
-          border-bottom: 1px solid var(--border);
-          flex-shrink: 0;
-          min-height: 57px;
-        }
-        .mobile-menu-header .header-logo {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          line-height: 0;
-          margin: 0;
-          padding: 0;
-        }
-        .mobile-menu-header .logo {
-          height: 36px;
-          width: auto;
-          display: block;
-        }
-        .mobile-menu-header .logo-text {
-          font-family: "Montserrat", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          font-size: 24px;
-          font-weight: 700;
-          font-style: italic;
-          fill: var(--text);
-          letter-spacing: -0.02em;
-        }
-        .mobile-menu-close {
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          padding: 6px;
-          color: var(--text);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 6px;
-          transition: background-color 0.2s;
-          margin: auto;
-        }
-        .mobile-menu-close:hover {
-          background: var(--surface-strong);
-        }
-        .mobile-menu-close svg {
-          width: 25px;
-          height: 25px;
-        }
-        .mobile-menu-content {
-          padding: 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-        }
-        .mobile-menu-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          margin-bottom: 20px;
-        }
-        .mobile-menu-nav .nav-link {
-          display: block;
-          padding: 14px 16px;
-          text-decoration: none;
-          color: var(--text-muted);
-          font-size: 0.95rem;
-          font-weight: 500;
-          border-radius: 8px;
-          transition: background-color 0.2s, color 0.2s;
-        }
-        .mobile-menu-nav .nav-link:hover {
-          background: var(--surface-strong);
-          color: var(--text);
-        }
-        .mobile-menu-nav .nav-link.active {
-          color: var(--text);
-          font-weight: 600;
-          background: var(--surface-strong);
-        }
-        .mobile-menu-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          margin-top: 20px;
-        }
-        .mobile-menu-actions .create-button {
-          width: 100%;
-          padding: 12px 16px;
-          border-radius: 8px;
-          font-size: 0.95rem;
-          font-weight: 600;
-        }
-        .mobile-menu-actions .action-item {
-          display: block;
-          width: 100%;
-          padding: 14px 16px;
-          text-decoration: none;
-          color: var(--text-muted);
-          font-size: 0.95rem;
-          font-weight: 500;
-          border-radius: 8px;
-          transition: background-color 0.2s, color 0.2s;
-          border: none;
-          background: transparent;
-          text-align: left;
-          cursor: pointer;
-          font: inherit;
-        }
-        .mobile-menu-actions .action-item:hover {
-          background: var(--surface-strong);
-          color: var(--text);
-        }
-        .mobile-menu-profile {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .mobile-menu-profile-item {
-          display: block;
-          padding: 14px 16px;
-          text-decoration: none;
-          color: var(--text-muted);
-          border-radius: 8px;
-          background: transparent;
-          text-align: left;
-          font-size: 0.95rem;
-          font-weight: 500;
-          transition: background-color 0.2s, color 0.2s;
-          border: none;
-          cursor: pointer;
-          font: inherit;
-        }
-        .mobile-menu-profile-item:hover {
-          background: var(--surface-strong);
-          color: var(--text);
-        }
-        .mobile-menu-profile button[type="submit"].mobile-menu-profile-item {
-          background: var(--surface-strong);
-          color: var(--text);
-          text-align: center;
-          margin-top: 8px;
-        }
-        .mobile-menu-profile button[type="submit"].mobile-menu-profile-item:hover {
-          background: var(--border);
-        }
-        /* Mobile responsive styles */
-        @media (max-width: 768px) {
-          header .hamburger-button,
-          header .action-item,
-          header .header-nav a,
-          .mobile-menu .nav-link,
-          .mobile-menu .action-item,
-          .mobile-menu-close {
-            -webkit-tap-highlight-color: transparent;
-          }
-          header .hamburger-button {
-            display: flex;
-            margin-right: 12px;
-            margin-left: 0;
-            flex-shrink: 0;
-          }
-          header .header-nav {
-            display: none;
-          }
-          header .header-actions {
-            display: flex;
-            gap: 4px;
-          }
-          header .header-actions .create-button {
-            display: none;
-          }
-          header .header-content {
-            padding: 0 16px;
-            gap: 0;
-            align-items: center;
-            min-height: 48px;
-          }
-          header .header-logo {
-            margin: 0;
-            height: 36px;
-            display: flex;
-            align-items: center;
-          }
-          header .header-logo .logo {
-            height: 36px;
-            width: auto;
-          }
-          header .header-actions {
-            margin-left: auto;
-          }
-        }
-        @media (min-width: 769px) {
-          header .hamburger-button {
-            display: none;
-          }
-        }
-      </style>
       <header>
         <div class="header-content">
           <button class="hamburger-button" aria-label="Toggle menu">
@@ -906,23 +458,24 @@ class AppHeader extends HTMLElement {
           </nav>
           <div class="header-actions">
             ${showCreate ? `
-              <button class="action-item create-button" style="background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 500;">
+              <button class="action-item create-button btn-primary">
                 Create
               </button>
             ` : ''}
             ${showNotifications ? `
-              <div style="position: relative;">
+              <div class="notifications-wrapper">
                 <button class="action-item notifications-button" aria-label="Open notifications">
                   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                   </svg>
-                  <span class="notifications-badge" style="display: none;"></span>
+                  <span class="notifications-badge"></span>
                 </button>
                 <div class="notifications-menu">
                   <div class="notifications-preview"></div>
                   <div class="notifications-menu-divider"></div>
                   <a href="#" data-action="notifications" class="notifications-menu-item">View All</a>
+                </div>
                 </div>
               </div>
             ` : ''}
@@ -964,7 +517,7 @@ class AppHeader extends HTMLElement {
           </nav>
           <div class="mobile-menu-actions">
             ${showCreate ? `
-              <button class="action-item create-button" style="background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 500;">
+              <button class="action-item create-button btn-primary">
                 Create
               </button>
             ` : ''}
