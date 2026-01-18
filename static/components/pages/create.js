@@ -2,16 +2,11 @@ class AppRouteCreate extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
       <style>
-        .create-route {
-          padding: 24px;
-        }
         .create-route .route-header {
-          margin-bottom: 24px;
+          margin-bottom: 12px;
         }
         .create-route .route-header h3 {
           margin: 0 0 8px 0;
-          font-size: 1.5rem;
-          font-weight: 600;
         }
         .create-route .route-header p {
           color: var(--text-muted);
