@@ -6,7 +6,7 @@ import { clearAuthCookie, getJwtSecret, setAuthCookie } from "./auth.js";
 export default function createProfileRoutes({ queries }) {
   const router = express.Router();
 
-  router.post("/signup", (req, res) => {
+  router.post("/signup", async (req, res) => {
     const email = String(req.body.username || req.body.email || "")
       .trim()
       .toLowerCase();
@@ -16,14 +16,17 @@ export default function createProfileRoutes({ queries }) {
       return res.status(400).send("Email and password are required.");
     }
 
-    if (queries.selectUserByEmail.get(email)) {
+    const existingUser = await queries.selectUserByEmail.get(email);
+    if (existingUser) {
       return res.status(409).send("Email already registered.");
     }
 
     const passwordHash = bcrypt.hashSync(password, 12);
-    const info = queries.insertUser.run(email, passwordHash, "consumer");
+    const info = await queries.insertUser.run(email, passwordHash, "consumer");
+    // Support both insertId (standardized) and lastInsertRowid (legacy SQLite)
+    const userId = info.insertId || info.lastInsertRowid;
     const token = jwt.sign(
-      { userId: info.lastInsertRowid },
+      { userId },
       getJwtSecret(),
       { expiresIn: "7d" }
     );
@@ -32,7 +35,7 @@ export default function createProfileRoutes({ queries }) {
     return res.redirect("/");
   });
 
-  router.post("/login", (req, res) => {
+  router.post("/login", async (req, res) => {
     const email = String(req.body.username || req.body.email || "")
       .trim()
       .toLowerCase();
@@ -42,7 +45,7 @@ export default function createProfileRoutes({ queries }) {
       return res.status(400).send("Email and password are required.");
     }
 
-    const user = queries.selectUserByEmail.get(email);
+    const user = await queries.selectUserByEmail.get(email);
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
       return res.redirect("/#auth-fail");
     }
@@ -63,12 +66,12 @@ export default function createProfileRoutes({ queries }) {
     res.json({ userId: req.auth?.userId || null });
   });
 
-  router.get("/api/profile", (req, res) => {
+  router.get("/api/profile", async (req, res) => {
     if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.auth.userId);
+    const user = await queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -76,46 +79,46 @@ export default function createProfileRoutes({ queries }) {
     return res.json(user);
   });
 
-  router.get("/api/notifications", (req, res) => {
+  router.get("/api/notifications", async (req, res) => {
     if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.auth.userId);
+    const user = await queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const notifications = queries.selectNotificationsForUser.all(
+    const notifications = await queries.selectNotificationsForUser.all(
       user.id,
       user.role
     );
     return res.json({ notifications });
   });
 
-  router.get("/api/notifications/unread-count", (req, res) => {
+  router.get("/api/notifications/unread-count", async (req, res) => {
     if (!req.auth?.userId) {
       return res.json({ count: 0 });
     }
 
-    const user = queries.selectUserById.get(req.auth.userId);
+    const user = await queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.json({ count: 0 });
     }
 
-    const result = queries.selectUnreadNotificationCount.get(
+    const result = await queries.selectUnreadNotificationCount.get(
       user.id,
       user.role
     );
     return res.json({ count: result?.count ?? 0 });
   });
 
-  router.post("/api/notifications/acknowledge", (req, res) => {
+  router.post("/api/notifications/acknowledge", async (req, res) => {
     if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const user = queries.selectUserById.get(req.auth.userId);
+    const user = await queries.selectUserById.get(req.auth.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -125,7 +128,7 @@ export default function createProfileRoutes({ queries }) {
       return res.status(400).json({ error: "Notification id required" });
     }
 
-    const result = queries.acknowledgeNotificationById.run(
+    const result = await queries.acknowledgeNotificationById.run(
       id,
       user.id,
       user.role

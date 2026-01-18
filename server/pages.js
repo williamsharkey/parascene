@@ -15,13 +15,13 @@ function getPageForUser(user) {
 export default function createPageRoutes({ queries, pagesDir }) {
   const router = express.Router();
 
-  router.get("/", (req, res) => {
+  router.get("/", async (req, res) => {
     const userId = req.auth?.userId;
     if (!userId) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    const user = queries.selectUserById.get(userId);
+    const user = await queries.selectUserById.get(userId);
     if (!user) {
       clearAuthCookie(res);
       res.sendFile(path.join(pagesDir, "auth.html"));
@@ -35,7 +35,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
   // Catch-all route for sub-routes - serve the same page for all routes
   // This allows clean URLs like /feed, /explore, etc. while serving the same HTML
   // Must come after API routes but will be handled by static middleware first for actual files
-  router.get("/*", (req, res, next) => {
+  router.get("/*", async (req, res, next) => {
     // Skip if it's an API route, static file, or known endpoint
     if (req.path.startsWith("/api/") ||
         req.path.startsWith("/admin/users") ||
@@ -53,7 +53,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    const user = queries.selectUserById.get(userId);
+    const user = await queries.selectUserById.get(userId);
     if (!user) {
       clearAuthCookie(res);
       res.sendFile(path.join(pagesDir, "auth.html"));

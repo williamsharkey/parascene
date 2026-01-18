@@ -1,9 +1,15 @@
-import fs from "fs";
-import { dbPath } from "./index.js";
+import { openDb } from "./index.js";
 
-if (fs.existsSync(dbPath)) {
-  fs.unlinkSync(dbPath);
+try {
+  // Use adapter's reset method if available
+  const { reset } = openDb();
+  if (reset) {
+    await reset();
+  }
+
+  await import("./seed.js");
+  console.log("Database reset complete.");
+} catch (error) {
+  console.error("Database reset error:", error);
+  process.exit(1);
 }
-
-await import("./seed.js");
-console.log("Database reset complete.");

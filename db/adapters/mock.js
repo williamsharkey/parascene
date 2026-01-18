@@ -190,7 +190,7 @@ const feed_items = [
   {
     id: 2,
     title: "Creator Spotlight: Nimbus",
-    summary: "A deep dive into last month’s leading creator workflows.",
+    summary: "A deep dive into last month's leading creator workflows.",
     author: "Parascene Team",
     tags: "creator,workflow",
     created_at: now
@@ -240,32 +240,25 @@ const templates = [
   }
 ];
 
-function makeStatement({ get, all, run }) {
-  return {
-    get: get || (() => undefined),
-    all: all || (() => []),
-    run: run || (() => ({ changes: 0 }))
-  };
-}
 
-function openMockDb() {
+export function openDb() {
   let nextUserId = users.length + 1;
   let nextNotificationId = notifications.length + 1;
 
   const queries = {
-    selectUserByEmail: makeStatement({
-      get: (email) => users.find((user) => user.email === email)
-    }),
-    selectUserById: makeStatement({
-      get: (id) => {
+    selectUserByEmail: {
+      get: async (email) => users.find((user) => user.email === email)
+    },
+    selectUserById: {
+      get: async (id) => {
         const user = users.find((entry) => entry.id === Number(id));
         if (!user) return undefined;
         const { password_hash, ...safeUser } = user;
         return safeUser;
       }
-    }),
-    insertUser: makeStatement({
-      run: (email, password_hash, role) => {
+    },
+    insertUser: {
+      run: async (email, password_hash, role) => {
         const user = {
           id: nextUserId++,
           email,
@@ -274,51 +267,52 @@ function openMockDb() {
           created_at: new Date().toISOString()
         };
         users.push(user);
-        return { lastInsertRowid: user.id, changes: 1 };
+        // Standardize return value: use insertId (also support lastInsertRowid for backward compat)
+        return { insertId: user.id, lastInsertRowid: user.id, changes: 1 };
       }
-    }),
-    selectUsers: makeStatement({
-      all: () =>
+    },
+    selectUsers: {
+      all: async () =>
         users.map(({ password_hash, ...safeUser }) => ({ ...safeUser }))
-    }),
-    selectModerationQueue: makeStatement({
-      all: () => [...moderation_queue]
-    }),
-    selectProviders: makeStatement({
-      all: () => [...provider_registry]
-    }),
-    selectProviderStatuses: makeStatement({
-      all: () => [...provider_statuses]
-    }),
-    selectProviderMetrics: makeStatement({
-      all: () => [...provider_metrics]
-    }),
-    selectProviderGrants: makeStatement({
-      all: () => [...provider_grants]
-    }),
-    selectProviderTemplates: makeStatement({
-      all: () => [...provider_templates]
-    }),
-    selectPolicies: makeStatement({
-      all: () => [...policy_knobs]
-    }),
-    selectNotificationsForUser: makeStatement({
-      all: (userId, role) =>
+    },
+    selectModerationQueue: {
+      all: async () => [...moderation_queue]
+    },
+    selectProviders: {
+      all: async () => [...provider_registry]
+    },
+    selectProviderStatuses: {
+      all: async () => [...provider_statuses]
+    },
+    selectProviderMetrics: {
+      all: async () => [...provider_metrics]
+    },
+    selectProviderGrants: {
+      all: async () => [...provider_grants]
+    },
+    selectProviderTemplates: {
+      all: async () => [...provider_templates]
+    },
+    selectPolicies: {
+      all: async () => [...policy_knobs]
+    },
+    selectNotificationsForUser: {
+      all: async (userId, role) =>
         notifications.filter(
           (note) => note.user_id === userId || note.role === role
         )
-    }),
-    selectUnreadNotificationCount: makeStatement({
-      get: (userId, role) => ({
+    },
+    selectUnreadNotificationCount: {
+      get: async (userId, role) => ({
         count: notifications.filter(
           (note) =>
             !note.acknowledged_at &&
             (note.user_id === userId || note.role === role)
         ).length
       })
-    }),
-    acknowledgeNotificationById: makeStatement({
-      run: (id, userId, role) => {
+    },
+    acknowledgeNotificationById: {
+      run: async (id, userId, role) => {
         const notification = notifications.find(
           (note) =>
             note.id === Number(id) &&
@@ -331,22 +325,22 @@ function openMockDb() {
         notification.acknowledged_at = new Date().toISOString();
         return { changes: 1 };
       }
-    }),
-    selectFeedItems: makeStatement({
-      all: () => [...feed_items]
-    }),
-    selectExploreItems: makeStatement({
-      all: () => [...explore_items]
-    }),
-    selectPostsForUser: makeStatement({
-      all: (userId) => posts.filter((post) => post.user_id === Number(userId))
-    }),
-    selectServers: makeStatement({
-      all: () => [...servers]
-    }),
-    selectTemplates: makeStatement({
-      all: () => [...templates]
-    })
+    },
+    selectFeedItems: {
+      all: async () => [...feed_items]
+    },
+    selectExploreItems: {
+      all: async () => [...explore_items]
+    },
+    selectPostsForUser: {
+      all: async (userId) => posts.filter((post) => post.user_id === Number(userId))
+    },
+    selectServers: {
+      all: async () => [...servers]
+    },
+    selectTemplates: {
+      all: async () => [...templates]
+    }
   };
 
   const db = {
@@ -354,7 +348,106 @@ function openMockDb() {
     exec: () => {}
   };
 
-  return { db, queries };
-}
+  async function seed(tableName, items, options = {}) {
+    if (!items || items.length === 0) return;
 
-export { openMockDb };
+    const { skipIfExists = false, transform, checkExists } = options;
+
+    // Get the appropriate array for this table
+    let targetArray;
+    switch (tableName) {
+      case "users":
+        targetArray = users;
+        break;
+      case "moderation_queue":
+        targetArray = moderation_queue;
+        break;
+      case "provider_registry":
+        targetArray = provider_registry;
+        break;
+      case "provider_statuses":
+        targetArray = provider_statuses;
+        break;
+      case "provider_metrics":
+        targetArray = provider_metrics;
+        break;
+      case "provider_grants":
+        targetArray = provider_grants;
+        break;
+      case "provider_templates":
+        targetArray = provider_templates;
+        break;
+      case "policy_knobs":
+        targetArray = policy_knobs;
+        break;
+      case "notifications":
+        targetArray = notifications;
+        break;
+      case "feed_items":
+        targetArray = feed_items;
+        break;
+      case "explore_items":
+        targetArray = explore_items;
+        break;
+      case "posts":
+        targetArray = posts;
+        break;
+      case "servers":
+        targetArray = servers;
+        break;
+      case "templates":
+        targetArray = templates;
+        break;
+      default:
+        console.warn(`Unknown table: ${tableName}`);
+        return;
+    }
+
+    // Check if we should skip seeding
+    if (skipIfExists) {
+      if (checkExists) {
+        const existing = await checkExists();
+        if (existing && existing.length > 0) return;
+      } else {
+        if (targetArray.length > 0) return;
+      }
+    }
+
+    // Insert items
+    for (const item of items) {
+      const transformedItem = transform ? transform(item) : item;
+      // Generate ID if needed
+      const newItem = { ...transformedItem };
+      if (!newItem.id) {
+        // Simple ID generation based on array length
+        newItem.id = targetArray.length > 0 
+          ? Math.max(...targetArray.map(i => i.id || 0)) + 1
+          : 1;
+      }
+      targetArray.push(newItem);
+    }
+  }
+
+  async function reset() {
+    // Clear all in-memory data arrays
+    users.length = 0;
+    moderation_queue.length = 0;
+    provider_registry.length = 0;
+    provider_statuses.length = 0;
+    provider_metrics.length = 0;
+    provider_grants.length = 0;
+    provider_templates.length = 0;
+    policy_knobs.length = 0;
+    notifications.length = 0;
+    feed_items.length = 0;
+    explore_items.length = 0;
+    posts.length = 0;
+    servers.length = 0;
+    templates.length = 0;
+    // Reset ID counters
+    nextUserId = 1;
+    nextNotificationId = 1;
+  }
+
+  return { db, queries, seed, reset };
+}
