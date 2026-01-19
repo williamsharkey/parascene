@@ -26,7 +26,19 @@ const staticDir = path.join(__dirname, "..", "static");
 const { queries } = openDb();
 
 app.use(express.static(staticDir));
-app.use(express.static(pagesDir));
+// Serve CSS/JS from pagesDir, but NEVER serve HTML files - they go through routes
+app.use('/index.css', express.static(path.join(pagesDir, 'index.css')));
+app.use('/index.js', express.static(path.join(pagesDir, 'index.js')));
+app.use('/auth.css', express.static(path.join(pagesDir, 'auth.css')));
+app.use('/auth.js', express.static(path.join(pagesDir, 'auth.js')));
+app.use('/consumer.css', express.static(path.join(pagesDir, 'consumer.css')));
+app.use('/consumer.js', express.static(path.join(pagesDir, 'consumer.js')));
+app.use('/creator.css', express.static(path.join(pagesDir, 'creator.css')));
+app.use('/creator.js', express.static(path.join(pagesDir, 'creator.js')));
+app.use('/provider.css', express.static(path.join(pagesDir, 'provider.css')));
+app.use('/provider.js', express.static(path.join(pagesDir, 'provider.js')));
+app.use('/admin.css', express.static(path.join(pagesDir, 'admin.css')));
+app.use('/admin.js', express.static(path.join(pagesDir, 'admin.js')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());

@@ -310,7 +310,7 @@ main {
   padding: 24px 24px 48px;
 }
 
-main > section:first-of-type {
+main > section:first-of-type:not(.hero) {
   margin-top: 16px;
 }
 

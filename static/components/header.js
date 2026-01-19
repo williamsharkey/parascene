@@ -8,6 +8,7 @@ class AppHeader extends HTMLElement {
     this.handleRouteChange = this.handleRouteChange.bind(this);
     this.handleNotificationsUpdated = this.handleNotificationsUpdated.bind(this);
     this.routes = [];
+    this.authLinks = [];
     this.defaultRoute = null;
     this.hasParsedRoutes = false;
   }
@@ -64,17 +65,32 @@ class AppHeader extends HTMLElement {
     // Parse routes from direct children - must be called BEFORE render()
     const children = Array.from(this.children);
     
-    const links = children.filter(child => 
+    const routeLinks = children.filter(child => 
       child.tagName === 'A' && child.hasAttribute('data-route')
     );
     
-    this.routes = links.map(link => ({
+    this.routes = routeLinks.map(link => ({
       id: link.getAttribute('data-route'),
       label: link.textContent.trim()
     }));
     
     if (!Array.isArray(this.routes)) {
       this.routes = [];
+    }
+    
+    // Parse auth links (links with class header-auth-link)
+    const authLinks = children.filter(child => 
+      child.tagName === 'A' && child.classList.contains('header-auth-link')
+    );
+    
+    this.authLinks = authLinks.map(link => ({
+      href: link.getAttribute('href') || '#',
+      text: link.textContent.trim(),
+      isPrimary: link.classList.contains('btn-primary')
+    }));
+    
+    if (!Array.isArray(this.authLinks)) {
+      this.authLinks = [];
     }
     
     this.defaultRoute = this.getAttribute('default-route') || this.routes[0]?.id;
@@ -468,6 +484,7 @@ class AppHeader extends HTMLElement {
     const showNotifications = this.hasAttribute('show-notifications');
     const showProfile = this.hasAttribute('show-profile');
     const showCreate = this.hasAttribute('show-create');
+    const hasAuthLinks = (this.authLinks || []).length > 0;
 
     this.innerHTML = `
       <header>
@@ -478,11 +495,13 @@ class AppHeader extends HTMLElement {
             <span></span>
           </button>
           <div class="header-logo">
-            <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
-              <text x="2" y="27" class="logo-text">
-                <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
-              </text>
-            </svg>
+            <a href="/" style="text-decoration: none; display: block;">
+              <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
+                <text x="2" y="27" class="logo-text">
+                  <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
+                </text>
+              </svg>
+            </a>
           </div>
           <nav class="header-nav">
             ${(this.routes || []).map(route => {
@@ -493,6 +512,9 @@ class AppHeader extends HTMLElement {
             }).join('')}
           </nav>
           <div class="header-actions">
+            ${hasAuthLinks ? (this.authLinks || []).map(authLink => 
+              `<a href="${authLink.href}" class="header-auth-link ${authLink.isPrimary ? 'btn-primary' : ''}">${authLink.text}</a>`
+            ).join('') : ''}
             ${showCreate ? `
               <button class="action-item create-button btn-primary">
                 Create
@@ -530,11 +552,13 @@ class AppHeader extends HTMLElement {
       <div class="mobile-menu">
         <div class="mobile-menu-header">
           <div class="header-logo">
-            <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
-              <text x="2" y="27" class="logo-text">
-                <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
-              </text>
-            </svg>
+            <a href="/" style="text-decoration: none; display: block;">
+              <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
+                <text x="2" y="27" class="logo-text">
+                  <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
+                </text>
+              </svg>
+            </a>
           </div>
           <button class="mobile-menu-close" aria-label="Close menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -552,6 +576,9 @@ class AppHeader extends HTMLElement {
             }).join('')}
           </nav>
           <div class="mobile-menu-actions">
+            ${hasAuthLinks ? (this.authLinks || []).map(authLink => 
+              `<a href="${authLink.href}" class="header-auth-link ${authLink.isPrimary ? 'btn-primary' : ''}" style="display: block; width: 100%; text-align: center; margin-bottom: 8px;">${authLink.text}</a>`
+            ).join('') : ''}
             ${showCreate ? `
               <button class="action-item create-button btn-primary">
                 Create

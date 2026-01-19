@@ -15,19 +15,23 @@ function getPageForUser(user) {
 export default function createPageRoutes({ queries, pagesDir }) {
   const router = express.Router();
 
-  router.get("/", async (req, res) => {
+  // Handle root and index.html - same logic
+  router.get(["/", "/index.html"], async (req, res) => {
     const userId = req.auth?.userId;
+    
+    // NOT logged in → landing page
     if (!userId) {
-      return res.sendFile(path.join(pagesDir, "auth.html"));
+      return res.sendFile(path.join(pagesDir, "index.html"));
     }
 
+    // Logged in → get role and serve role page
     const user = await queries.selectUserById.get(userId);
     if (!user) {
       clearAuthCookie(res);
-      res.sendFile(path.join(pagesDir, "auth.html"));
-      return;
+      return res.sendFile(path.join(pagesDir, "index.html"));
     }
 
+    // Serve role-based page
     const page = getPageForUser(user);
     return res.sendFile(path.join(pagesDir, page));
   });
@@ -84,7 +88,6 @@ export default function createPageRoutes({ queries, pagesDir }) {
 
   // Catch-all route for sub-routes - serve the same page for all routes
   // This allows clean URLs like /feed, /explore, etc. while serving the same HTML
-  // Must come after API routes but will be handled by static middleware first for actual files
   router.get("/*", async (req, res, next) => {
     // Skip if it's an API route, static file, or known endpoint
     if (req.path.startsWith("/api/") ||
@@ -93,25 +96,27 @@ export default function createPageRoutes({ queries, pagesDir }) {
         req.path === "/me" ||
         req.path === "/signup" ||
         req.path === "/login" ||
-        req.path === "/logout") {
+        req.path === "/logout" ||
+        req.path === "/index.html") {
       return next(); // Let other routes handle it or 404
     }
 
-    // Check if it's a static file request (Express static middleware handles this)
-    // If we get here, it's likely a route that should serve the page
     const userId = req.auth?.userId;
+    
+    // If NOT logged in → require authentication
     if (!userId) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
+    // If logged in → get user and their role
     const user = await queries.selectUserById.get(userId);
     if (!user) {
       clearAuthCookie(res);
-      res.sendFile(path.join(pagesDir, "auth.html"));
-      return;
+      return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    // Serve the same page for all routes - client-side routing handles the rest
+    // User is logged in and has a role → serve their role-based page
+    // Client-side routing handles the rest (feed, explore, etc.)
     const page = getPageForUser(user);
     return res.sendFile(path.join(pagesDir, page));
   });
