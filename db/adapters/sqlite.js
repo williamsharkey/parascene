@@ -206,6 +206,38 @@ function initSchema(db) {
   } catch {
     // Column already exists.
   }
+
+  // Add published fields to created_images table
+  try {
+    db.exec("ALTER TABLE created_images ADD COLUMN published INTEGER NOT NULL DEFAULT 0;");
+  } catch {
+    // Column already exists.
+  }
+
+  try {
+    db.exec("ALTER TABLE created_images ADD COLUMN published_at TEXT;");
+  } catch {
+    // Column already exists.
+  }
+
+  try {
+    db.exec("ALTER TABLE created_images ADD COLUMN title TEXT;");
+  } catch {
+    // Column already exists.
+  }
+
+  try {
+    db.exec("ALTER TABLE created_images ADD COLUMN description TEXT;");
+  } catch {
+    // Column already exists.
+  }
+
+  // Add created_image_id to feed_items table
+  try {
+    db.exec("ALTER TABLE feed_items ADD COLUMN created_image_id INTEGER;");
+  } catch {
+    // Column already exists.
+  }
 }
 
 export function openDb() {
@@ -360,9 +392,12 @@ export function openDb() {
     selectFeedItems: {
       all: async () => {
         const stmt = db.prepare(
-          `SELECT id, title, summary, author, tags, created_at
-           FROM feed_items
-           ORDER BY created_at DESC`
+          `SELECT fi.id, fi.title, fi.summary, fi.author, fi.tags, fi.created_at, 
+                  fi.created_image_id, ci.filename, ci.user_id,
+                  CASE WHEN ci.filename IS NOT NULL THEN '/images/created/' || ci.filename ELSE NULL END as url
+           FROM feed_items fi
+           LEFT JOIN created_images ci ON fi.created_image_id = ci.id
+           ORDER BY fi.created_at DESC`
         );
         return Promise.resolve(stmt.all());
       }
@@ -446,7 +481,8 @@ export function openDb() {
     selectCreatedImagesForUser: {
       all: async (userId) => {
         const stmt = db.prepare(
-          `SELECT id, filename, file_path, width, height, color, status, created_at
+          `SELECT id, filename, file_path, width, height, color, status, created_at, 
+                  published, published_at, title, description
            FROM created_images
            WHERE user_id = ?
            ORDER BY created_at DESC`
@@ -457,11 +493,48 @@ export function openDb() {
     selectCreatedImageById: {
       get: async (id, userId) => {
         const stmt = db.prepare(
-          `SELECT id, filename, file_path, width, height, color, status, created_at
+          `SELECT id, filename, file_path, width, height, color, status, created_at,
+                  published, published_at, title, description, user_id
            FROM created_images
            WHERE id = ? AND user_id = ?`
         );
         return Promise.resolve(stmt.get(id, userId));
+      }
+    },
+    selectCreatedImageByIdAnyUser: {
+      get: async (id) => {
+        const stmt = db.prepare(
+          `SELECT id, filename, file_path, width, height, color, status, created_at,
+                  published, published_at, title, description, user_id
+           FROM created_images
+           WHERE id = ?`
+        );
+        return Promise.resolve(stmt.get(id));
+      }
+    },
+    publishCreatedImage: {
+      run: async (id, userId, title, description) => {
+        const stmt = db.prepare(
+          `UPDATE created_images
+           SET published = 1, published_at = datetime('now'), title = ?, description = ?
+           WHERE id = ? AND user_id = ?`
+        );
+        const result = stmt.run(title, description, id, userId);
+        return Promise.resolve({ changes: result.changes });
+      }
+    },
+    insertFeedItem: {
+      run: async (title, summary, author, tags, createdImageId) => {
+        const stmt = db.prepare(
+          `INSERT INTO feed_items (title, summary, author, tags, created_image_id)
+           VALUES (?, ?, ?, ?, ?)`
+        );
+        const result = stmt.run(title, summary, author, tags || null, createdImageId || null);
+        return Promise.resolve({
+          insertId: result.lastInsertRowid,
+          lastInsertRowid: result.lastInsertRowid,
+          changes: result.changes
+        });
       }
     }
   };

@@ -110,7 +110,11 @@ export default function createCreateRoutes({ queries }) {
         height: img.height,
         color: img.color,
         status: img.status || 'completed', // Default to completed for backward compatibility
-        created_at: img.created_at
+        created_at: img.created_at,
+        published: img.published === 1 || img.published === true,
+        published_at: img.published_at || null,
+        title: img.title || null,
+        description: img.description || null
       }));
 
       return res.json({ images: imagesWithUrls });
@@ -126,13 +130,26 @@ export default function createCreateRoutes({ queries }) {
     if (!user) return;
 
     try {
-      const image = await queries.selectCreatedImageById.get(
+      // First try to get as owner
+      let image = await queries.selectCreatedImageById.get(
         req.params.id,
         user.id
       );
 
+      // If not found as owner, check if it exists and is published
       if (!image) {
-        return res.status(404).json({ error: "Image not found" });
+        const anyImage = await queries.selectCreatedImageByIdAnyUser.get(req.params.id);
+        if (anyImage && (anyImage.published === 1 || anyImage.published === true)) {
+          image = anyImage;
+        } else {
+          return res.status(404).json({ error: "Image not found" });
+        }
+      }
+
+      // Get user information for the creator
+      let creator = null;
+      if (image.user_id) {
+        creator = await queries.selectUserById.get(image.user_id);
       }
 
       return res.json({
@@ -143,11 +160,98 @@ export default function createCreateRoutes({ queries }) {
         height: image.height,
         color: image.color,
         status: image.status || 'completed',
-        created_at: image.created_at
+        created_at: image.created_at,
+        published: image.published === 1 || image.published === true,
+        published_at: image.published_at || null,
+        title: image.title || null,
+        description: image.description || null,
+        user_id: image.user_id,
+        creator: creator ? {
+          id: creator.id,
+          email: creator.email,
+          role: creator.role
+        } : null
       });
     } catch (error) {
       console.error("Error fetching image:", error);
       return res.status(500).json({ error: "Failed to fetch image" });
+    }
+  });
+
+  // POST /api/create/images/:id/publish - Publish a creation
+  router.post("/api/create/images/:id/publish", async (req, res) => {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    try {
+      const { title, description } = req.body;
+
+      if (!title || title.trim() === '') {
+        return res.status(400).json({ error: "Title is required" });
+      }
+
+      // Get the image to verify ownership and status
+      const image = await queries.selectCreatedImageById.get(
+        req.params.id,
+        user.id
+      );
+
+      if (!image) {
+        return res.status(404).json({ error: "Image not found" });
+      }
+
+      if (image.status !== 'completed') {
+        return res.status(400).json({ error: "Image must be completed before publishing" });
+      }
+
+      if (image.published === 1 || image.published === true) {
+        return res.status(400).json({ error: "Image is already published" });
+      }
+
+      // Publish the image
+      const publishResult = await queries.publishCreatedImage.run(
+        req.params.id,
+        user.id,
+        title.trim(),
+        description ? description.trim() : null
+      );
+
+      if (publishResult.changes === 0) {
+        return res.status(500).json({ error: "Failed to publish image" });
+      }
+
+      // Create feed item
+      await queries.insertFeedItem.run(
+        title.trim(),
+        description ? description.trim() : '',
+        user.email || 'User',
+        null, // tags
+        parseInt(req.params.id)
+      );
+
+      // Get updated image
+      const updatedImage = await queries.selectCreatedImageById.get(
+        req.params.id,
+        user.id
+      );
+
+      return res.json({
+        id: updatedImage.id,
+        filename: updatedImage.filename,
+        url: `/images/created/${updatedImage.filename}`,
+        width: updatedImage.width,
+        height: updatedImage.height,
+        color: updatedImage.color,
+        status: updatedImage.status || 'completed',
+        created_at: updatedImage.created_at,
+        published: true,
+        published_at: updatedImage.published_at,
+        title: updatedImage.title,
+        description: updatedImage.description
+      });
+    } catch (error) {
+      console.error("Error publishing image:", error);
+      return res.status(500).json({ error: "Failed to publish image" });
     }
   });
 

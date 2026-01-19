@@ -65,6 +65,24 @@ class AppRouteCreations extends HTMLElement {
     }
   }
 
+  getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffDays / 365);
+
+    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    return 'just now';
+  }
+
   startPolling() {
     // Poll every 2 seconds for creations that are still being created
     this.pollInterval = setInterval(() => {
@@ -198,6 +216,27 @@ class AppRouteCreations extends HTMLElement {
             window.location.href = `/creations/${item.id}`;
           });
           
+          const isPublished = item.published === true || item.published === 1;
+          let publishedBadge = '';
+          let publishedInfo = '';
+          
+          if (isPublished && item.published_at) {
+            const publishedDate = new Date(item.published_at);
+            const publishedTimeAgo = this.getTimeAgo(publishedDate);
+            
+            publishedBadge = `
+              <div class="creation-published-badge" title="Published">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </div>
+            `;
+            
+            publishedInfo = `<div class="route-meta">Published ${publishedTimeAgo}</div>`;
+          }
+          
           card.innerHTML = `
             <div 
               class="route-media"
@@ -206,11 +245,13 @@ class AppRouteCreations extends HTMLElement {
               data-image-id="${item.id}"
               data-status="completed"
             ></div>
+            ${publishedBadge}
             <div class="route-details">
               <div class="route-details-content">
-                <div class="route-title">Creation</div>
+                <div class="route-title">${item.title || 'Creation'}</div>
                 <div class="route-summary">${item.width} × ${item.height}px</div>
-                <div class="route-meta">${item.created_at}</div>
+                ${publishedInfo}
+                <div class="route-meta">Created ${this.getTimeAgo(new Date(item.created_at))}</div>
                 <div class="route-meta route-meta-spacer"></div>
                 <div class="route-tags">Color: ${item.color || 'N/A'}</div>
               </div>

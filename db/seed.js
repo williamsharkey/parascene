@@ -536,33 +536,6 @@ const { queries, seed } = openDb();
       skipIfExists: true
     });
 
-    // Seed feed_items
-    const existingFeedItems = await queries.selectFeedItems.all();
-    if (existingFeedItems.length === 0) {
-      await seed("feed_items", seedData.feed_items);
-
-      // Generate additional feed items
-      const { targetCount, titles, summaries, authors, tags } = seedData.feed_items_generated;
-      const generatedCount = Math.max(0, targetCount - seedData.feed_items.length);
-      const generatedItems = [];
-
-      for (let i = 0; i < generatedCount; i += 1) {
-        const title = titles[i % titles.length];
-        const summary = summaries[i % summaries.length];
-        const author = authors[i % authors.length];
-        const tagList = `${tags[i % tags.length]},${tags[(i + 3) % tags.length]}`;
-        
-        generatedItems.push({
-          title: `${title} #${i + 1}`,
-          summary,
-          author,
-          tags: tagList
-        });
-      }
-
-      await seed("feed_items", generatedItems);
-    }
-
     // Seed explore_items
     await seed("explore_items", seedData.explore_items, {
       skipIfExists: true,

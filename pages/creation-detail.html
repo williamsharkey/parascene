@@ -57,6 +57,52 @@
     <app-profile></app-profile>
     <app-notifications></app-notifications>
 
+    <!-- Publish Modal -->
+    <div class="publish-modal-overlay" data-publish-modal>
+      <div class="publish-modal">
+        <div class="publish-modal-loading" data-publish-loading>
+          <div class="publish-spinner"></div>
+        </div>
+        <div class="publish-modal-header">
+          <h2>Publish Creation</h2>
+          <button class="publish-modal-close" aria-label="Close" data-publish-modal-close>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="publish-modal-body">
+          <div class="publish-alert" data-publish-alert style="display: none;">
+            <span class="publish-alert-message" data-publish-alert-message></span>
+            <button class="publish-alert-close" data-publish-alert-close aria-label="Close alert">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="publish-field">
+            <label for="publish-title">Title</label>
+            <input type="text" id="publish-title" name="title" placeholder="Enter a title for your creation" />
+          </div>
+          <div class="publish-field">
+            <label for="publish-description">Description</label>
+            <textarea id="publish-description" name="description" rows="4" placeholder="Describe your creation..."></textarea>
+          </div>
+        </div>
+        <div class="publish-modal-footer">
+          <a href="#" class="publish-cancel-link" data-publish-modal-close>Cancel</a>
+          <button class="btn-primary publish-submit-btn" data-publish-submit>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 6px; vertical-align: middle;">
+              <path d="M1.5 8L14.5 1.5L10.5 14.5L8 9L1.5 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            Publish
+          </button>
+        </div>
+      </div>
+    </div>
+
     <main>
       <div class="creation-detail-route">
         <div class="creation-detail-hero">
@@ -67,7 +113,12 @@
         </div>
         <div class="creation-detail-footer">
           <div class="creation-detail-actions">
-            <button class="creation-detail-action-btn">→ Expand</button>
+            <button class="creation-detail-action-btn btn-primary" data-publish-btn>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 6px; vertical-align: middle;">
+                <path d="M1.5 8L14.5 1.5L10.5 14.5L8 9L1.5 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+              Publish
+            </button>
             <button class="creation-detail-action-btn">⚙️ Adjust & Crop</button>
             <button class="creation-detail-action-btn">⋮ More</button>
           </div>
@@ -156,19 +207,94 @@
           const date = new Date(creation.created_at);
           const timeAgo = getTimeAgo(date);
           
-          // Generate title from filename or use default
-          const title = creation.filename 
+          // Generate title from published title, filename, or use default
+          const isPublished = creation.published === true || creation.published === 1;
+          const displayTitle = creation.title || (creation.filename 
             ? creation.filename.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
-            : 'Creation';
+            : 'Creation');
+          
+          // Check if current user owns this creation
+          let currentUserId = null;
+          try {
+            const profileResponse = await fetch('/api/profile');
+            if (profileResponse.ok) {
+              const profile = await profileResponse.json();
+              currentUserId = profile.id;
+            }
+          } catch (error) {
+            console.error('Error fetching user profile:', error);
+          }
+          
+          const isOwner = currentUserId && creation.user_id && currentUserId === creation.user_id;
+          
+          // Update publish button - hide if not owner, disable if already published
+          const publishBtn = document.querySelector('[data-publish-btn]');
+          if (publishBtn) {
+            if (!isOwner) {
+              // Hide publish button if user doesn't own the creation
+              publishBtn.style.display = 'none';
+            } else {
+              // Button is active (enabled) when not already published
+              publishBtn.style.display = '';
+              publishBtn.disabled = isPublished;
+              
+              // Create SVG icon
+              const svgIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+              svgIcon.setAttribute('width', '16');
+              svgIcon.setAttribute('height', '16');
+              svgIcon.setAttribute('viewBox', '0 0 16 16');
+              svgIcon.setAttribute('fill', 'none');
+              svgIcon.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+              svgIcon.style.marginRight = '6px';
+              svgIcon.style.verticalAlign = 'middle';
+              
+              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+              path.setAttribute('d', 'M1.5 8L14.5 1.5L10.5 14.5L8 9L1.5 8Z');
+              path.setAttribute('stroke', 'currentColor');
+              path.setAttribute('stroke-width', '1.5');
+              path.setAttribute('stroke-linecap', 'round');
+              path.setAttribute('stroke-linejoin', 'round');
+              path.setAttribute('fill', 'none');
+              svgIcon.appendChild(path);
+              
+              // Update button content
+              publishBtn.innerHTML = '';
+              publishBtn.appendChild(svgIcon);
+              publishBtn.appendChild(document.createTextNode(isPublished ? ' Published' : ' Publish'));
+            }
+          }
+          
+          // Build published info if published
+          let publishedInfo = '';
+          if (isPublished && creation.published_at) {
+            const publishedDate = new Date(creation.published_at);
+            const publishedTimeAgo = getTimeAgo(publishedDate);
+            publishedInfo = `
+              <div class="creation-detail-published">
+                <div class="creation-detail-published-label">Published ${publishedTimeAgo}</div>
+                ${creation.description ? `<div class="creation-detail-description">${creation.description}</div>` : ''}
+              </div>
+            `;
+          }
+          
+          // Get creator information
+          const creatorName = creation.creator?.email 
+            ? creation.creator.email.split('@')[0] 
+            : 'User';
+          const creatorHandle = creation.creator?.email 
+            ? `@${creation.creator.email.split('@')[0]}` 
+            : '@user';
+          const creatorInitial = creatorName.charAt(0).toUpperCase();
           
           detailContent.innerHTML = `
             <div class="creation-detail-author">
-              <span class="creation-detail-author-icon">S</span>
-              <span class="creation-detail-author-name">User</span>
-              <span class="creation-detail-author-handle">@user</span>
+              <span class="creation-detail-author-icon">${creatorInitial}</span>
+              <span class="creation-detail-author-name">${creatorName}</span>
+              <span class="creation-detail-author-handle">${creatorHandle}</span>
               <span class="creation-detail-date">${timeAgo}</span>
             </div>
-            <div class="creation-detail-title">${title}</div>
+            <div class="creation-detail-title">${displayTitle}</div>
+            ${publishedInfo}
             <div class="creation-detail-meta">
               <span>Created ${timeAgo}</span>
               <span>•</span>
@@ -207,10 +333,181 @@
         }
       }
 
-      // Load creation when page loads
+      // Publish modal functionality
+      function openPublishModal() {
+        const modal = document.querySelector('[data-publish-modal]');
+        if (modal) {
+          modal.classList.add('open');
+          document.body.style.overflow = 'hidden';
+          // Hide any existing alert
+          hidePublishAlert();
+          // Focus on title input
+          const titleInput = document.getElementById('publish-title');
+          if (titleInput) {
+            setTimeout(() => titleInput.focus(), 100);
+          }
+        }
+      }
+
+      function closePublishModal() {
+        const modal = document.querySelector('[data-publish-modal]');
+        if (modal) {
+          modal.classList.remove('open');
+          document.body.style.overflow = '';
+          // Clear form
+          const titleInput = document.getElementById('publish-title');
+          const descriptionTextarea = document.getElementById('publish-description');
+          if (titleInput) titleInput.value = '';
+          if (descriptionTextarea) descriptionTextarea.value = '';
+          // Hide alert
+          hidePublishAlert();
+        }
+      }
+
+      function showPublishAlert(message, isError = true) {
+        const alert = document.querySelector('[data-publish-alert]');
+        const alertMessage = document.querySelector('[data-publish-alert-message]');
+        if (alert && alertMessage) {
+          alertMessage.textContent = message;
+          alert.className = `publish-alert ${isError ? 'publish-alert-error' : 'publish-alert-success'}`;
+          alert.style.display = 'flex';
+        }
+      }
+
+      function hidePublishAlert() {
+        const alert = document.querySelector('[data-publish-alert]');
+        if (alert) {
+          alert.style.display = 'none';
+        }
+      }
+
+      // Close alert button handler
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-publish-alert-close]')) {
+          hidePublishAlert();
+        }
+      });
+
+      // Set up modal event listeners
       document.addEventListener('DOMContentLoaded', () => {
         checkAndLoadCreation();
       });
+
+      // Open modal when publish button is clicked
+      document.addEventListener('click', (e) => {
+        const publishBtn = e.target.closest('[data-publish-btn]');
+        if (publishBtn && !publishBtn.disabled) {
+          e.preventDefault();
+          openPublishModal();
+        }
+      });
+
+      // Close modal handlers - set up after DOM is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.querySelector('[data-publish-modal]');
+        if (modal) {
+          // Close on overlay click (but not when clicking inside the modal)
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+              closePublishModal();
+            }
+          });
+
+          // Close on X button or cancel link
+          const closeButtons = document.querySelectorAll('[data-publish-modal-close]');
+          closeButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              closePublishModal();
+            });
+          });
+        }
+      });
+
+      // Close on Escape key
+      document.addEventListener('keydown', (e) => {
+        const modal = document.querySelector('[data-publish-modal]');
+        if (e.key === 'Escape' && modal && modal.classList.contains('open')) {
+          const loading = document.querySelector('[data-publish-loading]');
+          if (!loading || !loading.classList.contains('active')) {
+            closePublishModal();
+          }
+        }
+      });
+
+      // Publish submission handler
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-publish-submit]')) {
+          e.preventDefault();
+          handlePublish();
+        }
+      });
+
+      async function handlePublish() {
+        const creationId = getCreationId();
+        if (!creationId) {
+          showPublishAlert('Invalid creation ID');
+          return;
+        }
+
+        const titleInput = document.getElementById('publish-title');
+        const descriptionTextarea = document.getElementById('publish-description');
+        const loadingOverlay = document.querySelector('[data-publish-loading]');
+        const modal = document.querySelector('[data-publish-modal]');
+        const submitBtn = document.querySelector('[data-publish-submit]');
+        const cancelLink = document.querySelector('.publish-cancel-link');
+
+        if (!titleInput || !loadingOverlay || !modal) return;
+
+        const title = titleInput.value.trim();
+        const description = descriptionTextarea ? descriptionTextarea.value.trim() : '';
+
+        if (!title) {
+          showPublishAlert('Title is required');
+          titleInput.focus();
+          return;
+        }
+
+        // Hide any existing alert
+        hidePublishAlert();
+
+        // Show loading state
+        loadingOverlay.classList.add('active');
+        titleInput.disabled = true;
+        if (descriptionTextarea) descriptionTextarea.disabled = true;
+        submitBtn.disabled = true;
+        cancelLink.style.pointerEvents = 'none';
+        cancelLink.style.opacity = '0.5';
+
+        try {
+          const response = await fetch(`/api/create/images/${creationId}/publish`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title, description })
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to publish creation');
+          }
+
+          // Success - navigate to creation detail page
+          window.location.href = `/creations/${creationId}`;
+        } catch (error) {
+          console.error('Error publishing creation:', error);
+          showPublishAlert(error.message || 'Failed to publish creation. Please try again.');
+          
+          // Hide loading state
+          loadingOverlay.classList.remove('active');
+          titleInput.disabled = false;
+          if (descriptionTextarea) descriptionTextarea.disabled = false;
+          submitBtn.disabled = false;
+          cancelLink.style.pointerEvents = '';
+          cancelLink.style.opacity = '';
+        }
+      }
 
       // Listen for URL changes (browser back/forward navigation)
       // Use capture phase to ensure we get the event before header handles it

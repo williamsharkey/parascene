@@ -45,16 +45,24 @@ export default function createPageRoutes({ queries, pagesDir }) {
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
-    // Verify the creation exists and belongs to the user
+    // Verify the creation exists and is either published or belongs to the user
     const creationId = parseInt(req.params.id, 10);
     if (!creationId) {
       return res.status(404).send("Not found");
     }
 
     try {
-      const image = await queries.selectCreatedImageById.get(creationId, userId);
+      // First try to get as owner
+      let image = await queries.selectCreatedImageById.get(creationId, userId);
+      
+      // If not found as owner, check if it exists and is published
       if (!image) {
-        return res.status(404).send("Creation not found");
+        const anyImage = await queries.selectCreatedImageByIdAnyUser.get(creationId);
+        if (anyImage && (anyImage.published === 1 || anyImage.published === true)) {
+          image = anyImage;
+        } else {
+          return res.status(404).send("Creation not found");
+        }
       }
 
       // Read the HTML file and inject user role
