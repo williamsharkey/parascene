@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import { openDb } from "./index.js";
 
 // Seed data
 const seedData = {
@@ -460,10 +459,12 @@ const seedData = {
   ]
 };
 
-// Seed execution
-const { queries, seed } = await openDb();
+export async function seedDatabase(dbInstance) {
+  const { queries, seed } = dbInstance ?? {};
+  if (!queries || !seed) {
+    throw new Error("seedDatabase requires a db instance with queries and seed.");
+  }
 
-(async () => {
   try {
     // Seed users (with password hashing)
     await seed("users", seedData.users, {
@@ -582,6 +583,6 @@ const { queries, seed } = await openDb();
     console.log("Seed complete.");
   } catch (error) {
     console.error("Seed error:", error);
-    process.exit(1);
+    throw error;
   }
-})();
+}

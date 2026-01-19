@@ -1,4 +1,5 @@
 import { openDb } from "./index.js";
+import { seedDatabase } from "./seed.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -34,12 +35,12 @@ try {
   console.log("Images cleared.");
 
   // Use adapter's reset method if available
-  const { reset } = await openDb();
-  if (reset) {
-    await reset();
+  const dbInstance = await openDb();
+  if (dbInstance.reset) {
+    await dbInstance.reset();
   }
 
-  await import("./seed.js");
+  await seedDatabase(dbInstance);
   console.log("Database reset complete.");
 } catch (error) {
   console.error("Database reset error:", error);

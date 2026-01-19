@@ -3,7 +3,7 @@
 ## dev server (express)
 
 ```sh
-npm install --include=optional
+npm install --include=dev
 npm run dev
 ```
 
@@ -27,7 +27,7 @@ npm run reset
 
 Seeded accounts after reset (run `npm run reset` if you already seeded):
 
-- `consumer@example.com` / `password123@#`
-- `creator@example.com` / `password123@#`
-- `provider@example.com` / `password123@#`
-- `admin@example.com` / `password123@#`
+- `consumer@example.com` / `p123@#`
+- `creator@example.com` / `p123@#`
+- `provider@example.com` / `p123@#`
+- `admin@example.com` / `p123@#`
