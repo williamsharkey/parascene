@@ -3,8 +3,7 @@
 ## dev server (express)
 
 ```sh
-npm install
-npm i -g better-sqlite3
+npm install --include=optional
 npm run dev
 ```
 
