@@ -32,9 +32,7 @@ function initSchema(db) {
       role TEXT NOT NULL DEFAULT 'consumer',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -43,9 +41,7 @@ function initSchema(db) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS moderation_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       content_type TEXT NOT NULL,
@@ -54,9 +50,7 @@ function initSchema(db) {
       reason TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS provider_registry (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -65,9 +59,7 @@ function initSchema(db) {
       contact_email TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS provider_statuses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       provider_name TEXT NOT NULL,
@@ -77,9 +69,7 @@ function initSchema(db) {
       capacity_pct REAL NOT NULL,
       last_check_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS provider_metrics (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -90,9 +80,7 @@ function initSchema(db) {
       description TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS provider_grants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -102,9 +90,7 @@ function initSchema(db) {
       next_report TEXT,
       awarded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS provider_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -113,9 +99,7 @@ function initSchema(db) {
       deployments INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS policy_knobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       key TEXT NOT NULL,
@@ -123,9 +107,7 @@ function initSchema(db) {
       description TEXT,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -137,20 +119,17 @@ function initSchema(db) {
       acknowledged_at TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS feed_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       summary TEXT NOT NULL,
       author TEXT NOT NULL,
       tags TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_image_id INTEGER
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS explore_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
@@ -158,9 +137,7 @@ function initSchema(db) {
       category TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS creations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -170,9 +147,7 @@ function initSchema(db) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS servers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -182,9 +157,7 @@ function initSchema(db) {
       description TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -192,9 +165,7 @@ function initSchema(db) {
       description TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `);
 
-  db.exec(`
     CREATE TABLE IF NOT EXISTS created_images (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -205,58 +176,13 @@ function initSchema(db) {
       color TEXT,
       status TEXT NOT NULL DEFAULT 'creating',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      published INTEGER NOT NULL DEFAULT 0,
+      published_at TEXT,
+      title TEXT,
+      description TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
   `);
-
-  // Add status column to existing tables if it doesn't exist
-  try {
-    db.exec("ALTER TABLE created_images ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';");
-    // Update existing rows without status to 'completed'
-    db.exec("UPDATE created_images SET status = 'completed' WHERE status IS NULL;");
-  } catch {
-    // Column already exists.
-  }
-
-  try {
-    db.exec(
-      "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'consumer';"
-    );
-  } catch {
-    // Column already exists.
-  }
-
-  // Add published fields to created_images table
-  try {
-    db.exec("ALTER TABLE created_images ADD COLUMN published INTEGER NOT NULL DEFAULT 0;");
-  } catch {
-    // Column already exists.
-  }
-
-  try {
-    db.exec("ALTER TABLE created_images ADD COLUMN published_at TEXT;");
-  } catch {
-    // Column already exists.
-  }
-
-  try {
-    db.exec("ALTER TABLE created_images ADD COLUMN title TEXT;");
-  } catch {
-    // Column already exists.
-  }
-
-  try {
-    db.exec("ALTER TABLE created_images ADD COLUMN description TEXT;");
-  } catch {
-    // Column already exists.
-  }
-
-  // Add created_image_id to feed_items table
-  try {
-    db.exec("ALTER TABLE feed_items ADD COLUMN created_image_id INTEGER;");
-  } catch {
-    // Column already exists.
-  }
 }
 
 export async function openDb() {
