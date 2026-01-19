@@ -35,11 +35,12 @@ try {
   console.log("Images cleared.");
 
   // Use adapter's reset method if available
-  const dbInstance = await openDb();
-  if (dbInstance.reset) {
-    await dbInstance.reset();
+  const { reset } = await openDb();
+  if (reset) {
+    await reset();
   }
 
+  const dbInstance = await openDb({ quiet: true });
   await seedDatabase(dbInstance);
   console.log("Database reset complete.");
 } catch (error) {

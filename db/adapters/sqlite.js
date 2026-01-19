@@ -585,29 +585,15 @@ export async function openDb() {
   }
 
   async function reset() {
-    if (!db) {
-      return;
+    // Close existing connection if open
+    if (db) {
+      db.close();
     }
-
-    // Drop all user tables while keeping the same connection open.
-    const tables = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-      .all()
-      .map((row) => row.name);
-
-    db.exec("BEGIN");
-    try {
-      for (const table of tables) {
-        db.exec(`DROP TABLE IF EXISTS ${table};`);
-      }
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
+    // Delete the database file
+    // The database will be recreated on the next openDb() call
+    if (fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath);
     }
-
-    // Recreate schema so the existing connection can be reused for seeding.
-    initSchema(db);
   }
 
   return { db, queries, seed, reset };

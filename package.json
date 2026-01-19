@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "watch": "PORT=2367 node --watch api/index.js",
+    "watch": "NODE_ENV=dev PORT=2367 node --watch api/index.js",
     "reset": "node db/reset.js"
   },
   "dependencies": {
