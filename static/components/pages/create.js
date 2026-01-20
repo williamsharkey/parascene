@@ -30,16 +30,6 @@ class AppRouteCreate extends HTMLElement {
           opacity: 0.6;
           cursor: not-allowed;
         }
-        .create-route .create-status {
-          color: var(--text-muted);
-          font-size: 0.9rem;
-        }
-        .create-route .create-status.loading {
-          color: var(--accent);
-        }
-        .create-route .create-status.error {
-          color: var(--error-text);
-        }
       </style>
       <div class="create-route">
         <div class="route-header">
@@ -50,7 +40,6 @@ class AppRouteCreate extends HTMLElement {
           <button class="create-button" data-create-button>
             Create
           </button>
-          <div class="create-status" data-create-status></div>
         </div>
       </div>
     `;
@@ -66,12 +55,11 @@ class AppRouteCreate extends HTMLElement {
 
   async handleCreate() {
     const button = this.querySelector("[data-create-button]");
-    const status = this.querySelector("[data-create-status]");
     
-    if (!button || !status) return;
+    if (!button) return;
 
     if (typeof this.onCreate === "function") {
-      this.onCreate({ button, status });
+      this.onCreate({ button });
     }
   }
 }

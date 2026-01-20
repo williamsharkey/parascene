@@ -2,11 +2,8 @@ function setupCreateHandler() {
   const createRoute = document.querySelector('app-route-create');
   if (!createRoute) return;
 
-  createRoute.onCreate = ({ button, status }) => {
-    if (!button || !status) return;
-
-    status.textContent = "Creating...";
-    status.className = "create-status loading";
+  createRoute.onCreate = async ({ button }) => {
+    if (!button) return;
     button.disabled = true;
 
     const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -21,6 +18,10 @@ function setupCreateHandler() {
     sessionStorage.setItem(pendingKey, JSON.stringify(pendingList));
 
     document.dispatchEvent(new CustomEvent("creations-pending-updated"));
+    const creationsRoute = document.querySelector("app-route-creations");
+    if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
+      await creationsRoute.loadCreations();
+    }
 
     // Navigate to Creations page immediately (optimistic UI)
     const header = document.querySelector('app-header');
@@ -52,16 +53,13 @@ function setupCreateHandler() {
         const next = current.filter(item => item.id !== pendingId);
         sessionStorage.setItem(pendingKey, JSON.stringify(next));
         document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-        status.textContent = "";
-        status.className = "create-status";
       })
       .catch((error) => {
         const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
         const next = current.filter(item => item.id !== pendingId);
         sessionStorage.setItem(pendingKey, JSON.stringify(next));
         document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-        status.textContent = error.message || "Failed to create image";
-        status.className = "create-status error";
+        console.error("Error creating image:", error);
       })
       .finally(() => {
         button.disabled = false;
