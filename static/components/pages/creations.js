@@ -13,6 +13,10 @@ class AppRouteCreations extends HTMLElement {
     `;
     this.pollInterval = null;
     this.setupRouteListener();
+    this.pendingUpdateHandler = () => {
+      this.loadCreations();
+    };
+    document.addEventListener('creations-pending-updated', this.pendingUpdateHandler);
     // Load creations after a brief delay to ensure DOM is ready
     // This also ensures we reload if navigating from another page
     setTimeout(() => {
@@ -60,9 +64,17 @@ class AppRouteCreations extends HTMLElement {
     if (this.routeChangeHandler) {
       document.removeEventListener('route-change', this.routeChangeHandler);
     }
+    if (this.pendingUpdateHandler) {
+      document.removeEventListener('creations-pending-updated', this.pendingUpdateHandler);
+    }
     if (this.intersectionObserver) {
       this.intersectionObserver.disconnect();
     }
+  }
+
+  getPendingCreations() {
+    const pending = JSON.parse(sessionStorage.getItem("pendingCreations") || "[]");
+    return Array.isArray(pending) ? pending : [];
   }
 
   getTimeAgo(date) {
@@ -154,8 +166,10 @@ class AppRouteCreations extends HTMLElement {
         : [];
 
       container.innerHTML = "";
+      const pendingCreations = this.getPendingCreations();
+      const combinedCreations = [...pendingCreations, ...creations];
       
-      if (creations.length === 0) {
+      if (combinedCreations.length === 0) {
         container.innerHTML = `
           <div class="route-empty route-empty-image-grid">
             <div class="route-empty-title">No creations yet</div>
@@ -182,7 +196,7 @@ class AppRouteCreations extends HTMLElement {
       }
 
       // Sort creations by created_at (newest first)
-      const sortedCreations = creations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const sortedCreations = combinedCreations.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       for (const item of sortedCreations) {
         const card = document.createElement("div");

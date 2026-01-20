@@ -64,9 +64,19 @@ class AppHeader extends HTMLElement {
   parseRoutesFromChildren() {
     // Parse routes from direct children - must be called BEFORE render()
     const children = Array.from(this.children);
+    const userRole = window.__USER_ROLE__;
+    const shouldIncludeRoute = (child) => {
+      if (!child.hasAttribute('data-role-only')) {
+        return true;
+      }
+      if (!userRole) {
+        return false;
+      }
+      return child.getAttribute('data-role-only') === userRole;
+    };
     
     const routeLinks = children.filter(child => 
-      child.tagName === 'A' && child.hasAttribute('data-route')
+      child.tagName === 'A' && child.hasAttribute('data-route') && shouldIncludeRoute(child)
     );
     
     this.routes = routeLinks.map(link => ({

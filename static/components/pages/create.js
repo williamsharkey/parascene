@@ -70,48 +70,8 @@ class AppRouteCreate extends HTMLElement {
     
     if (!button || !status) return;
 
-    button.disabled = true;
-    status.textContent = "Creating...";
-    status.className = "create-status loading";
-
-    try {
-      const response = await fetch("/api/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        credentials: "include"
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create image");
-      }
-
-      const image = await response.json();
-      // status.textContent = "Image creation started!";
-      status.className = "create-status";
-      
-      // Clear status after 2 seconds
-      setTimeout(() => {
-        status.textContent = "";
-      }, 2000);
-      
-      // Navigate to Creations page
-      const header = document.querySelector('app-header');
-      if (header && typeof header.handleRouteChange === 'function') {
-        window.history.pushState({ route: 'creations' }, '', '/creations');
-        header.handleRouteChange();
-      } else {
-        // Fallback: use hash-based routing
-        window.location.hash = 'creations';
-      }
-    } catch (error) {
-      console.error("Error creating image:", error);
-      status.textContent = error.message || "Failed to create image";
-      status.className = "create-status error";
-    } finally {
-      button.disabled = false;
+    if (typeof this.onCreate === "function") {
+      this.onCreate({ button, status });
     }
   }
 }
