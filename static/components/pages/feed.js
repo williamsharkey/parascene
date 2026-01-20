@@ -39,7 +39,9 @@ class AppRouteFeed extends HTMLElement {
       // Get current user ID
       let currentUserId = null;
       try {
-        const profileResponse = await fetch('/api/profile');
+        const profileResponse = await fetch('/api/profile', {
+          credentials: 'include'
+        });
         if (profileResponse.ok) {
           const profile = await profileResponse.json();
           currentUserId = profile.id;
@@ -48,7 +50,9 @@ class AppRouteFeed extends HTMLElement {
         console.error('Error fetching user profile:', error);
       }
 
-      const response = await fetch("/api/feed");
+      const response = await fetch("/api/feed", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load feed.");
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];

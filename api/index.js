@@ -97,7 +97,7 @@ app.use((err, req, res, next) => {
     return next(err);
   }
 
-  clearAuthCookie(res);
+  clearAuthCookie(res, req);
 
   if (req.path.startsWith("/api/") || req.path === "/me") {
     return res.status(401).json({ error: "Unauthorized" });

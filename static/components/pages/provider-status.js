@@ -38,7 +38,9 @@ class AppRouteProviderStatus extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/provider/status");
+      const response = await fetch("/api/provider/status", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load provider status.");
       const data = await response.json();
       const statuses = Array.isArray(data.statuses) ? data.statuses : [];

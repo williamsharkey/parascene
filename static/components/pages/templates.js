@@ -17,7 +17,9 @@ class AppRouteTemplates extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/templates");
+      const response = await fetch("/api/templates", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load templates.");
       const data = await response.json();
       const templates = Array.isArray(data.templates) ? data.templates : [];

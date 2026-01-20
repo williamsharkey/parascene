@@ -123,7 +123,9 @@ class AppNotifications extends HTMLElement {
     content.innerHTML = '<p>Loading...</p>';
 
     try {
-      const response = await fetch('/api/notifications');
+      const response = await fetch('/api/notifications', {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error('Failed to load notifications');
       }
@@ -150,7 +152,8 @@ class AppNotifications extends HTMLElement {
       const response = await fetch('/api/notifications/acknowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ id: String(id) })
+        body: new URLSearchParams({ id: String(id) }),
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error('Failed to acknowledge notification');

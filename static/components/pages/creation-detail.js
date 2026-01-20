@@ -129,7 +129,9 @@ class AppRouteCreationDetail extends HTMLElement {
     detailContent.innerHTML = '<div class="route-empty">Loading...</div>';
 
     try {
-      const response = await fetch(`/api/create/images/${creationId}`);
+      const response = await fetch(`/api/create/images/${creationId}`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         if (response.status === 404) {
           detailContent.innerHTML = `

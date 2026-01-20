@@ -33,7 +33,7 @@ export default function createProfileRoutes({ queries }) {
     // Support both insertId (standardized) and lastInsertRowid (legacy SQLite)
     const userId = info.insertId || info.lastInsertRowid;
     const token = jwt.sign({ userId }, getJwtSecret(), { expiresIn: "7d" });
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, req);
     if (queries.insertSession) {
       const tokenHash = hashToken(token);
       const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
@@ -61,7 +61,7 @@ export default function createProfileRoutes({ queries }) {
     const token = jwt.sign({ userId: user.id }, getJwtSecret(), {
       expiresIn: "7d"
     });
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, req);
     if (queries.insertSession) {
       const tokenHash = hashToken(token);
       const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
@@ -81,7 +81,7 @@ export default function createProfileRoutes({ queries }) {
         );
       }
     }
-    clearAuthCookie(res);
+    clearAuthCookie(res, req);
     res.redirect("/");
   });
 

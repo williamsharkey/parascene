@@ -88,7 +88,9 @@ class AppProfile extends HTMLElement {
     content.innerHTML = '<p>Loading...</p>';
 
     try {
-      const response = await fetch('/api/profile');
+      const response = await fetch('/api/profile', {
+        credentials: 'include'
+      });
       if (!response.ok) {
         if (response.status === 401) {
           content.innerHTML = '<p style="color: var(--text-muted);">Please log in to view your profile.</p>';

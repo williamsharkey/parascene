@@ -25,7 +25,9 @@ async function loadUsers() {
   if (adminDataLoaded.users) return;
 
   try {
-    const response = await fetch("/admin/users");
+    const response = await fetch("/admin/users", {
+      credentials: 'include'
+    });
     if (!response.ok) throw new Error("Failed to load users.");
     const data = await response.json();
 
@@ -75,7 +77,9 @@ async function loadModeration() {
   if (adminDataLoaded.moderation) return;
 
   try {
-    const response = await fetch("/admin/moderation");
+    const response = await fetch("/admin/moderation", {
+      credentials: 'include'
+    });
     if (!response.ok) throw new Error("Failed to load moderation queue.");
     const data = await response.json();
 
@@ -175,7 +179,9 @@ async function loadPolicies() {
   if (adminDataLoaded.policies) return;
 
   try {
-    const response = await fetch("/admin/policies");
+    const response = await fetch("/admin/policies", {
+      credentials: 'include'
+    });
     if (!response.ok) throw new Error("Failed to load policies.");
     const data = await response.json();
 

@@ -111,7 +111,9 @@ class AppRouteCreations extends HTMLElement {
 
       // Fetch updated creations
       try {
-        const response = await fetch("/api/create/images");
+        const response = await fetch("/api/create/images", {
+          credentials: 'include'
+        });
         if (!response.ok) return;
         
         const data = await response.json();
@@ -143,7 +145,9 @@ class AppRouteCreations extends HTMLElement {
 
     try {
       // Fetch created creations only
-      const creationsResponse = await fetch("/api/create/images").catch(() => ({ ok: false }));
+      const creationsResponse = await fetch("/api/create/images", {
+        credentials: 'include'
+      }).catch(() => ({ ok: false }));
       
       const creations = creationsResponse.ok
         ? (await creationsResponse.json()).images || []

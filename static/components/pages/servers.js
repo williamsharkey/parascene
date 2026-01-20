@@ -17,7 +17,9 @@ class AppRouteServers extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/servers");
+      const response = await fetch("/api/servers", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load servers.");
       const data = await response.json();
       const servers = Array.isArray(data.servers) ? data.servers : [];

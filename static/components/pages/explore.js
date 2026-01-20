@@ -17,7 +17,9 @@ class AppRouteExplore extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/explore");
+      const response = await fetch("/api/explore", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load explore.");
       const data = await response.json();
       const items = Array.isArray(data.items) ? data.items : [];

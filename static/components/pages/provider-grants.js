@@ -22,7 +22,9 @@ class AppRouteProviderGrants extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/provider/grants");
+      const response = await fetch("/api/provider/grants", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load provider grants.");
       const data = await response.json();
       const grants = Array.isArray(data.grants) ? data.grants : [];

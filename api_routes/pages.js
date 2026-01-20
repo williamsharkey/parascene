@@ -27,7 +27,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
     // Logged in → get role and serve role page
     const user = await queries.selectUserById.get(userId);
     if (!user) {
-      clearAuthCookie(res);
+      clearAuthCookie(res, req);
       return res.sendFile(path.join(pagesDir, "index.html"));
     }
 
@@ -45,7 +45,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
 
     const user = await queries.selectUserById.get(userId);
     if (!user) {
-      clearAuthCookie(res);
+      clearAuthCookie(res, req);
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 
@@ -111,7 +111,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
     // If logged in → get user and their role
     const user = await queries.selectUserById.get(userId);
     if (!user) {
-      clearAuthCookie(res);
+      clearAuthCookie(res, req);
       return res.sendFile(path.join(pagesDir, "auth.html"));
     }
 

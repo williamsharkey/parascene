@@ -138,7 +138,9 @@ class AppHeader extends HTMLElement {
     if (!this.hasAttribute('show-notifications')) return;
 
     try {
-      const response = await fetch('/api/notifications/unread-count');
+      const response = await fetch('/api/notifications/unread-count', {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error('Failed to load notifications count');
       const data = await response.json();
       const count = Number(data.count || 0);
@@ -181,7 +183,9 @@ class AppHeader extends HTMLElement {
     `;
 
     try {
-      const response = await fetch('/api/notifications');
+      const response = await fetch('/api/notifications', {
+        credentials: 'include'
+      });
       if (response.status === 401) {
         preview.innerHTML = `
           <div class="notifications-menu-item notifications-loading">

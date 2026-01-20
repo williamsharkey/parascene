@@ -34,7 +34,9 @@ class AppRouteProviderMetrics extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/provider/metrics");
+      const response = await fetch("/api/provider/metrics", {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to load provider metrics.");
       const data = await response.json();
       const metrics = Array.isArray(data.metrics) ? data.metrics : [];

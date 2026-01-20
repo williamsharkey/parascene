@@ -182,7 +182,9 @@
         detailContent.innerHTML = '<div class="route-empty">Loading...</div>';
 
         try {
-          const response = await fetch(`/api/create/images/${creationId}`);
+          const response = await fetch(`/api/create/images/${creationId}`, {
+            credentials: 'include'
+          });
           if (!response.ok) {
             if (response.status === 404) {
               detailContent.innerHTML = `
@@ -485,7 +487,8 @@
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ title, description })
+            body: JSON.stringify({ title, description }),
+            credentials: 'include'
           });
 
           if (!response.ok) {

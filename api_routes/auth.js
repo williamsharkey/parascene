@@ -40,7 +40,7 @@ function sessionMiddleware(queries = {}) {
     );
 
     if (!session) {
-      clearAuthCookie(res);
+      clearAuthCookie(res, req);
       req.auth = null;
       if (req.path.startsWith("/api/") || req.path === "/me") {
         return res.status(401).json({ error: "Unauthorized" });
@@ -51,7 +51,7 @@ function sessionMiddleware(queries = {}) {
     const expiresAtMs = Date.parse(session.expires_at);
     if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
       await queries.deleteSessionByTokenHash?.run(tokenHash, req.auth.userId);
-      clearAuthCookie(res);
+      clearAuthCookie(res, req);
       req.auth = null;
       if (req.path.startsWith("/api/") || req.path === "/me") {
         return res.status(401).json({ error: "Unauthorized" });
@@ -61,7 +61,7 @@ function sessionMiddleware(queries = {}) {
 
     const refreshedAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
     await queries.refreshSessionExpiry.run(session.id, refreshedAt);
-    setAuthCookie(res, token);
+    setAuthCookie(res, token, req);
     return next();
   };
 }
@@ -91,20 +91,36 @@ function probabilisticSessionCleanup(queries = {}, options = {}) {
   };
 }
 
-function setAuthCookie(res, token) {
+function isSecureRequest(req) {
+  // Check if request is over HTTPS
+  // Vercel sets x-forwarded-proto header
+  if (req) {
+    return (
+      req.secure ||
+      req.headers["x-forwarded-proto"] === "https" ||
+      process.env.NODE_ENV === "production"
+    );
+  }
+  // Fallback to NODE_ENV check if req not available
+  return process.env.NODE_ENV === "production";
+}
+
+function setAuthCookie(res, token, req = null) {
+  const isSecure = isSecureRequest(req);
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     maxAge: ONE_WEEK_MS
   });
 }
 
-function clearAuthCookie(res) {
+function clearAuthCookie(res, req = null) {
+  const isSecure = isSecureRequest(req);
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production"
+    secure: isSecure
   });
 }
 
