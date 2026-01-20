@@ -610,14 +610,13 @@ export function openDb() {
         throw new Error(`Failed to upload image to Supabase Storage: ${error.message}`);
       }
 
-      const thumbnailFilename = getThumbnailFilename(filename);
       const thumbnailBuffer = await sharp(buffer)
         .resize(250, 250, { fit: "cover" })
         .png()
         .toBuffer();
       const { error: thumbnailError } = await storageClient.storage
         .from(STORAGE_THUMBNAIL_BUCKET)
-        .upload(thumbnailFilename, thumbnailBuffer, {
+        .upload(filename, thumbnailBuffer, {
           contentType: "image/png",
           upsert: true
         });
@@ -638,13 +637,12 @@ export function openDb() {
     getImageBuffer: async (filename, options = {}) => {
       const isThumbnail = options?.variant === "thumbnail";
       const bucket = isThumbnail ? STORAGE_THUMBNAIL_BUCKET : STORAGE_BUCKET;
-      const requestedFilename = filename;
       // Fetch image from Supabase Storage and return as buffer
       // Uses storage client (service role if available) to access private bucket
       const { data, error } = await storageClient.storage
         .from(bucket)
-        .download(requestedFilename);
-      
+        .download(filename);
+
       if (error) {
         console.error("Supabase image fetch failed, serving fallback image.", {
           bucket,
