@@ -310,6 +310,12 @@ main {
   padding: 24px 24px 48px;
 }
 
+@media (max-width: 768px) {
+  main {
+    padding: 24px 8px 48px;
+  }
+}
+
 main > section:first-of-type:not(.hero) {
   margin-top: 16px;
 }
@@ -1965,8 +1971,12 @@ body.creation-detail-page main > section:first-of-type {
   }
   
   .creation-detail-image-wrapper {
-    max-width: 95%;
-    padding: 20px;
+    max-width: 100%;
+    padding: 0;
+  }
+  
+  .creation-detail-footer {
+    padding: 16px 8px;
   }
   
   .creation-detail-title {
