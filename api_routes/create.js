@@ -18,6 +18,7 @@ export default function createCreateRoutes({ queries, storage }) {
   // This route handles images from Supabase Storage and provides authorization
   router.get("/api/images/created/:filename", async (req, res) => {
     const filename = req.params.filename;
+    const variant = req.query?.variant;
     
     try {
       // Find the image in the database by filename
@@ -37,7 +38,7 @@ export default function createCreateRoutes({ queries, storage }) {
       }
       
       // Fetch image buffer from storage
-      const imageBuffer = await storage.getImageBuffer(filename);
+      const imageBuffer = await storage.getImageBuffer(filename, { variant });
       
       // Set appropriate content type
       res.setHeader('Content-Type', 'image/png');

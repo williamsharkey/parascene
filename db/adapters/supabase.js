@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import path from "path";
+import sharp from "sharp";
 
 // Note: Supabase schema must be provisioned separately (SQL editor/migrations).
 // This adapter expects all tables to be prefixed with "prsn_".
@@ -585,7 +587,14 @@ export function openDb() {
   // Storage interface for images using Supabase Storage
   // Images are stored in a private bucket and served through the backend
   const STORAGE_BUCKET = "prsn_created-images";
+  const STORAGE_THUMBNAIL_BUCKET = "prsn_created_images_thumbnails";
   
+  function getThumbnailFilename(filename) {
+    const ext = path.extname(filename);
+    const base = path.basename(filename, ext);
+    return `${base}_th${ext || ""}`;
+  }
+
   const storage = {
     uploadImage: async (buffer, filename) => {
       // Use storage client (service role if available) for uploads to private bucket
@@ -599,6 +608,21 @@ export function openDb() {
       if (error) {
         throw new Error(`Failed to upload image to Supabase Storage: ${error.message}`);
       }
+
+      const thumbnailFilename = getThumbnailFilename(filename);
+      const thumbnailBuffer = await sharp(buffer)
+        .resize(250, 250, { fit: "cover" })
+        .png()
+        .toBuffer();
+      const { error: thumbnailError } = await storageClient.storage
+        .from(STORAGE_THUMBNAIL_BUCKET)
+        .upload(thumbnailFilename, thumbnailBuffer, {
+          contentType: "image/png",
+          upsert: true
+        });
+      if (thumbnailError) {
+        throw new Error(`Failed to upload thumbnail to Supabase Storage: ${thumbnailError.message}`);
+      }
       
       // Return backend route URL instead of public Supabase URL
       // Images will be served through /api/images/created/:filename
@@ -610,12 +634,15 @@ export function openDb() {
       return `/api/images/created/${filename}`;
     },
     
-    getImageBuffer: async (filename) => {
+    getImageBuffer: async (filename, options = {}) => {
+      const isThumbnail = options?.variant === "thumbnail";
+      const bucket = isThumbnail ? STORAGE_THUMBNAIL_BUCKET : STORAGE_BUCKET;
+      const requestedFilename = isThumbnail ? getThumbnailFilename(filename) : filename;
       // Fetch image from Supabase Storage and return as buffer
       // Uses storage client (service role if available) to access private bucket
       const { data, error } = await storageClient.storage
-        .from(STORAGE_BUCKET)
-        .download(filename);
+        .from(bucket)
+        .download(requestedFilename);
       
       if (error) {
         throw new Error(`Failed to fetch image from Supabase Storage: ${error.message}`);
