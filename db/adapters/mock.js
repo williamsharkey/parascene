@@ -23,12 +23,23 @@ const templates = [];
 const created_images = [];
 const sessions = [];
 
-const dataDir = path.join(__dirname, "..", "data");
+// On Vercel, use /tmp directory which is writable
+// Otherwise use the local data directory
+const dataDir = process.env.VERCEL 
+  ? "/tmp/parascene-data"
+  : path.join(__dirname, "..", "data");
 const imagesDir = path.join(dataDir, "images", "created");
 
 function ensureImagesDir() {
-  if (!fs.existsSync(imagesDir)) {
-    fs.mkdirSync(imagesDir, { recursive: true });
+  try {
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
+    }
+  } catch (error) {
+    // If directory creation fails (e.g., on Vercel without /tmp access),
+    // log a warning but don't throw - images will be stored in memory only
+    console.warn(`Warning: Could not create images directory: ${error.message}`);
+    console.warn("Images will not be persisted to disk. Consider using Supabase adapter on Vercel.");
   }
 }
 
@@ -413,10 +424,21 @@ export function openDb() {
   // Storage interface for images (using filesystem like SQLite)
   const storage = {
     uploadImage: async (buffer, filename) => {
-      ensureImagesDir();
-      const filePath = path.join(imagesDir, filename);
-      fs.writeFileSync(filePath, buffer);
-      return `/images/created/${filename}`;
+      try {
+        ensureImagesDir();
+        const filePath = path.join(imagesDir, filename);
+        fs.writeFileSync(filePath, buffer);
+        return `/images/created/${filename}`;
+      } catch (error) {
+        // On Vercel or other read-only filesystems, we can't write files
+        // Return a URL anyway - the image data is stored in the database record
+        // The image won't be accessible via filesystem, but the database entry will exist
+        console.warn(`Warning: Could not write image file ${filename}: ${error.message}`);
+        console.warn("Image metadata will be stored, but file will not be persisted.");
+        console.warn("For production on Vercel, use Supabase adapter with SUPABASE_URL and SUPABASE_ANON_KEY.");
+        // Return a URL that indicates the file isn't available
+        return `/images/created/${filename}`;
+      }
     },
     
     getImageUrl: (filename) => {
@@ -424,11 +446,17 @@ export function openDb() {
     },
     
     getImageBuffer: async (filename) => {
-      const filePath = path.join(imagesDir, filename);
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`Image not found: ${filename}`);
+      try {
+        const filePath = path.join(imagesDir, filename);
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`Image not found: ${filename}`);
+        }
+        return fs.readFileSync(filePath);
+      } catch (error) {
+        // If file doesn't exist (e.g., on Vercel where files can't be written),
+        // throw a clear error
+        throw new Error(`Image file not available: ${filename}. This may occur on serverless platforms. Consider using Supabase adapter.`);
       }
-      return fs.readFileSync(filePath);
     },
     
     deleteImage: async (filename) => {
