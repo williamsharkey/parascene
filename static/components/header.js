@@ -6,9 +6,12 @@ class AppHeader extends HTMLElement {
     this.notificationsMenuOpen = false;
     this.mobileMenuOpen = false;
     this.notificationsCount = 0;
+    this.creditsCount = 0;
     this.handleDocumentClick = this.handleDocumentClick.bind(this);
     this.handleRouteChange = this.handleRouteChange.bind(this);
     this.handleNotificationsUpdated = this.handleNotificationsUpdated.bind(this);
+    this.handleCreditsUpdated = this.handleCreditsUpdated.bind(this);
+    this.handleCreditsClaimStatus = this.handleCreditsClaimStatus.bind(this);
     this.routes = [];
     this.authLinks = [];
     this.defaultRoute = null;
@@ -16,7 +19,7 @@ class AppHeader extends HTMLElement {
   }
 
   static get observedAttributes() {
-    return ['show-notifications', 'show-profile', 'show-create', 'default-route'];
+    return ['show-notifications', 'show-profile', 'show-create', 'default-route', 'credits-count'];
   }
 
   connectedCallback() {
@@ -32,7 +35,11 @@ class AppHeader extends HTMLElement {
     document.addEventListener('click', this.handleDocumentClick);
     window.addEventListener('popstate', this.handleRouteChange);
     document.addEventListener('notifications-acknowledged', this.handleNotificationsUpdated);
+    document.addEventListener('credits-updated', this.handleCreditsUpdated);
+    document.addEventListener('credits-claim-status', this.handleCreditsClaimStatus);
     this.loadNotificationCount();
+    this.loadCreditsCount();
+    this.updateCreditsAttention();
     // Small delay to ensure DOM is ready for route change handler
     setTimeout(() => this.handleRouteChange(), 0);
   }
@@ -41,6 +48,8 @@ class AppHeader extends HTMLElement {
     document.removeEventListener('click', this.handleDocumentClick);
     window.removeEventListener('popstate', this.handleRouteChange);
     document.removeEventListener('notifications-acknowledged', this.handleNotificationsUpdated);
+    document.removeEventListener('credits-updated', this.handleCreditsUpdated);
+    document.removeEventListener('credits-claim-status', this.handleCreditsClaimStatus);
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -54,12 +63,16 @@ class AppHeader extends HTMLElement {
       if (this.hasParsedRoutes) {
         this.handleRouteChange();
       }
+    } else if (name === 'credits-count' && oldValue !== newValue) {
+      this.creditsCount = this.parseCreditsCount(newValue);
+      this.updateCreditsUI(this.creditsCount);
     } else {
       // Re-render to update UI
       this.render();
       this.setupEventListeners();
       this.setupNavListeners();
       this.loadNotificationCount();
+      this.loadCreditsCount();
     }
   }
   
@@ -119,7 +132,8 @@ class AppHeader extends HTMLElement {
         if (route) {
           // Check if we're on a server-sent page (like creation detail)
           // If so, use full page navigation for ANY route change
-          const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname);
+          const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+            window.location.pathname.startsWith('/help/');
           if (isServerSentPage) {
             // Use full page navigation for server-sent pages
             window.location.href = `/${route}`;
@@ -179,6 +193,88 @@ class AppHeader extends HTMLElement {
         count > 0
           ? `${count} new notification${count === 1 ? '' : 's'}`
           : 'No new notifications';
+    }
+  }
+
+  async loadCreditsCount() {
+    if (!this.hasAttribute('show-profile')) return;
+
+    if (this.hasAttribute('credits-count')) {
+      const count = this.parseCreditsCount(this.getAttribute('credits-count'));
+      this.updateCreditsUI(count);
+      return;
+    }
+
+    const storedCount = this.readStoredCreditsCount();
+    if (storedCount !== null) {
+      this.updateCreditsUI(storedCount);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/profile', { credentials: 'include' });
+      if (!response.ok) {
+        this.updateCreditsUI(0);
+        return;
+      }
+      const user = await response.json();
+      const count = this.parseCreditsCount(user?.credits);
+      this.updateCreditsUI(count);
+    } catch {
+      this.updateCreditsUI(0);
+    }
+  }
+
+  updateCreditsUI(count) {
+    this.creditsCount = count;
+    const creditsCount = this.querySelector('.credits-count');
+    if (creditsCount) {
+      creditsCount.textContent = String(count);
+    }
+  }
+
+  parseCreditsCount(value) {
+    const count = Number(value);
+    if (!Number.isFinite(count)) return 0;
+    return Math.max(0, Math.round(count * 10) / 10);
+  }
+
+  handleCreditsUpdated(event) {
+    const count = this.parseCreditsCount(event?.detail?.count);
+    this.updateCreditsUI(count);
+  }
+
+  handleCreditsClaimStatus(event) {
+    const canClaim = Boolean(event?.detail?.canClaim);
+    this.updateCreditsAttention(canClaim);
+  }
+
+  updateCreditsAttention(forceCanClaim) {
+    const creditsButton = this.querySelector('.credits-button');
+    if (!creditsButton) return;
+    const canClaim = typeof forceCanClaim === 'boolean' ? forceCanClaim : this.getCreditsClaimStatus();
+    creditsButton.classList.toggle('attention', canClaim);
+  }
+
+  getCreditsClaimStatus() {
+    try {
+      const lastClaim = window.localStorage?.getItem('credits-last-claim');
+      if (!lastClaim) return true;
+      const today = new Date().toISOString().slice(0, 10);
+      return lastClaim !== today;
+    } catch {
+      return false;
+    }
+  }
+
+  readStoredCreditsCount() {
+    try {
+      const stored = window.localStorage?.getItem('credits-balance');
+      if (stored == null) return null;
+      const parsed = this.parseCreditsCount(stored);
+      return parsed;
+    } catch {
+      return null;
     }
   }
 
@@ -274,7 +370,8 @@ class AppHeader extends HTMLElement {
   handleRouteChange() {
     // If we're on a server-sent page (like creation detail), don't handle route changes
     // Any navigation should result in a full page load
-    const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname);
+    const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+      window.location.pathname.startsWith('/help/');
     if (isServerSentPage) {
       return;
     }
@@ -282,6 +379,9 @@ class AppHeader extends HTMLElement {
     // Get route from pathname (e.g., /feed -> feed, / -> defaultRoute)
     const pathname = window.location.pathname;
     let currentRoute = pathname === '/' || pathname === '' ? this.defaultRoute : pathname.slice(1);
+    if (pathname.startsWith('/servers/')) {
+      currentRoute = 'servers';
+    }
     
     // If at root and we have a default route, update URL to reflect it
     if ((pathname === '/' || pathname === '') && this.defaultRoute && currentRoute) {
@@ -358,7 +458,8 @@ class AppHeader extends HTMLElement {
         if (route) {
           // Check if we're on a server-sent page (like creation detail)
           // If so, use full page navigation for ANY route change
-          const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname);
+          const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+            window.location.pathname.startsWith('/help/');
           if (isServerSentPage) {
             // Use full page navigation for server-sent pages
             window.location.href = `/${route}`;
@@ -380,7 +481,8 @@ class AppHeader extends HTMLElement {
         if (mobileCreateButton.disabled) return;
         this.closeMobileMenu();
         // Check if we're on a server-sent page (like creation detail)
-        const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname);
+        const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+          window.location.pathname.startsWith('/help/');
         if (isServerSentPage) {
           window.location.href = '/create';
           return;
@@ -422,6 +524,14 @@ class AppHeader extends HTMLElement {
       notificationsButton.addEventListener('click', (e) => {
         e.stopPropagation();
         this.toggleNotificationsMenu();
+      });
+    }
+
+    const creditsButton = this.querySelector('.credits-button');
+    if (creditsButton) {
+      creditsButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.dispatchEvent(new CustomEvent('open-credits'));
       });
     }
 
@@ -500,6 +610,7 @@ class AppHeader extends HTMLElement {
     const showNotifications = this.hasAttribute('show-notifications');
     const showProfile = this.hasAttribute('show-profile');
     const showCreate = this.hasAttribute('show-create');
+    const showCredits = this.hasAttribute('show-profile');
     const hasAuthLinks = (this.authLinks || []).length > 0;
 
     this.innerHTML = html`
@@ -552,6 +663,15 @@ class AppHeader extends HTMLElement {
                 </div>
                 </div>
               </div>
+            ` : ''}
+            ${showCredits ? html`
+              <button class="action-item credits-button" aria-label="Credits balance">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <text x="12" y="12" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="currentColor" stroke="none">P</text>
+                </svg>
+                <span class="credits-count">${this.creditsCount}</span>
+              </button>
             ` : ''}
             ${showProfile ? html`
               <button class="action-item profile-button" aria-label="Open profile">

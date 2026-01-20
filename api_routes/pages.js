@@ -93,6 +93,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
     }
   });
 
+
   // Catch-all route for sub-routes - serve the same page for all routes
   // This allows clean URLs like /feed, /explore, etc. while serving the same HTML
   router.get("/*", async (req, res, next) => {

@@ -661,6 +661,17 @@ header .action-item .icon {
   display: block;
 }
 
+header .credits-button .icon {
+  width: 20px;
+  height: 20px;
+}
+
+header .credits-button.attention {
+  border-color: var(--accent);
+  background: var(--surface-strong);
+}
+
+
 header .header-actions > * {
   align-self: center;
 }
@@ -1138,6 +1149,10 @@ header .hamburger-button.active span:nth-child(3) {
 
 .route-header {
   margin-bottom: 12px;
+}
+
+.route-section {
+  margin-top: 28px;
 }
 
 .route-header p {

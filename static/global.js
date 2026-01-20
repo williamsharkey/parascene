@@ -1,6 +1,7 @@
 // Global components that all pages will use
 import './components/header.js';
 import './components/profile.js';
+import './components/credits.js';
 import './components/notifications.js';
 import './components/nav-bar.js';
 import './components/pages/feed.js';
@@ -27,6 +28,7 @@ async function initPage() {
   const customElementTags = [
     'app-header',
     'app-profile',
+    'app-credits',
     'app-notifications',
     'app-route-feed',
     'app-route-explore',

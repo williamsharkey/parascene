@@ -10,7 +10,20 @@ class AppRouteServers extends HTMLElement {
       <div class="route-cards grid-auto-fit" data-servers-container>
         <div class="route-empty">Loading...</div>
       </div>
+      <div class="route-header route-section" id="servers-help">
+        <h3>How to run a server</h3>
+        <p>Running a server earns credits and helps the community scale.</p>
+      </div>
+      <div class="route-card">
+        <ol>
+          <li>Create your server profile and choose a region.</li>
+          <li>Configure capacity, uptime targets, and moderation settings.</li>
+          <li>Connect your infrastructure and verify health checks.</li>
+          <li>Publish the server so creators can discover and boost it.</li>
+        </ol>
+      </div>
     `;
+    this.maybeScrollToHelp();
     this.loadServers();
   }
 
@@ -45,6 +58,16 @@ class AppRouteServers extends HTMLElement {
       }
     } catch (error) {
       container.innerHTML = html`<div class="route-empty">Unable to load servers.</div>`;
+    }
+  }
+
+  maybeScrollToHelp() {
+    if (!window.location.pathname.startsWith('/servers/help')) {
+      return;
+    }
+    const helpSection = this.querySelector('#servers-help');
+    if (helpSection) {
+      helpSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 }
