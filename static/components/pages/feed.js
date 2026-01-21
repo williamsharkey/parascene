@@ -1,4 +1,29 @@
+import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
+
 const html = String.raw;
+
+function setRouteMediaBackgroundImage(mediaEl, url) {
+  if (!mediaEl || !url) return;
+
+  // Start in "no-image" state so placeholders show until load completes
+  mediaEl.classList.remove('route-media-has-image');
+  mediaEl.classList.remove('route-media-error');
+  mediaEl.style.backgroundImage = '';
+
+  const probe = new Image();
+  probe.decoding = 'async';
+  probe.onload = () => {
+    mediaEl.classList.remove('route-media-error');
+    mediaEl.classList.add('route-media-has-image');
+    mediaEl.style.backgroundImage = `url("${String(url).replace(/"/g, '\\"')}")`;
+  };
+  probe.onerror = () => {
+    mediaEl.classList.remove('route-media-has-image');
+    mediaEl.classList.add('route-media-error');
+    mediaEl.style.backgroundImage = '';
+  };
+  probe.src = url;
+}
 
 class AppRouteFeed extends HTMLElement {
   connectedCallback() {
@@ -101,25 +126,29 @@ class AppRouteFeed extends HTMLElement {
         ` : '';
         
         // Add class to indicate if there's an image (to override gradient)
-        const mediaClass = item.image_url ? 'route-media-has-image' : '';
-        const mediaStyle = item.image_url 
-          ? `style="background-image: url('${item.thumbnail_url || item.image_url}'); background-size: cover; background-position: center;"`
-          : '';
+        const mediaClass = item.image_url ? '' : '';
         
         card.innerHTML = html`
-          <div class="route-media ${mediaClass}" ${mediaStyle} aria-hidden="true"></div>
+          <div class="route-media ${mediaClass}" aria-hidden="true"></div>
           ${ownedBadge}
           <div class="route-details">
             <div class="route-details-content">
               <div class="route-title">${item.title}</div>
               <div class="route-summary">${item.summary}</div>
-              <div class="route-meta">${item.created_at}</div>
+              <div class="route-meta" title="${formatDateTime(item.created_at)}">${formatRelativeTime(item.created_at)}</div>
               <div class="route-meta">By ${item.author}</div>
               <div class="route-meta route-meta-spacer"></div>
               <div class="route-tags">${item.tags || ""}</div>
             </div>
           </div>
         `;
+
+        // Apply image background with proper load/error handling
+        if (item.image_url) {
+          const mediaEl = card.querySelector('.route-media');
+          const url = item.thumbnail_url || item.image_url;
+          setRouteMediaBackgroundImage(mediaEl, url);
+        }
         container.appendChild(card);
       }
     } catch (error) {

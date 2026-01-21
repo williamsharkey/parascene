@@ -1,4 +1,25 @@
+import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
+
 const html = String.raw;
+
+function setRouteMediaBackgroundImage(mediaEl, url) {
+  if (!mediaEl || !url) return;
+
+  mediaEl.classList.remove('route-media-error');
+  mediaEl.style.backgroundImage = '';
+
+  const probe = new Image();
+  probe.decoding = 'async';
+  probe.onload = () => {
+    mediaEl.classList.remove('route-media-error');
+    mediaEl.style.backgroundImage = `url("${String(url).replace(/"/g, '\\"')}")`;
+  };
+  probe.onerror = () => {
+    mediaEl.classList.add('route-media-error');
+    mediaEl.style.backgroundImage = '';
+  };
+  probe.src = url;
+}
 
 class AppRouteCreations extends HTMLElement {
   connectedCallback() {
@@ -77,24 +98,6 @@ class AppRouteCreations extends HTMLElement {
   getPendingCreations() {
     const pending = JSON.parse(sessionStorage.getItem("pendingCreations") || "[]");
     return Array.isArray(pending) ? pending : [];
-  }
-
-  getTimeAgo(date) {
-    const now = new Date();
-    const diffMs = now - date;
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    const diffMonths = Math.floor(diffDays / 30);
-    const diffYears = Math.floor(diffDays / 365);
-
-    if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
-    if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
-    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    return 'just now';
   }
 
   startPolling() {
@@ -220,7 +223,7 @@ class AppRouteCreations extends HTMLElement {
               <div class="route-details-content">
                 <div class="route-title">Creating...</div>
                 <div class="route-summary">Your creation is being processed...</div>
-                <div class="route-meta">${item.created_at}</div>
+                <div class="route-meta" title="${formatDateTime(item.created_at)}">${formatRelativeTime(item.created_at)}</div>
               </div>
             </div>
           `;
@@ -242,7 +245,7 @@ class AppRouteCreations extends HTMLElement {
           
           if (isPublished && item.published_at) {
             const publishedDate = new Date(item.published_at);
-            const publishedTimeAgo = this.getTimeAgo(publishedDate);
+            const publishedTimeAgo = formatRelativeTime(publishedDate);
             
             publishedBadge = html`
               <div class="creation-published-badge" title="Published">
@@ -254,13 +257,12 @@ class AppRouteCreations extends HTMLElement {
               </div>
             `;
             
-            publishedInfo = html`<div class="route-meta">Published ${publishedTimeAgo}</div>`;
+            publishedInfo = html`<div class="route-meta" title="${formatDateTime(item.published_at)}">Published ${publishedTimeAgo}</div>`;
           }
           
           card.innerHTML = html`
             <div 
               class="route-media"
-              style="background-image: url('${item.thumbnail_url || item.url}')"
               aria-hidden="true"
               data-image-id="${item.id}"
               data-status="completed"
@@ -271,12 +273,16 @@ class AppRouteCreations extends HTMLElement {
                 <div class="route-title">${item.title || 'Creation'}</div>
                 <div class="route-summary">${item.width} × ${item.height}px</div>
                 ${publishedInfo}
-                <div class="route-meta">Created ${this.getTimeAgo(new Date(item.created_at))}</div>
+                <div class="route-meta" title="${formatDateTime(item.created_at)}">Created ${formatRelativeTime(item.created_at)}</div>
                 <div class="route-meta route-meta-spacer"></div>
                 <div class="route-tags">Color: ${item.color || 'N/A'}</div>
               </div>
             </div>
           `;
+
+          const mediaEl = card.querySelector('.route-media');
+          const url = item.thumbnail_url || item.url;
+          setRouteMediaBackgroundImage(mediaEl, url);
         }
         
         container.appendChild(card);

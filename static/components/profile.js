@@ -1,3 +1,5 @@
+import { formatDate } from '../shared/datetime.js';
+
 const html = String.raw;
 
 class AppProfile extends HTMLElement {
@@ -119,16 +121,6 @@ class AppProfile extends HTMLElement {
       admin: 'Administrator'
     };
 
-    const formatDate = (dateString) => {
-      if (!dateString) return 'N/A';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    };
-
     const escapeHtml = (text) => {
       const div = document.createElement('div');
       div.textContent = text;
@@ -146,7 +138,7 @@ class AppProfile extends HTMLElement {
       </div>
       <div class="field">
         <label>Member Since</label>
-        <div class="value">${formatDate(user.created_at)}</div>
+        <div class="value">${formatDate(user.created_at) || 'N/A'}</div>
       </div>
     `;
   }

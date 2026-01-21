@@ -1,3 +1,5 @@
+import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
+
 const html = String.raw;
 
 class AppRouteProviderTemplates extends HTMLElement {
@@ -35,12 +37,14 @@ class AppRouteProviderTemplates extends HTMLElement {
       for (const template of templates) {
         const card = document.createElement("div");
         card.className = "route-card";
+        const updatedRel = formatRelativeTime(template.updated_at);
+        const updatedTitle = formatDateTime(template.updated_at);
         card.innerHTML = html`
           <div class="route-title">${template.name}</div>
           <div>${template.category}</div>
           <div class="route-meta">Version • ${template.version}</div>
           <div class="route-meta">Deployments • ${template.deployments}</div>
-          <div class="route-meta">Updated • ${template.updated_at}</div>
+          <div class="route-meta" title="${updatedTitle}">Updated • ${updatedRel}</div>
         `;
         container.appendChild(card);
       }

@@ -262,9 +262,11 @@ body.landing-page header.scrolled::before {
   box-shadow: var(--shadow);
 }
 
-.feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  }
 }
 
 .feature-icon {
@@ -377,9 +379,11 @@ body.landing-page header.scrolled::before {
   transition: transform 0.2s, border-color 0.2s;
 }
 
-.use-case-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .use-case-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
 }
 
 .use-case-card h3 {

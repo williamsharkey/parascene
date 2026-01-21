@@ -132,7 +132,9 @@
       </div>
     </main>
 
-    <script>
+    <script type="module">
+      import { formatDateTime, formatRelativeTime } from '/shared/datetime.js';
+
       // Set up URL change detection BEFORE header component loads
       // This ensures we capture navigation events
       
@@ -147,30 +149,35 @@
       const originalPushState = history.pushState.bind(history);
       const originalReplaceState = history.replaceState.bind(history);
 
-      function getTimeAgo(date) {
-        const now = new Date();
-        const diffMs = now - date;
-        const diffSecs = Math.floor(diffMs / 1000);
-        const diffMins = Math.floor(diffSecs / 60);
-        const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-        const diffMonths = Math.floor(diffDays / 30);
-        const diffYears = Math.floor(diffDays / 365);
-
-        if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
-        if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
-        if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-        if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-        if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-        return 'just now';
-      }
-
       async function loadCreation() {
         const detailContent = document.querySelector('[data-detail-content]');
         const imageEl = document.querySelector('[data-image]');
         const backgroundEl = document.querySelector('[data-background]');
+        const imageWrapper = imageEl?.closest?.('.creation-detail-image-wrapper');
         
         if (!detailContent || !imageEl || !backgroundEl) return;
+
+        // Attach image load/error handlers once, so broken-image icons never show
+        if (!imageEl.dataset.fallbackAttached) {
+          imageEl.dataset.fallbackAttached = '1';
+
+          imageEl.addEventListener('load', () => {
+            imageWrapper?.classList.remove('image-loading');
+            imageWrapper?.classList.remove('image-error');
+            if (imageEl.dataset.currentUrl) {
+              backgroundEl.style.backgroundImage = `url('${imageEl.dataset.currentUrl}')`;
+            }
+            imageEl.style.visibility = 'visible';
+          });
+
+          imageEl.addEventListener('error', () => {
+            imageWrapper?.classList.remove('image-loading');
+            imageWrapper?.classList.add('image-error');
+            backgroundEl.style.backgroundImage = '';
+            // Hide default browser broken-image UI
+            imageEl.style.visibility = 'hidden';
+          });
+        }
 
         const creationId = getCreationId();
         if (!creationId) {
@@ -204,13 +211,17 @@
           const creation = await response.json();
           
           // Set image and blurred background
+          imageWrapper?.classList.remove('image-error');
+          imageWrapper?.classList.add('image-loading');
+          backgroundEl.style.backgroundImage = '';
+          imageEl.style.visibility = 'hidden';
+          imageEl.dataset.currentUrl = creation.url;
           imageEl.src = creation.url;
-          imageEl.style.display = 'block';
-          backgroundEl.style.backgroundImage = `url('${creation.url}')`;
           
           // Format date
           const date = new Date(creation.created_at);
-          const timeAgo = getTimeAgo(date);
+          const timeAgo = formatRelativeTime(date);
+          const createdAtTitle = formatDateTime(date);
           
           // Generate title from published title, filename, or use default
           const isPublished = creation.published === true || creation.published === 1;
@@ -273,10 +284,11 @@
           let publishedInfo = '';
           if (isPublished && creation.published_at) {
             const publishedDate = new Date(creation.published_at);
-            const publishedTimeAgo = getTimeAgo(publishedDate);
+            const publishedTimeAgo = formatRelativeTime(publishedDate);
+            const publishedAtTitle = formatDateTime(publishedDate);
             publishedInfo = `
               <div class="creation-detail-published">
-                <div class="creation-detail-published-label">Published ${publishedTimeAgo}</div>
+                <div class="creation-detail-published-label" title="${publishedAtTitle}">Published ${publishedTimeAgo}</div>
                 ${creation.description ? `<div class="creation-detail-description">${creation.description}</div>` : ''}
               </div>
             `;
@@ -296,12 +308,12 @@
               <span class="creation-detail-author-icon">${creatorInitial}</span>
               <span class="creation-detail-author-name">${creatorName}</span>
               <span class="creation-detail-author-handle">${creatorHandle}</span>
-              <span class="creation-detail-date">${timeAgo}</span>
+              <span class="creation-detail-date" title="${createdAtTitle}">${timeAgo}</span>
             </div>
             <div class="creation-detail-title">${displayTitle}</div>
             ${publishedInfo}
             <div class="creation-detail-meta">
-              <span>Created ${timeAgo}</span>
+              <span title="${createdAtTitle}">Created ${timeAgo}</span>
               <span>•</span>
               <span>0 comments</span>
               <span>•</span>

@@ -1,3 +1,5 @@
+import { formatDateTime, formatRelativeTime } from '../shared/datetime.js';
+
 const html = String.raw;
 
 class AppNotifications extends HTMLElement {
@@ -208,13 +210,16 @@ class AppNotifications extends HTMLElement {
       return div.innerHTML;
     };
 
-    content.innerHTML = this.notifications.map((notification) => html`
+    content.innerHTML = this.notifications.map((notification) => {
+      const time = formatRelativeTime(notification.created_at);
+      const timeTitle = formatDateTime(notification.created_at);
+      return html`
       <button class="notification-list-item ${notification.acknowledged_at ? 'is-read' : 'is-unread'}" data-id="${notification.id}">
         <div class="notification-list-title">${escapeHtml(notification.title || 'Notification')}</div>
         <div class="notification-list-message">${escapeHtml(notification.message || '')}</div>
-        <div class="notification-list-time">${escapeHtml(notification.created_at || '')}</div>
+        <div class="notification-list-time" title="${escapeHtml(timeTitle)}">${escapeHtml(time)}</div>
       </button>
-    `).join('');
+    `}).join('');
 
     content.querySelectorAll('.notification-list-item').forEach((item) => {
       item.addEventListener('click', () => {
@@ -248,13 +253,16 @@ class AppNotifications extends HTMLElement {
       notification.acknowledged_at = new Date().toISOString();
     }
 
+    const time = formatRelativeTime(notification.created_at);
+    const timeTitle = formatDateTime(notification.created_at);
+
     content.innerHTML = html`
       <div class="notification-detail">
         <div class="notification-detail-header">
           <div class="notification-title">${escapeHtml(notification.title || 'Notification')}</div>
         </div>
         <div class="notification-message">${escapeHtml(notification.message || '')}</div>
-        <div class="notification-time">${escapeHtml(notification.created_at || '')}</div>
+        <div class="notification-time" title="${escapeHtml(timeTitle)}">${escapeHtml(time)}</div>
         ${notification.link ? html`
           <a class="notification-link" href="${escapeHtml(notification.link)}">Open related page</a>
         ` : ''}

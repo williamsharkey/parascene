@@ -1,3 +1,5 @@
+import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
+
 const html = String.raw;
 
 class AppRouteExplore extends HTMLElement {
@@ -35,10 +37,12 @@ class AppRouteExplore extends HTMLElement {
       for (const item of items) {
         const card = document.createElement("div");
         card.className = "route-card";
+        const createdRel = formatRelativeTime(item.created_at);
+        const createdTitle = formatDateTime(item.created_at);
         card.innerHTML = html`
           <div class="route-title">${item.title}</div>
           <div>${item.summary}</div>
-          <div class="route-meta">${item.category} • ${item.created_at}</div>
+          <div class="route-meta" title="${createdTitle}">${item.category} • ${createdRel}</div>
         `;
         container.appendChild(card);
       }

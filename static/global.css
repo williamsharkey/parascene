@@ -6,6 +6,10 @@
   --surface-muted: #f8f9fc;
   --text: #0f172a;
   --text-muted: #4b5563;
+  /* Used as a subtle backdrop while images are still loading */
+  --image-placeholder: rgba(15, 23, 42, 0.06);
+  /* Used for "image unavailable" fallbacks */
+  --icon-image-unavailable: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='14' rx='2'/%3E%3Cpath d='M8 13l2-2 3 3'/%3E%3Cpath d='M3 19L21 5'/%3E%3C/g%3E%3C/svg%3E");
   --border: #e2e8f0;
   --accent: #7c3aed;
   --accent-text: #ffffff;
@@ -45,6 +49,8 @@
     --surface-muted: #120f1d;
     --text: #ede9fe;
     --text-muted: #a78bfa;
+    /* Used as a subtle backdrop while images are still loading */
+    --image-placeholder: rgba(237, 233, 254, 0.08);
     --border: #3d3552;
     /* --accent: #7c3aed; */
     --accent: #05c76f;
@@ -55,6 +61,12 @@
     --error-bg: #2a1520;
     --error-border: #5b1f35;
     --error-text: #fda4af;
+  }
+}
+
+@supports (background-color: color-mix(in srgb, white 10%, transparent)) {
+  :root {
+    --image-placeholder: color-mix(in srgb, var(--text) 10%, transparent);
   }
 }
 
@@ -75,6 +87,105 @@ body {
   line-height: 1.5;
   background: var(--bg);
   color: var(--text);
+}
+
+img {
+  /* Shows through while the image is still loading */
+  background-color: var(--image-placeholder);
+}
+
+/* ============================================
+   Image failure fallbacks (professional)
+   ============================================ */
+
+.route-media.route-media-error {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--text) 10%, transparent),
+      color-mix(in srgb, var(--text) 4%, transparent)
+    );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+}
+
+.route-media.route-media-error::after {
+  content: "";
+  width: 40px;
+  height: 40px;
+  background-color: color-mix(in srgb, var(--text) 42%, transparent);
+  -webkit-mask: var(--icon-image-unavailable) center / contain no-repeat;
+  mask: var(--icon-image-unavailable) center / contain no-repeat;
+  opacity: 0.85;
+}
+
+.creation-detail-image-wrapper.image-loading,
+.creation-detail-image-wrapper.image-error {
+  width: min(92vw, 1100px);
+  height: min(78vh, 820px);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+
+.creation-detail-image-wrapper.image-loading {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text) 6%, transparent),
+    color-mix(in srgb, var(--text) 12%, transparent),
+    color-mix(in srgb, var(--text) 6%, transparent)
+  );
+  background-size: 220% 100%;
+  animation: image-loading-shimmer 1.4s ease-in-out infinite;
+  /* Keep it calm initially, then shimmer */
+  animation-delay: 650ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creation-detail-image-wrapper.image-loading {
+    animation: none;
+  }
+}
+
+@keyframes image-loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.creation-detail-image-wrapper.image-error {
+  background: var(--image-placeholder);
+}
+
+.creation-detail-image-wrapper.image-error::after {
+  content: "";
+  width: 56px;
+  height: 56px;
+  background-color: color-mix(in srgb, var(--text) 42%, transparent);
+  -webkit-mask: var(--icon-image-unavailable) center / contain no-repeat;
+  mask: var(--icon-image-unavailable) center / contain no-repeat;
+  opacity: 0.85;
+}
+
+.creation-detail-image-wrapper.image-loading,
+.creation-detail-image-wrapper.image-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.creation-detail-image-wrapper.image-loading .creation-detail-image,
+.creation-detail-image-wrapper.image-error .creation-detail-image {
+  display: none;
 }
 
 /* Hide content until page is fully loaded */
@@ -1218,6 +1329,7 @@ header .hamburger-button.active span:nth-child(3) {
   position: absolute;
   inset: 0;
   border-radius: 6px;
+  background-color: var(--image-placeholder);
   background-size: cover;
   background-position: center;
   border: none;
@@ -1296,10 +1408,16 @@ header .hamburger-button.active span:nth-child(3) {
   padding: 12px;
 }
 
-.route-card:hover .route-details,
 .route-card:focus-within .route-details {
   opacity: 1;
   transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .route-card:hover .route-details {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .route-title {
@@ -1443,9 +1561,11 @@ header .hamburger-button.active span:nth-child(3) {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  }
 }
 
 /* Grid layouts for cards */

@@ -1,3 +1,5 @@
+import { formatDateTime, formatRelativeTime } from '../shared/datetime.js';
+
 const html = String.raw;
 
 class AppHeader extends HTMLElement {
@@ -347,7 +349,8 @@ class AppHeader extends HTMLElement {
 
         const time = document.createElement('div');
         time.className = 'notification-preview-time';
-        time.textContent = notification.created_at || '';
+        time.textContent = formatRelativeTime(notification.created_at) || '';
+        time.title = formatDateTime(notification.created_at) || '';
 
         item.appendChild(title);
         item.appendChild(message);
