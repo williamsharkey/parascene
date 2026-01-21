@@ -9,6 +9,9 @@ class AppHeader extends HTMLElement {
     this.mobileMenuOpen = false;
     this.notificationsCount = 0;
     this.creditsCount = 0;
+    this.previewNotifications = [];
+    this.previewLoadedAt = 0;
+    this.previewLoading = false;
     this.handleDocumentClick = this.handleDocumentClick.bind(this);
     this.handleRouteChange = this.handleRouteChange.bind(this);
     this.handleNotificationsUpdated = this.handleNotificationsUpdated.bind(this);
@@ -42,6 +45,7 @@ class AppHeader extends HTMLElement {
     this.loadNotificationCount();
     this.loadCreditsCount();
     this.updateCreditsAttention();
+    this.prefetchNotificationPreview();
     // Small delay to ensure DOM is ready for route change handler
     setTimeout(() => this.handleRouteChange(), 0);
   }
@@ -280,28 +284,29 @@ class AppHeader extends HTMLElement {
     }
   }
 
-  async loadNotificationPreview() {
+  async loadNotificationPreview({ silent = true, force = false } = {}) {
     if (!this.hasAttribute('show-notifications')) return;
 
     const preview = this.querySelector('.notifications-preview');
     if (!preview) return;
 
-    preview.innerHTML = html`
-      <div class="notifications-menu-item notifications-loading">
-        Loading notifications...
-      </div>
-    `;
+    if (this.previewLoading) return;
+    const now = Date.now();
+    if (!force && now - this.previewLoadedAt < 30000) return;
 
     try {
+      this.previewLoading = true;
       const response = await fetch('/api/notifications', {
         credentials: 'include'
       });
       if (response.status === 401) {
-        preview.innerHTML = html`
-          <div class="notifications-menu-item notifications-loading">
-            Sign in to view notifications.
-          </div>
-        `;
+        if (!this.previewNotifications.length) {
+          preview.innerHTML = html`
+            <div class="notifications-menu-item notifications-loading">
+              Sign in to view notifications.
+            </div>
+          `;
+        }
         return;
       }
       if (!response.ok) {
@@ -312,7 +317,21 @@ class AppHeader extends HTMLElement {
         ? data.notifications.slice(0, 5)
         : [];
 
-      preview.innerHTML = '';
+      const nextKey = notifications
+        .map((notification) => `${notification.id}:${notification.acknowledged_at || ''}`)
+        .join('|');
+      const currentKey = this.previewNotifications
+        .map((notification) => `${notification.id}:${notification.acknowledged_at || ''}`)
+        .join('|');
+
+      if (nextKey === currentKey) {
+        this.previewLoadedAt = Date.now();
+        return;
+      }
+
+      this.previewNotifications = notifications;
+      this.previewLoadedAt = Date.now();
+
       if (notifications.length === 0) {
         preview.innerHTML = html`
           <div class="notifications-menu-item notifications-loading">
@@ -322,6 +341,7 @@ class AppHeader extends HTMLElement {
         return;
       }
 
+      const fragment = document.createDocumentFragment();
       for (const notification of notifications) {
         const item = document.createElement('div');
         item.className = 'notification-preview-item';
@@ -355,15 +375,30 @@ class AppHeader extends HTMLElement {
         item.appendChild(title);
         item.appendChild(message);
         item.appendChild(time);
-        preview.appendChild(item);
+        fragment.appendChild(item);
       }
+      preview.innerHTML = '';
+      preview.appendChild(fragment);
     } catch {
-      preview.innerHTML = html`
-        <div class="notifications-menu-item notifications-loading">
-          Failed to load notifications.
-        </div>
-      `;
+      if (!silent && !this.previewNotifications.length) {
+        preview.innerHTML = html`
+          <div class="notifications-menu-item notifications-loading">
+            Failed to load notifications.
+          </div>
+        `;
+      }
+    } finally {
+      this.previewLoading = false;
     }
+  }
+
+  prefetchNotificationPreview() {
+    const schedule = window.requestIdleCallback
+      ? window.requestIdleCallback.bind(window)
+      : (cb) => setTimeout(cb, 250);
+    schedule(() => {
+      this.loadNotificationPreview({ silent: true, force: true });
+    });
   }
 
   handleNotificationsUpdated() {
@@ -560,7 +595,7 @@ class AppHeader extends HTMLElement {
     if (menu) {
       menu.classList.toggle('open', this.notificationsMenuOpen);
       if (this.notificationsMenuOpen) {
-        this.loadNotificationPreview();
+        this.loadNotificationPreview({ silent: true });
       }
     }
   }

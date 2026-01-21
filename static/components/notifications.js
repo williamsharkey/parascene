@@ -7,6 +7,8 @@ class AppNotifications extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._isOpen = false;
+    this._isLoading = false;
+    this._lastLoadedAt = 0;
     this.notifications = [];
     this.activeIndex = 0;
     this.pendingNotificationId = null;
@@ -19,6 +21,7 @@ class AppNotifications extends HTMLElement {
   connectedCallback() {
     this.render();
     this.setupEventListeners();
+    this.prefetchNotifications();
   }
 
   disconnectedCallback() {
@@ -33,9 +36,7 @@ class AppNotifications extends HTMLElement {
     document.addEventListener('close-notifications', this.handleCloseEvent);
     document.addEventListener('notifications-acknowledged', () => {
       // Reload notifications when one is acknowledged
-      if (this.isOpen()) {
-        this.loadNotifications();
-      }
+      this.loadNotifications({ silent: true, force: true });
     });
 
     const overlays = this.shadowRoot.querySelectorAll(
@@ -85,7 +86,10 @@ class AppNotifications extends HTMLElement {
     this.viewMode = 'list';
     this.pendingNotificationId = null;
     this.openModal('.notifications-overlay');
-    this.loadNotifications();
+    if (this.notifications.length) {
+      this.renderNotificationList();
+    }
+    this.loadNotifications({ silent: true });
     document.dispatchEvent(new CustomEvent('close-profile'));
   }
 
@@ -93,7 +97,11 @@ class AppNotifications extends HTMLElement {
     this.viewMode = 'detail';
     this.pendingNotificationId = notificationId;
     this.openModal('.notification-detail-overlay');
-    this.loadNotifications();
+    if (this.notifications.length) {
+      this.selectActiveNotification();
+      this.renderNotificationDetail();
+    }
+    this.loadNotifications({ silent: true });
     document.dispatchEvent(new CustomEvent('close-profile'));
   }
 
@@ -118,14 +126,23 @@ class AppNotifications extends HTMLElement {
     overlays.forEach((overlay) => overlay.classList.remove('open'));
   }
 
-  async loadNotifications() {
+  async loadNotifications({ silent = false, force = false } = {}) {
+    if (this._isLoading) return;
+    const now = Date.now();
+    if (!force && now - this._lastLoadedAt < 30000) {
+      return;
+    }
+
     const listContent = this.shadowRoot.querySelector('.notifications-content');
     const detailContent = this.shadowRoot.querySelector('.notification-detail-content');
     const content = this.viewMode === 'detail' ? detailContent : listContent;
     if (!content) return;
 
-    content.innerHTML = html`<p>Loading...</p>`;
+    if (!silent && !this.notifications.length) {
+      content.innerHTML = html`<p>Loading...</p>`;
+    }
 
+    this._isLoading = true;
     try {
       const response = await fetch('/api/notifications', {
         credentials: 'include'
@@ -137,17 +154,19 @@ class AppNotifications extends HTMLElement {
       this.notifications = Array.isArray(data.notifications)
         ? data.notifications
         : [];
+      this._lastLoadedAt = Date.now();
       this.selectActiveNotification();
-      if (this.viewMode === 'detail') {
-        this.renderNotificationDetail();
-      } else {
-        this.renderNotificationList();
-      }
+      this.renderNotificationList();
+      this.renderNotificationDetail({
+        acknowledge: this.isOpen() && this.viewMode === 'detail'
+      });
     } catch (error) {
       console.error('Error loading notifications:', error);
       if (content) {
         content.innerHTML = html`<p style="color: var(--text-muted);">Failed to load notifications.</p>`;
       }
+    } finally {
+      this._isLoading = false;
     }
   }
 
@@ -170,7 +189,7 @@ class AppNotifications extends HTMLElement {
           notification.acknowledged_at = new Date().toISOString();
         }
         // Reload notifications to get fresh data from server
-        await this.loadNotifications();
+        await this.loadNotifications({ silent: true, force: true });
         // Dispatch event for other components (like header count)
         document.dispatchEvent(new CustomEvent('notifications-acknowledged'));
       }
@@ -231,7 +250,7 @@ class AppNotifications extends HTMLElement {
     });
   }
 
-  renderNotificationDetail() {
+  renderNotificationDetail({ acknowledge = true } = {}) {
     const content = this.shadowRoot.querySelector('.notification-detail-content');
     if (!content) return;
 
@@ -248,7 +267,7 @@ class AppNotifications extends HTMLElement {
 
     const notification = this.notifications[this.activeIndex];
 
-    if (!notification.acknowledged_at) {
+    if (acknowledge && !notification.acknowledged_at) {
       this.acknowledgeNotification(notification.id);
       notification.acknowledged_at = new Date().toISOString();
     }
@@ -484,9 +503,7 @@ class AppNotifications extends HTMLElement {
             </button>
           </div>
           <div class="notifications-body">
-            <div class="notifications-content">
-              <p>Loading...</p>
-            </div>
+            <div class="notifications-content"></div>
           </div>
         </div>
       </div>
@@ -502,13 +519,20 @@ class AppNotifications extends HTMLElement {
             </button>
           </div>
           <div class="notification-detail-body">
-            <div class="notification-detail-content">
-              <p>Loading...</p>
-            </div>
+            <div class="notification-detail-content"></div>
           </div>
         </div>
       </div>
     `;
+  }
+
+  prefetchNotifications() {
+    const schedule = window.requestIdleCallback
+      ? window.requestIdleCallback.bind(window)
+      : (cb) => setTimeout(cb, 250);
+    schedule(() => {
+      this.loadNotifications({ silent: true, force: true });
+    });
   }
 }
 
