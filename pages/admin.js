@@ -6,6 +6,7 @@ const adminDataLoaded = {
 	todo: false
 };
 let todoWritable = true;
+let todoPriorityMode = "pre";
 
 function getDialColor(value) {
 	const clamped = Math.max(0, Math.min(100, Number(value) || 0));
@@ -409,7 +410,7 @@ function renderTodoRows(container, items, writable) {
 	}
 }
 
-async function loadTodo({ force = false } = {}) {
+async function loadTodo({ force = false, mode } = {}) {
 	const body = document.querySelector("#todo-list");
 	const alert = document.querySelector("#todo-alert");
 	const modal = document.querySelector("#todo-modal");
@@ -418,7 +419,9 @@ async function loadTodo({ force = false } = {}) {
 	if (adminDataLoaded.todo && !force) return;
 
 	try {
-		const response = await fetch("/api/todo", {
+		const priorityMode = mode ? (mode === "post" ? "post" : "pre") : todoPriorityMode;
+		const query = new URLSearchParams({ mode: priorityMode });
+		const response = await fetch(`/api/todo?${query.toString()}`, {
 			credentials: "include"
 		});
 		if (!response.ok) throw new Error("Failed to load todo.");
@@ -602,6 +605,33 @@ if (todoList) {
 				}
 			});
 		}
+	});
+}
+
+const todoModeToggle = document.querySelector("[data-todo-mode-toggle]");
+const todoModeButtons = todoModeToggle
+	? Array.from(todoModeToggle.querySelectorAll("[data-todo-mode]"))
+	: [];
+
+function setTodoPriorityMode(mode) {
+	todoPriorityMode = mode === "post" ? "post" : "pre";
+	todoModeButtons.forEach((button) => {
+		const isActive = button.dataset.todoMode === todoPriorityMode;
+		button.classList.toggle("is-active", isActive);
+		button.setAttribute("aria-pressed", String(isActive));
+	});
+}
+
+if (todoModeButtons.length) {
+	setTodoPriorityMode(todoPriorityMode);
+	todoModeButtons.forEach((button) => {
+		button.addEventListener("click", () => {
+			const nextMode = button.dataset.todoMode;
+			if (!nextMode || nextMode === todoPriorityMode) return;
+			setTodoPriorityMode(nextMode);
+			adminDataLoaded.todo = false;
+			loadTodo({ force: true, mode: todoPriorityMode });
+		});
 	});
 }
 

@@ -21,38 +21,41 @@
   </head>
   <body>
     <app-header show-notifications show-profile default-route="users">
-      <a data-route="users">Users</a>
-      <a data-route="moderation">Moderation</a>
-      <a data-route="providers">Providers</a>
-      <a data-route="policies">Policies</a>
       <a data-route="todo">Todo</a>
+      <a data-route="users">Users</a>
+      <a data-route="providers">Servers</a>
+      <!-- <a data-route="moderation">Moderation</a> -->
+      <!-- <a data-route="policies">Policies</a> -->
     </app-header>
     <app-profile></app-profile>
     <app-credits></app-credits>
     <app-notifications></app-notifications>
 
     <main>
+      <!--
       <section data-route-content="moderation">
         <h3>Moderation</h3>
         <div id="moderation-container" class="admin-cards">
           <div class="admin-loading">Loading...</div>
         </div>
       </section>
-      
+      -->
+
       <section data-route-content="providers">
-        <h3>Providers</h3>
+        <h3>Servers</h3>
         <div id="providers-container" class="admin-cards">
           <div class="admin-loading">Loading...</div>
         </div>
       </section>
-      
+
+      <!--
       <section data-route-content="policies">
         <h3>Policies</h3>
         <div id="policies-container" class="admin-cards">
           <div class="admin-loading">Loading...</div>
         </div>
       </section>
-      
+      -->
       <section data-route-content="users">
         <h3>Users</h3>
         <div id="users-container" class="users-cards">
@@ -61,7 +64,13 @@
       </section>
 
       <section data-route-content="todo">
-        <h3>Todo</h3>
+        <div class="todo-header">
+          <h3>Todo</h3>
+          <div class="todo-mode-toggle" data-todo-mode-toggle role="group" aria-label="Priority formula">
+            <button type="button" class="todo-mode-button" data-todo-mode="pre" aria-pressed="true">Pre-release</button>
+            <button type="button" class="todo-mode-button" data-todo-mode="post" aria-pressed="false">Post-release</button>
+          </div>
+        </div>
         <div class="todo-layout">
           <div id="todo-list" class="todo-list">
             <div class="todo-loading">Loading...</div>

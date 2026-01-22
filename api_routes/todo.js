@@ -7,7 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TODO_PATH = path.resolve(__dirname, "..", "TODO.json");
 
+// pre-release
 // priority: 100 (highest) .. 1 (lowest)
+// Goal: Get something real into users’ hands fast.
 // Impact dominates unless time gets too high.
 function computePriority(time, impact) {
 	if (!Number.isFinite(time) || !Number.isFinite(impact)) return 1;
@@ -35,6 +37,37 @@ function computePriority(time, impact) {
 	}
 }
 
+// post-release
+// Goal: Allocate effort efficiently under real constraints.
+// priority: 100 (highest) .. 1 (lowest)
+// Impact dominates, but time progressively taxes it (no hard cutoff).
+function computePriorityRatio(time, impact) {
+	if (!Number.isFinite(time) || !Number.isFinite(impact)) return 1;
+
+	const MIN = 1, MAX = 100;
+
+	// --- weighting knobs (tweak later) ---
+	const timeScale = 100; // time where cost meaningfully bites
+	const timeCurve = 2;   // 1=linear, 2=quadratic, 3+=harsher
+	const timeWeight = 1;   // >1 makes time matter more
+
+	// --- normalize inputs ---
+	const i = clamp(impact, 0, MAX);
+	const t = Math.max(0, time / timeScale);
+
+	// --- time taxes impact (ratio form) ---
+	// denominator grows smoothly; impact can still win
+	const cost = timeWeight * Math.pow(t, timeCurve);
+	const rawScore = i / (1 + cost);
+
+	// map 0..100 → 1..100
+	return clamp(Math.round(rawScore || MIN), MIN, MAX);
+
+	function clamp(n, lo, hi) {
+		return Math.max(lo, Math.min(hi, n));
+	}
+}
+
 function computeProbability(time) {
 	if (!Number.isFinite(time)) return 0;
 	return Math.max(0, Math.min(100, Math.round(100 - time)));
@@ -47,14 +80,14 @@ function normalizeDependencies(dependsOn) {
 		.filter((dep) => dep.length > 0);
 }
 
-function normalizeTodoItem(item) {
+function normalizeTodoItem(item, computeFn = computePriority) {
 	const name = String(item?.name || "").trim();
 	const description = String(item?.description || "").trim();
 	const cost = Number(item?.cost ?? item?.time);
 	const impact = Number(item?.impact);
 	const dependsOn = normalizeDependencies(item?.dependsOn);
 	const priority = Number.isFinite(cost) && Number.isFinite(impact)
-		? computePriority(cost, impact)
+		? computeFn(cost, impact)
 		: 0;
 	const probability = Number.isFinite(cost)
 		? computeProbability(cost)
@@ -95,11 +128,12 @@ function applyDependencyPriority(items) {
 	}
 }
 
-async function readTodoItems() {
+async function readTodoItems({ mode } = {}) {
+	const computeFn = mode === "post" ? computePriorityRatio : computePriority;
 	const raw = await fs.readFile(TODO_PATH, "utf8");
 	const parsed = JSON.parse(raw);
 	if (!Array.isArray(parsed)) return [];
-	const items = parsed.map(normalizeTodoItem);
+	const items = parsed.map((item) => normalizeTodoItem(item, computeFn));
 	applyDependencyPriority(items);
 	return items;
 }
@@ -129,7 +163,8 @@ export default function createTodoRoutes() {
 
 	router.get("/api/todo", async (req, res) => {
 		try {
-			const items = await readTodoItems();
+		const mode = req.query?.mode === "post" ? "post" : "pre";
+		const items = await readTodoItems({ mode });
 			res.json({
 				items: items.map((item) => ({
 					name: item.name,
@@ -140,7 +175,9 @@ export default function createTodoRoutes() {
 					probability: item.probability
 				})),
 				writable: !process.env.VERCEL,
-				formula: "round(Impact * (1 - (Cost/100)^2)), deps bumped +1"
+			formula: mode === "post"
+				? "round(Impact / (1 + (Cost/100)^2)), deps bumped +1"
+				: "round(Impact * (1 - (Cost/100)^2)), deps bumped +1"
 			});
 		} catch (error) {
 			res.status(500).json({ error: "Failed to read TODO.json." });

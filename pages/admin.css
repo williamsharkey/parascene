@@ -107,6 +107,39 @@
   gap: 16px;
 }
 
+.todo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.todo-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.todo-mode-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.todo-mode-button.is-active {
+  background: var(--surface-strong, rgba(124, 58, 237, 0.15));
+  color: var(--text);
+}
+
 .todo-list {
   display: grid;
   gap: 0;
