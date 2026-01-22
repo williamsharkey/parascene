@@ -1,96 +1,81 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="supported-color-schemes" content="light dark" />
-    <title>parascene</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#7c3aed" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Parascene" />
-    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
-    <link rel="stylesheet" href="/global.css" />
-    <link rel="stylesheet" href="/auth.css" />
-    <script type="module" src="/global.js"></script>
-  </head>
-  <body>
-    <main>
-      <div class="auth-logo">
-        <svg class="logo" width="300" height="60" viewBox="0 0 200 40">
-          <text x="2" y="30" class="logo-text">
-            <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
-          </text>
-        </svg>
-      </div>
 
-      <section id="signup">
-        <h3>Signup</h3>
-        <form action="/signup" method="post" autocomplete="on">
-          <label>
-            Email
-            <input
-              type="email"
-              name="username"
-              autocomplete="username"
-              inputmode="email"
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              name="password"
-              autocomplete="new-password"
-              required
-            />
-          </label>
-          <button type="submit">Create account</button>
-        </form>
-        <br />
-        <p>Already have an account? <a href="#login">Click here to log in.</a></p>
-      </section>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<meta name="color-scheme" content="light dark" />
+	<meta name="supported-color-schemes" content="light dark" />
+	<title>parascene</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap"
+		rel="stylesheet">
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#7c3aed" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-title" content="Parascene" />
+	<link rel="apple-touch-icon" href="/icons/icon-180.png" />
+	<link rel="stylesheet" href="/global.css" />
+	<link rel="stylesheet" href="/auth.css" />
+	<script type="module" src="/global.js"></script>
+</head>
 
-      <section id="login">
-        <h3>Login</h3>
-        <div id="auth-fail" class="alert error margin-bottom-1">
-          <strong>Login failed</strong>
-          <p>Please check your email and password, then try again.</p>
-        </div>
-        <form action="/login" method="post" autocomplete="on">
-          <label>
-            Email
-            <input
-              type="email"
-              name="username"
-              autocomplete="username"
-              inputmode="email"
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              name="password"
-              autocomplete="current-password"
-              required
-            />
-          </label>
-          <button type="submit">Login</button>
-        </form>
-        <br />
-        <p>New here? <a href="#signup">Click here to sign up.</a></p>
-      </section>
+<body>
+	<main>
+		<div class="auth-logo">
+			<svg class="logo" width="300" height="60" viewBox="0 0 200 40">
+				<text x="2" y="30" class="logo-text">
+					<tspan opacity="1">par</tspan>
+					<tspan opacity="0.7">asc</tspan>
+					<tspan opacity="1">ene</tspan>
+				</text>
+			</svg>
+		</div>
 
-    </main>
+		<section id="signup">
+			<h3>Signup</h3>
+			<form action="/signup" method="post" autocomplete="on">
+				<label>
+					Email
+					<input type="email" name="username" autocomplete="username" inputmode="email" required />
+				</label>
+				<label>
+					Password
+					<input type="password" name="password" autocomplete="new-password" required />
+				</label>
+				<button type="submit">Create account</button>
+			</form>
+			<br />
+			<p>Already have an account? <a href="#login">Click here to log in.</a></p>
+		</section>
 
-    <script src="/auth.js" defer></script>
-  </body>
+		<section id="login">
+			<h3>Login</h3>
+			<div id="fail" class="alert error margin-bottom-1">
+				<strong>Login failed</strong>
+				<p>Please check your email and password, then try again.</p>
+			</div>
+			<form action="/login" method="post" autocomplete="on">
+				<label>
+					Email
+					<input type="email" name="username" autocomplete="username" inputmode="email" required />
+				</label>
+				<label>
+					Password
+					<input type="password" name="password" autocomplete="current-password" required />
+				</label>
+				<button type="submit">Login</button>
+			</form>
+			<br />
+			<p>New here? <a href="#signup">Click here to sign up.</a></p>
+		</section>
+
+	</main>
+
+	<script src="/auth.js" defer></script>
+</body>
+
 </html>

@@ -1,272 +1,272 @@
 const html = String.raw;
 
 class AppCredits extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-    this._isOpen = false;
-    this.creditsCount = 0;
-    this.lastClaimDate = null;
-    this.handleEscape = this.handleEscape.bind(this);
-    this.handleOpenEvent = this.handleOpenEvent.bind(this);
-    this.handleCloseEvent = this.handleCloseEvent.bind(this);
-    this.handleClaimCredits = this.handleClaimCredits.bind(this);
-  }
+	constructor() {
+		super();
+		this.attachShadow({ mode: 'open' });
+		this._isOpen = false;
+		this.creditsCount = 0;
+		this.lastClaimDate = null;
+		this.handleEscape = this.handleEscape.bind(this);
+		this.handleOpenEvent = this.handleOpenEvent.bind(this);
+		this.handleCloseEvent = this.handleCloseEvent.bind(this);
+		this.handleClaimCredits = this.handleClaimCredits.bind(this);
+	}
 
-  connectedCallback() {
-    this.render();
-    this.setupEventListeners();
-    this.refreshCredits();
-  }
+	connectedCallback() {
+		this.render();
+		this.setupEventListeners();
+		this.refreshCredits();
+	}
 
-  disconnectedCallback() {
-    document.removeEventListener('keydown', this.handleEscape);
-    document.removeEventListener('open-credits', this.handleOpenEvent);
-    document.removeEventListener('close-credits', this.handleCloseEvent);
-  }
+	disconnectedCallback() {
+		document.removeEventListener('keydown', this.handleEscape);
+		document.removeEventListener('open-credits', this.handleOpenEvent);
+		document.removeEventListener('close-credits', this.handleCloseEvent);
+	}
 
-  setupEventListeners() {
-    document.addEventListener('keydown', this.handleEscape);
-    document.addEventListener('open-credits', this.handleOpenEvent);
-    document.addEventListener('close-credits', this.handleCloseEvent);
+	setupEventListeners() {
+		document.addEventListener('keydown', this.handleEscape);
+		document.addEventListener('open-credits', this.handleOpenEvent);
+		document.addEventListener('close-credits', this.handleCloseEvent);
 
-    const overlay = this.shadowRoot.querySelector('.credits-overlay');
-    const closeButton = this.shadowRoot.querySelector('.credits-close');
-    const claimButton = this.shadowRoot.querySelector('.credits-claim-button');
-    const linkButtons = this.shadowRoot.querySelectorAll('.credits-link-button');
+		const overlay = this.shadowRoot.querySelector('.credits-overlay');
+		const closeButton = this.shadowRoot.querySelector('.credits-close');
+		const claimButton = this.shadowRoot.querySelector('.credits-claim-button');
+		const linkButtons = this.shadowRoot.querySelectorAll('.credits-link-button');
 
-    if (overlay) {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-          this.close();
-        }
-      });
-    }
+		if (overlay) {
+			overlay.addEventListener('click', (e) => {
+				if (e.target === overlay) {
+					this.close();
+				}
+			});
+		}
 
-    if (closeButton) {
-      closeButton.addEventListener('click', () => {
-        this.close();
-      });
-    }
+		if (closeButton) {
+			closeButton.addEventListener('click', () => {
+				this.close();
+			});
+		}
 
-    if (claimButton) {
-      claimButton.addEventListener('click', this.handleClaimCredits);
-    }
+		if (claimButton) {
+			claimButton.addEventListener('click', this.handleClaimCredits);
+		}
 
-    if (linkButtons.length > 0) {
-      linkButtons.forEach((link) => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const href = link.getAttribute('href');
-          if (!href) return;
-          this.close();
-          if (href.startsWith('/servers')) {
-            window.location.assign(href);
-            return;
-          }
-          window.location.assign(href);
-        });
-      });
-    }
-  }
+		if (linkButtons.length > 0) {
+			linkButtons.forEach((link) => {
+				link.addEventListener('click', (e) => {
+					e.preventDefault();
+					const href = link.getAttribute('href');
+					if (!href) return;
+					this.close();
+					if (href.startsWith('/servers')) {
+						window.location.assign(href);
+						return;
+					}
+					window.location.assign(href);
+				});
+			});
+		}
+	}
 
-  handleOpenEvent() {
-    this.open();
-  }
+	handleOpenEvent() {
+		this.open();
+	}
 
-  handleCloseEvent() {
-    this.close();
-  }
+	handleCloseEvent() {
+		this.close();
+	}
 
-  handleEscape(e) {
-    if (e.key === 'Escape' && this.isOpen()) {
-      this.close();
-    }
-  }
+	handleEscape(e) {
+		if (e.key === 'Escape' && this.isOpen()) {
+			this.close();
+		}
+	}
 
-  isOpen() {
-    return this._isOpen;
-  }
+	isOpen() {
+		return this._isOpen;
+	}
 
-  open() {
-    if (this._isOpen) return;
-    this._isOpen = true;
-    const overlay = this.shadowRoot.querySelector('.credits-overlay');
-    if (overlay) {
-      overlay.classList.add('open');
-    }
-    document.dispatchEvent(new CustomEvent('close-notifications'));
-    this.refreshCredits();
-  }
+	open() {
+		if (this._isOpen) return;
+		this._isOpen = true;
+		const overlay = this.shadowRoot.querySelector('.credits-overlay');
+		if (overlay) {
+			overlay.classList.add('open');
+		}
+		document.dispatchEvent(new CustomEvent('close-notifications'));
+		this.refreshCredits();
+	}
 
-  close() {
-    if (!this._isOpen) return;
-    this._isOpen = false;
-    const overlay = this.shadowRoot.querySelector('.credits-overlay');
-    if (overlay) {
-      overlay.classList.remove('open');
-    }
-  }
+	close() {
+		if (!this._isOpen) return;
+		this._isOpen = false;
+		const overlay = this.shadowRoot.querySelector('.credits-overlay');
+		if (overlay) {
+			overlay.classList.remove('open');
+		}
+	}
 
-  async refreshCredits() {
-    try {
-      const response = await fetch('/api/credits', { credentials: 'include' });
-      if (!response.ok) {
-        this.creditsCount = 0;
-        this.updateCreditsUI();
-        this.updateClaimUI();
-        return;
-      }
-      const data = await response.json();
-      this.creditsCount = this.normalizeCredits(data?.balance ?? 0);
-      this.lastClaimDate = data?.lastClaimDate || null;
-      // Cache in localStorage for offline/performance (optional)
-      this.writeStoredCredits(this.creditsCount);
-      this.updateCreditsUI();
-      this.updateClaimUI();
-    } catch {
-      // Fallback to cached value if available
-      const storedCredits = this.readStoredCredits();
-      if (storedCredits !== null) {
-        this.creditsCount = storedCredits;
-        this.updateCreditsUI();
-        this.updateClaimUI();
-      } else {
-        this.creditsCount = 0;
-        this.updateCreditsUI();
-        this.updateClaimUI();
-      }
-    }
-  }
+	async refreshCredits() {
+		try {
+			const response = await fetch('/api/credits', { credentials: 'include' });
+			if (!response.ok) {
+				this.creditsCount = 0;
+				this.updateCreditsUI();
+				this.updateClaimUI();
+				return;
+			}
+			const data = await response.json();
+			this.creditsCount = this.normalizeCredits(data?.balance ?? 0);
+			this.lastClaimDate = data?.lastClaimDate || null;
+			// Cache in localStorage for offline/performance (optional)
+			this.writeStoredCredits(this.creditsCount);
+			this.updateCreditsUI();
+			this.updateClaimUI();
+		} catch {
+			// Fallback to cached value if available
+			const storedCredits = this.readStoredCredits();
+			if (storedCredits !== null) {
+				this.creditsCount = storedCredits;
+				this.updateCreditsUI();
+				this.updateClaimUI();
+			} else {
+				this.creditsCount = 0;
+				this.updateCreditsUI();
+				this.updateClaimUI();
+			}
+		}
+	}
 
-  async handleClaimCredits() {
-    if (this.isClaimedToday()) return;
-    
-    try {
-      const response = await fetch('/api/credits/claim', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Failed to claim credits:', error);
-        return;
-      }
-      
-      const data = await response.json();
-      if (data.success) {
-        this.creditsCount = this.normalizeCredits(data.balance);
-        this.writeStoredCredits(this.creditsCount);
-        // Refresh to get updated lastClaimDate
-        await this.refreshCredits();
-        this.updateCreditsUI();
-        this.updateClaimUI();
-        document.dispatchEvent(new CustomEvent('credits-updated', {
-          detail: { count: this.creditsCount }
-        }));
-        document.dispatchEvent(new CustomEvent('credits-claim-status', {
-          detail: { canClaim: false }
-        }));
-      }
-    } catch (error) {
-      console.error('Error claiming credits:', error);
-    }
-  }
+	async handleClaimCredits() {
+		if (this.isClaimedToday()) return;
 
-  updateCreditsUI() {
-    const balanceValue = this.shadowRoot.querySelector('.credits-balance-value');
-    if (balanceValue) {
-      balanceValue.textContent = this.formatCredits(this.creditsCount);
-    }
-  }
+		try {
+			const response = await fetch('/api/credits/claim', {
+				method: 'POST',
+				credentials: 'include',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
 
-  updateClaimUI() {
-    const claimButton = this.shadowRoot.querySelector('.credits-claim-button');
-    const claimNote = this.shadowRoot.querySelector('.credits-claim-note');
-    const claimed = this.isClaimedToday();
-    if (claimButton) {
-      claimButton.disabled = claimed;
-    }
-    if (claimNote) {
-      claimNote.textContent = claimed ? 'Come back tomorrow for more credits.' : '';
-    }
-    document.dispatchEvent(new CustomEvent('credits-claim-status', {
-      detail: { canClaim: !claimed }
-    }));
-  }
+			if (!response.ok) {
+				const error = await response.json();
+				console.error('Failed to claim credits:', error);
+				return;
+			}
 
-  isClaimedToday() {
-    if (!this.lastClaimDate) return false;
-    const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const lastClaimDate = new Date(this.lastClaimDate);
-    const lastClaimUTC = new Date(Date.UTC(lastClaimDate.getUTCFullYear(), lastClaimDate.getUTCMonth(), lastClaimDate.getUTCDate()));
-    return lastClaimUTC.getTime() >= todayUTC.getTime();
-  }
+			const data = await response.json();
+			if (data.success) {
+				this.creditsCount = this.normalizeCredits(data.balance);
+				this.writeStoredCredits(this.creditsCount);
+				// Refresh to get updated lastClaimDate
+				await this.refreshCredits();
+				this.updateCreditsUI();
+				this.updateClaimUI();
+				document.dispatchEvent(new CustomEvent('credits-updated', {
+					detail: { count: this.creditsCount }
+				}));
+				document.dispatchEvent(new CustomEvent('credits-claim-status', {
+					detail: { canClaim: false }
+				}));
+			}
+		} catch (error) {
+			console.error('Error claiming credits:', error);
+		}
+	}
 
-  getTodayKey() {
-    return new Date().toISOString().slice(0, 10);
-  }
+	updateCreditsUI() {
+		const balanceValue = this.shadowRoot.querySelector('.credits-balance-value');
+		if (balanceValue) {
+			balanceValue.textContent = this.formatCredits(this.creditsCount);
+		}
+	}
 
-  normalizeCredits(value) {
-    const count = Number(value);
-    if (!Number.isFinite(count)) return 0;
-    return Math.max(0, Math.round(count * 10) / 10);
-  }
+	updateClaimUI() {
+		const claimButton = this.shadowRoot.querySelector('.credits-claim-button');
+		const claimNote = this.shadowRoot.querySelector('.credits-claim-note');
+		const claimed = this.isClaimedToday();
+		if (claimButton) {
+			claimButton.disabled = claimed;
+		}
+		if (claimNote) {
+			claimNote.textContent = claimed ? 'Come back tomorrow for more credits.' : '';
+		}
+		document.dispatchEvent(new CustomEvent('credits-claim-status', {
+			detail: { canClaim: !claimed }
+		}));
+	}
 
-  formatCredits(value) {
-    const count = this.normalizeCredits(value);
-    // Show the actual decimal value (e.g., "101.5" instead of "101+")
-    // If it's a whole number, show without decimal places
-    const wholePart = Math.floor(count);
-    const decimalPart = count - wholePart;
-    if (decimalPart > 0) {
-      // Show one decimal place
-      return count.toFixed(1);
-    }
-    return String(wholePart);
-  }
+	isClaimedToday() {
+		if (!this.lastClaimDate) return false;
+		const now = new Date();
+		const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+		const lastClaimDate = new Date(this.lastClaimDate);
+		const lastClaimUTC = new Date(Date.UTC(lastClaimDate.getUTCFullYear(), lastClaimDate.getUTCMonth(), lastClaimDate.getUTCDate()));
+		return lastClaimUTC.getTime() >= todayUTC.getTime();
+	}
 
-  readStoredCredits() {
-    try {
-      const stored = window.localStorage?.getItem('credits-balance');
-      if (stored == null) return null;
-      return this.normalizeCredits(stored);
-    } catch {
-      return null;
-    }
-  }
+	getTodayKey() {
+		return new Date().toISOString().slice(0, 10);
+	}
 
-  writeStoredCredits(value) {
-    try {
-      window.localStorage?.setItem('credits-balance', String(this.normalizeCredits(value)));
-    } catch {
-      // ignore storage errors
-    }
-  }
+	normalizeCredits(value) {
+		const count = Number(value);
+		if (!Number.isFinite(count)) return 0;
+		return Math.max(0, Math.round(count * 10) / 10);
+	}
 
-  readStoredClaimDate() {
-    try {
-      return window.localStorage?.getItem('credits-last-claim');
-    } catch {
-      return null;
-    }
-  }
+	formatCredits(value) {
+		const count = this.normalizeCredits(value);
+		// Show the actual decimal value (e.g., "101.5" instead of "101+")
+		// If it's a whole number, show without decimal places
+		const wholePart = Math.floor(count);
+		const decimalPart = count - wholePart;
+		if (decimalPart > 0) {
+			// Show one decimal place
+			return count.toFixed(1);
+		}
+		return String(wholePart);
+	}
 
-  writeStoredClaimDate(value) {
-    try {
-      window.localStorage?.setItem('credits-last-claim', value);
-    } catch {
-      // ignore storage errors
-    }
-  }
+	readStoredCredits() {
+		try {
+			const stored = window.localStorage?.getItem('credits-balance');
+			if (stored == null) return null;
+			return this.normalizeCredits(stored);
+		} catch {
+			return null;
+		}
+	}
 
-  render() {
-    this.shadowRoot.innerHTML = html`
+	writeStoredCredits(value) {
+		try {
+			window.localStorage?.setItem('credits-balance', String(this.normalizeCredits(value)));
+		} catch {
+			// ignore storage errors
+		}
+	}
+
+	readStoredClaimDate() {
+		try {
+			return window.localStorage?.getItem('credits-last-claim');
+		} catch {
+			return null;
+		}
+	}
+
+	writeStoredClaimDate(value) {
+		try {
+			window.localStorage?.setItem('credits-last-claim', value);
+		} catch {
+			// ignore storage errors
+		}
+	}
+
+	render() {
+		this.shadowRoot.innerHTML = html`
       <style>
         :host {
           display: block;
@@ -478,7 +478,7 @@ class AppCredits extends HTMLElement {
         </div>
       </div>
     `;
-  }
+	}
 }
 
 customElements.define('app-credits', AppCredits);

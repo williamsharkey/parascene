@@ -2,297 +2,297 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import {
-  COOKIE_NAME,
-  ONE_WEEK_MS,
-  clearAuthCookie,
-  getJwtSecret,
-  hashToken,
-  setAuthCookie
+	COOKIE_NAME,
+	ONE_WEEK_MS,
+	clearAuthCookie,
+	getJwtSecret,
+	hashToken,
+	setAuthCookie
 } from "./auth.js";
 
 export default function createProfileRoutes({ queries }) {
-  const router = express.Router();
+	const router = express.Router();
 
-  router.post("/signup", async (req, res) => {
-    const email = String(req.body.username || req.body.email || "")
-      .trim()
-      .toLowerCase();
-    const password = String(req.body.password || "");
+	router.post("/signup", async (req, res) => {
+		const email = String(req.body.username || req.body.email || "")
+			.trim()
+			.toLowerCase();
+		const password = String(req.body.password || "");
 
-    if (!email || !password) {
-      return res.status(400).send("Email and password are required.");
-    }
+		if (!email || !password) {
+			return res.status(400).send("Email and password are required.");
+		}
 
-    const existingUser = await queries.selectUserByEmail.get(email);
-    if (existingUser) {
-      return res.status(409).send("Email already registered.");
-    }
+		const existingUser = await queries.selectUserByEmail.get(email);
+		if (existingUser) {
+			return res.status(409).send("Email already registered.");
+		}
 
-    const passwordHash = bcrypt.hashSync(password, 12);
-    const info = await queries.insertUser.run(email, passwordHash, "consumer");
-    // Support both insertId (standardized) and lastInsertRowid (legacy SQLite)
-    const userId = info.insertId || info.lastInsertRowid;
-    
-    // Initialize credits for new user with 100 starting credits
-    try {
-      await queries.insertUserCredits.run(userId, 100, null);
-    } catch (error) {
-      console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
-        error: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      // Don't fail signup if credits initialization fails
-    }
-    
-    const token = jwt.sign({ userId }, getJwtSecret(), { expiresIn: "7d" });
-    setAuthCookie(res, token, req);
-    if (queries.insertSession) {
-      const tokenHash = hashToken(token);
-      const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-      console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
-      try {
-        await queries.insertSession.run(userId, tokenHash, expiresAt);
-        console.log(`[Signup] Session created successfully for user ${userId}`);
-      } catch (error) {
-        console.error(`[Signup] Failed to create session for user ${userId}:`, {
-          error: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        // Don't fail signup if session creation fails - cookie is still set
-      }
-    }
+		const passwordHash = bcrypt.hashSync(password, 12);
+		const info = await queries.insertUser.run(email, passwordHash, "consumer");
+		// Support both insertId (standardized) and lastInsertRowid (legacy SQLite)
+		const userId = info.insertId || info.lastInsertRowid;
 
-    return res.redirect("/");
-  });
+		// Initialize credits for new user with 100 starting credits
+		try {
+			await queries.insertUserCredits.run(userId, 100, null);
+		} catch (error) {
+			console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
+				error: error.message,
+				stack: error.stack,
+				name: error.name
+			});
+			// Don't fail signup if credits initialization fails
+		}
 
-  router.post("/login", async (req, res) => {
-    const email = String(req.body.username || req.body.email || "")
-      .trim()
-      .toLowerCase();
-    const password = String(req.body.password || "");
+		const token = jwt.sign({ userId }, getJwtSecret(), { expiresIn: "7d" });
+		setAuthCookie(res, token, req);
+		if (queries.insertSession) {
+			const tokenHash = hashToken(token);
+			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
+			console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+			try {
+				await queries.insertSession.run(userId, tokenHash, expiresAt);
+				console.log(`[Signup] Session created successfully for user ${userId}`);
+			} catch (error) {
+				console.error(`[Signup] Failed to create session for user ${userId}:`, {
+					error: error.message,
+					stack: error.stack,
+					name: error.name
+				});
+				// Don't fail signup if session creation fails - cookie is still set
+			}
+		}
 
-    if (!email || !password) {
-      return res.status(400).send("Email and password are required.");
-    }
+		return res.redirect("/");
+	});
 
-    const user = await queries.selectUserByEmail.get(email);
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-      return res.redirect("/#auth-fail");
-    }
+	router.post("/login", async (req, res) => {
+		const email = String(req.body.username || req.body.email || "")
+			.trim()
+			.toLowerCase();
+		const password = String(req.body.password || "");
 
-    const token = jwt.sign({ userId: user.id }, getJwtSecret(), {
-      expiresIn: "7d"
-    });
-    setAuthCookie(res, token, req);
-    if (queries.insertSession) {
-      const tokenHash = hashToken(token);
-      const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-      console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
-      try {
-        await queries.insertSession.run(user.id, tokenHash, expiresAt);
-        console.log(`[Login] Session created successfully for user ${user.id}`);
-      } catch (error) {
-        console.error(`[Login] Failed to create session for user ${user.id}:`, {
-          error: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        // Don't fail login if session creation fails - cookie is still set
-      }
-    }
-    return res.redirect("/");
-  });
+		if (!email || !password) {
+			return res.status(400).send("Email and password are required.");
+		}
 
-  router.post("/logout", async (req, res) => {
-    if (queries.deleteSessionByTokenHash) {
-      const token = req.cookies?.[COOKIE_NAME];
-      if (token) {
-        const tokenHash = hashToken(token);
-        await queries.deleteSessionByTokenHash.run(
-          tokenHash,
-          req.auth?.userId
-        );
-      }
-    }
-    clearAuthCookie(res, req);
-    res.redirect("/");
-  });
+		const user = await queries.selectUserByEmail.get(email);
+		if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+			return res.redirect("/auth.html#fail");
+		}
 
-  router.get("/me", (req, res) => {
-    res.json({ userId: req.auth?.userId || null });
-  });
+		const token = jwt.sign({ userId: user.id }, getJwtSecret(), {
+			expiresIn: "7d"
+		});
+		setAuthCookie(res, token, req);
+		if (queries.insertSession) {
+			const tokenHash = hashToken(token);
+			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
+			console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+			try {
+				await queries.insertSession.run(user.id, tokenHash, expiresAt);
+				console.log(`[Login] Session created successfully for user ${user.id}`);
+			} catch (error) {
+				console.error(`[Login] Failed to create session for user ${user.id}:`, {
+					error: error.message,
+					stack: error.stack,
+					name: error.name
+				});
+				// Don't fail login if session creation fails - cookie is still set
+			}
+		}
+		return res.redirect("/");
+	});
 
-  router.get("/api/profile", async (req, res) => {
-    if (!req.auth?.userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+	router.post("/logout", async (req, res) => {
+		if (queries.deleteSessionByTokenHash) {
+			const token = req.cookies?.[COOKIE_NAME];
+			if (token) {
+				const tokenHash = hashToken(token);
+				await queries.deleteSessionByTokenHash.run(
+					tokenHash,
+					req.auth?.userId
+				);
+			}
+		}
+		clearAuthCookie(res, req);
+		res.redirect("/");
+	});
 
-    const user = await queries.selectUserById.get(req.auth.userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+	router.get("/me", (req, res) => {
+		res.json({ userId: req.auth?.userId || null });
+	});
 
-    // Get credits balance
-    let credits = await queries.selectUserCredits.get(req.auth.userId);
-    // If no credits record exists, initialize with 100 for existing users
-    if (!credits) {
-      try {
-        await queries.insertUserCredits.run(req.auth.userId, 100, null);
-        credits = { balance: 100 };
-      } catch (error) {
-        console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
-        credits = { balance: 0 };
-      }
-    }
+	router.get("/api/profile", async (req, res) => {
+		if (!req.auth?.userId) {
+			return res.status(401).json({ error: "Unauthorized" });
+		}
 
-    return res.json({ ...user, credits: credits.balance });
-  });
+		const user = await queries.selectUserById.get(req.auth.userId);
+		if (!user) {
+			return res.status(404).json({ error: "User not found" });
+		}
 
-  router.get("/api/notifications", async (req, res) => {
-    try {
-      if (!req.auth?.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
+		// Get credits balance
+		let credits = await queries.selectUserCredits.get(req.auth.userId);
+		// If no credits record exists, initialize with 100 for existing users
+		if (!credits) {
+			try {
+				await queries.insertUserCredits.run(req.auth.userId, 100, null);
+				credits = { balance: 100 };
+			} catch (error) {
+				console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
+				credits = { balance: 0 };
+			}
+		}
 
-      const user = await queries.selectUserById.get(req.auth.userId);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
+		return res.json({ ...user, credits: credits.balance });
+	});
 
-      const notifications = await queries.selectNotificationsForUser.all(
-        user.id,
-        user.role
-      );
-      return res.json({ notifications });
-    } catch (error) {
-      console.error("Error loading notifications:", error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  });
+	router.get("/api/notifications", async (req, res) => {
+		try {
+			if (!req.auth?.userId) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
 
-  router.get("/api/notifications/unread-count", async (req, res) => {
-    try {
-      if (!req.auth?.userId) {
-        return res.json({ count: 0 });
-      }
+			const user = await queries.selectUserById.get(req.auth.userId);
+			if (!user) {
+				return res.status(404).json({ error: "User not found" });
+			}
 
-      const user = await queries.selectUserById.get(req.auth.userId);
-      if (!user) {
-        return res.json({ count: 0 });
-      }
+			const notifications = await queries.selectNotificationsForUser.all(
+				user.id,
+				user.role
+			);
+			return res.json({ notifications });
+		} catch (error) {
+			console.error("Error loading notifications:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	});
 
-      const result = await queries.selectUnreadNotificationCount.get(
-        user.id,
-        user.role
-      );
-      return res.json({ count: result?.count ?? 0 });
-    } catch (error) {
-      console.error("Error loading unread notification count:", error);
-      return res.json({ count: 0 });
-    }
-  });
+	router.get("/api/notifications/unread-count", async (req, res) => {
+		try {
+			if (!req.auth?.userId) {
+				return res.json({ count: 0 });
+			}
 
-  router.post("/api/notifications/acknowledge", async (req, res) => {
-    try {
-      if (!req.auth?.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
+			const user = await queries.selectUserById.get(req.auth.userId);
+			if (!user) {
+				return res.json({ count: 0 });
+			}
 
-      const user = await queries.selectUserById.get(req.auth.userId);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
+			const result = await queries.selectUnreadNotificationCount.get(
+				user.id,
+				user.role
+			);
+			return res.json({ count: result?.count ?? 0 });
+		} catch (error) {
+			console.error("Error loading unread notification count:", error);
+			return res.json({ count: 0 });
+		}
+	});
 
-      const id = Number(req.body?.id);
-      if (!id) {
-        return res.status(400).json({ error: "Notification id required" });
-      }
+	router.post("/api/notifications/acknowledge", async (req, res) => {
+		try {
+			if (!req.auth?.userId) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
 
-      const result = await queries.acknowledgeNotificationById.run(
-        id,
-        user.id,
-        user.role
-      );
-      return res.json({ ok: true, updated: result.changes });
-    } catch (error) {
-      console.error("Error acknowledging notification:", error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  });
+			const user = await queries.selectUserById.get(req.auth.userId);
+			if (!user) {
+				return res.status(404).json({ error: "User not found" });
+			}
 
-  router.get("/api/credits", async (req, res) => {
-    try {
-      if (!req.auth?.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
+			const id = Number(req.body?.id);
+			if (!id) {
+				return res.status(400).json({ error: "Notification id required" });
+			}
 
-      const credits = await queries.selectUserCredits.get(req.auth.userId);
-      
-      // If no credits record exists, initialize with 100
-      if (!credits) {
-        try {
-          await queries.insertUserCredits.run(req.auth.userId, 100, null);
-          const newCredits = await queries.selectUserCredits.get(req.auth.userId);
-          return res.json({
-            balance: newCredits.balance,
-            canClaim: true,
-            lastClaimDate: null
-          });
-        } catch (error) {
-          console.error("Error initializing credits:", error);
-          return res.status(500).json({ error: "Internal server error" });
-        }
-      }
+			const result = await queries.acknowledgeNotificationById.run(
+				id,
+				user.id,
+				user.role
+			);
+			return res.json({ ok: true, updated: result.changes });
+		} catch (error) {
+			console.error("Error acknowledging notification:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	});
 
-      // Check if can claim (last claim was not today in UTC)
-      const canClaim = (() => {
-        if (!credits.last_daily_claim_at) return true;
-        const now = new Date();
-        const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-        const lastClaimDate = new Date(credits.last_daily_claim_at);
-        const lastClaimUTC = new Date(Date.UTC(lastClaimDate.getUTCFullYear(), lastClaimDate.getUTCMonth(), lastClaimDate.getUTCDate()));
-        return lastClaimUTC.getTime() < todayUTC.getTime();
-      })();
+	router.get("/api/credits", async (req, res) => {
+		try {
+			if (!req.auth?.userId) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
 
-      return res.json({
-        balance: credits.balance,
-        canClaim,
-        lastClaimDate: credits.last_daily_claim_at
-      });
-    } catch (error) {
-      console.error("Error loading credits:", error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  });
+			const credits = await queries.selectUserCredits.get(req.auth.userId);
 
-  router.post("/api/credits/claim", async (req, res) => {
-    try {
-      if (!req.auth?.userId) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
+			// If no credits record exists, initialize with 100
+			if (!credits) {
+				try {
+					await queries.insertUserCredits.run(req.auth.userId, 100, null);
+					const newCredits = await queries.selectUserCredits.get(req.auth.userId);
+					return res.json({
+						balance: newCredits.balance,
+						canClaim: true,
+						lastClaimDate: null
+					});
+				} catch (error) {
+					console.error("Error initializing credits:", error);
+					return res.status(500).json({ error: "Internal server error" });
+				}
+			}
 
-      const result = await queries.claimDailyCredits.run(req.auth.userId, 10);
-      
-      if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          balance: result.balance,
-          message: result.message || "Daily credits already claimed today"
-        });
-      }
+			// Check if can claim (last claim was not today in UTC)
+			const canClaim = (() => {
+				if (!credits.last_daily_claim_at) return true;
+				const now = new Date();
+				const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+				const lastClaimDate = new Date(credits.last_daily_claim_at);
+				const lastClaimUTC = new Date(Date.UTC(lastClaimDate.getUTCFullYear(), lastClaimDate.getUTCMonth(), lastClaimDate.getUTCDate()));
+				return lastClaimUTC.getTime() < todayUTC.getTime();
+			})();
 
-      return res.json({
-        success: true,
-        balance: result.balance,
-        message: "Daily credits claimed successfully"
-      });
-    } catch (error) {
-      console.error("Error claiming daily credits:", error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  });
+			return res.json({
+				balance: credits.balance,
+				canClaim,
+				lastClaimDate: credits.last_daily_claim_at
+			});
+		} catch (error) {
+			console.error("Error loading credits:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	});
 
-  return router;
+	router.post("/api/credits/claim", async (req, res) => {
+		try {
+			if (!req.auth?.userId) {
+				return res.status(401).json({ error: "Unauthorized" });
+			}
+
+			const result = await queries.claimDailyCredits.run(req.auth.userId, 10);
+
+			if (!result.success) {
+				return res.status(400).json({
+					success: false,
+					balance: result.balance,
+					message: result.message || "Daily credits already claimed today"
+				});
+			}
+
+			return res.json({
+				success: true,
+				balance: result.balance,
+				message: "Daily credits claimed successfully"
+			});
+		} catch (error) {
+			console.error("Error claiming daily credits:", error);
+			return res.status(500).json({ error: "Internal server error" });
+		}
+	});
+
+	return router;
 }
