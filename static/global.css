@@ -1309,6 +1309,168 @@ header .hamburger-button.active span:nth-child(3) {
   }
 }
 
+/* Mobile bottom nav */
+.mobile-bottom-nav-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  display: none;
+  pointer-events: none;
+  z-index: 999;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav-wrap {
+    display: flex;
+  }
+  body:not(.landing-page) main {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+
+.mobile-bottom-nav-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 55px;
+  background: linear-gradient(
+    to top,
+    rgba(246, 247, 251, 1) 0%,
+    rgba(246, 247, 251, 0.95) 20%,
+    rgba(246, 247, 251, 0.8) 50%,
+    rgba(246, 247, 251, 0.4) 100%
+  );
+  border-top: 1px solid rgba(226, 232, 240, 0.3);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.mobile-bottom-nav-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 30%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mobile-bottom-nav-bar {
+    background: linear-gradient(
+      to top,
+      rgba(26, 22, 40, 1) 0%,
+      rgba(26, 22, 40, 0.95) 20%,
+      rgba(26, 22, 40, 0.8) 50%,
+      rgba(26, 22, 40, 0.4) 100%
+    );
+    border-top: 1px solid rgba(61, 53, 82, 0.3);
+  }
+  .mobile-bottom-nav-bar::before {
+    background: linear-gradient(
+      to top,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.02) 30%,
+      transparent 100%
+    );
+  }
+}
+
+.mobile-bottom-nav-buttons {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 0;
+  height: 65px;
+  padding: 0 20px 13px;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.mobile-bottom-nav-slot {
+  height: 1px;
+}
+
+.mobile-bottom-nav-item {
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+	margin-top: auto;
+}
+
+.mobile-bottom-nav-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.mobile-bottom-nav-item.is-active {
+  color: var(--text);
+}
+
+.mobile-bottom-nav-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-bottom-nav-text {
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.mobile-bottom-nav-buttons .create-button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  justify-self: center;
+  font-weight: inherit;
+}
+
+.mobile-bottom-nav-buttons .create-button .create-button-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--focus);
+  border: 1px solid var(--focus);
+  color: var(--accent-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow);
+}
+
+.mobile-bottom-nav-buttons .create-button.is-active .create-button-icon {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+	margin-bottom: -8px;
+}
+
+.mobile-bottom-nav-buttons .create-button svg {
+  width: 18px;
+  height: 18px;
+	stroke: var(--text);
+}
+
 /* ============================================
    Common Route Component Styles
    ============================================ */
@@ -2160,10 +2322,19 @@ body.creation-detail-page main > section:first-of-type {
 @media (max-width: 768px) {
   .creation-detail-hero {
     min-height: 50vh;
+    border-radius: 0;
+  }
+
+  .creation-detail-background,
+  .creation-detail-image-wrapper,
+  .creation-detail-image,
+  .creation-detail-image-wrapper.image-loading,
+  .creation-detail-image-wrapper.image-error {
+    border-radius: 0;
   }
   
   .creation-detail-image-wrapper {
-    width: min(96vw, 70vh);
+    width: 100%;
     max-width: 100%;
     max-height: 70vh;
     padding: 0;

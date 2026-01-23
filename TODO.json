@@ -1,12 +1,5 @@
 [
   {
-    "name": "Mobile bottom nav",
-    "description": "Users get lost on mobile without clear actions visible at all times.  Add this and use instead of hamburger.",
-    "cost": 23,
-    "impact": 88,
-    "dependsOn": []
-  },
-  {
     "name": "Likes",
     "description": "Persist likes on creations and surface them in the UI.",
     "cost": 12,

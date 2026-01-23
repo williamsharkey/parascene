@@ -6,7 +6,6 @@ class AppHeader extends HTMLElement {
   constructor() {
     super();
     this.notificationsMenuOpen = false;
-    this.mobileMenuOpen = false;
     this.notificationsCount = 0;
     this.creditsCount = 0;
     this.previewNotifications = [];
@@ -449,6 +448,8 @@ class AppHeader extends HTMLElement {
       section.classList.toggle('active', isActive);
       section.style.display = isActive ? 'block' : 'none';
     });
+
+    this.resetSectionScroll();
     
     // Dispatch custom event for route change
     this.dispatchEvent(new CustomEvent('route-change', {
@@ -458,85 +459,21 @@ class AppHeader extends HTMLElement {
   }
 
   handleDocumentClick(e) {
-    // Don't close menus if clicking inside the mobile menu
-    if (this.mobileMenuOpen && this.querySelector('.mobile-menu')?.contains(e.target)) {
-      return;
-    }
     if (this.notificationsMenuOpen) {
       this.closeNotificationsMenu();
     }
   }
 
+  resetSectionScroll() {
+    const scroller = document.scrollingElement || document.documentElement;
+    if (!scroller) return;
+    scroller.scrollTop = 0;
+    if (typeof window.scrollTo === 'function') {
+      window.scrollTo(0, 0);
+    }
+  }
+
   setupEventListeners() {
-    const hamburgerButton = this.querySelector('.hamburger-button');
-    if (hamburgerButton) {
-      hamburgerButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.toggleMobileMenu();
-      });
-    }
-
-    const mobileMenuClose = this.querySelector('.mobile-menu-close');
-    if (mobileMenuClose) {
-      mobileMenuClose.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.closeMobileMenu();
-      });
-    }
-
-    const mobileMenuBackdrop = this.querySelector('.mobile-menu-backdrop');
-    if (mobileMenuBackdrop) {
-      mobileMenuBackdrop.addEventListener('click', () => {
-        this.closeMobileMenu();
-      });
-    }
-
-    // Handle mobile menu navigation clicks
-    const mobileNavLinks = this.querySelectorAll('.mobile-menu .nav-link');
-    mobileNavLinks.forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const route = link.getAttribute('data-route');
-        this.closeMobileMenu();
-        if (route) {
-          // Check if we're on a server-sent page (like creation detail)
-          // If so, use full page navigation for ANY route change
-          const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
-            window.location.pathname.startsWith('/help/');
-          if (isServerSentPage) {
-            // Use full page navigation for server-sent pages
-            window.location.href = `/${route}`;
-            return;
-          }
-          // Use History API with pathname-based routing for client-side pages
-          window.history.pushState({ route }, '', `/${route}`);
-          this.handleRouteChange();
-        }
-      });
-    });
-
-    // Handle mobile menu action clicks
-    const mobileCreateButton = this.querySelector('.mobile-menu .create-button');
-    if (mobileCreateButton) {
-      mobileCreateButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (mobileCreateButton.disabled) return;
-        this.closeMobileMenu();
-        // Check if we're on a server-sent page (like creation detail)
-        const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
-          window.location.pathname.startsWith('/help/');
-        if (isServerSentPage) {
-          window.location.href = '/create';
-          return;
-        }
-        window.history.pushState({ route: 'create' }, '', '/create');
-        this.handleRouteChange();
-      });
-    }
-
-
     const createButton = this.querySelector('.create-button');
     if (createButton) {
       createButton.addEventListener('click', (e) => {
@@ -614,41 +551,6 @@ class AppHeader extends HTMLElement {
     }
   }
 
-  toggleMobileMenu() {
-    this.mobileMenuOpen = !this.mobileMenuOpen;
-    const menu = this.querySelector('.mobile-menu');
-    const backdrop = this.querySelector('.mobile-menu-backdrop');
-    const hamburger = this.querySelector('.hamburger-button');
-    if (menu) {
-      menu.classList.toggle('open', this.mobileMenuOpen);
-    }
-    if (backdrop) {
-      backdrop.classList.toggle('open', this.mobileMenuOpen);
-    }
-    if (hamburger) {
-      hamburger.classList.toggle('active', this.mobileMenuOpen);
-    }
-    // Prevent body scroll when menu is open
-    document.body.style.overflow = this.mobileMenuOpen ? 'hidden' : '';
-  }
-
-  closeMobileMenu() {
-    this.mobileMenuOpen = false;
-    const menu = this.querySelector('.mobile-menu');
-    const backdrop = this.querySelector('.mobile-menu-backdrop');
-    const hamburger = this.querySelector('.hamburger-button');
-    if (menu) {
-      menu.classList.remove('open');
-    }
-    if (backdrop) {
-      backdrop.classList.remove('open');
-    }
-    if (hamburger) {
-      hamburger.classList.remove('active');
-    }
-    document.body.style.overflow = '';
-  }
-
 
   render() {
     const showNotifications = this.hasAttribute('show-notifications');
@@ -660,11 +562,6 @@ class AppHeader extends HTMLElement {
     this.innerHTML = html`
       <header>
         <div class="header-content">
-          <button class="hamburger-button" aria-label="Toggle menu">
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
           <div class="header-logo">
             <a href="/" style="text-decoration: none; display: block;">
               <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
@@ -728,45 +625,6 @@ class AppHeader extends HTMLElement {
           </div>
         </div>
       </header>
-      <div class="mobile-menu-backdrop"></div>
-      <div class="mobile-menu">
-        <div class="mobile-menu-header">
-          <div class="header-logo">
-            <a href="/" style="text-decoration: none; display: block;">
-              <svg class="logo" width="200" height="40" viewBox="0 0 200 40">
-                <text x="2" y="27" class="logo-text">
-                  <tspan opacity="1">par</tspan><tspan opacity="0.7">asc</tspan><tspan opacity="1">ene</tspan>
-                </text>
-              </svg>
-            </a>
-          </div>
-          <button class="mobile-menu-close" aria-label="Close menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="mobile-menu-content">
-          <nav class="mobile-menu-nav">
-            ${(this.routes || []).map(route => {
-              const routeId = route.id;
-              const routeLabel = route.label;
-              return html`<a href="/${routeId}" class="nav-link" data-route="${routeId}">${routeLabel}</a>`;
-            }).join('')}
-          </nav>
-          <div class="mobile-menu-actions">
-            ${hasAuthLinks ? (this.authLinks || []).map(authLink => 
-              html`<a href="${authLink.href}" class="header-auth-link ${authLink.isPrimary ? 'btn-primary' : ''}" style="display: block; width: 100%; text-align: center; margin-bottom: 8px;">${authLink.text}</a>`
-            ).join('') : ''}
-            ${showCreate ? html`
-              <button class="action-item create-button btn-primary">
-                Create
-              </button>
-            ` : ''}
-          </div>
-        </div>
-      </div>
     `;
   }
 }

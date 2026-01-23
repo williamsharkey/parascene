@@ -163,8 +163,8 @@ export default function createTodoRoutes() {
 
 	router.get("/api/todo", async (req, res) => {
 		try {
-		const mode = req.query?.mode === "post" ? "post" : "pre";
-		const items = await readTodoItems({ mode });
+			const mode = req.query?.mode === "post" ? "post" : "pre";
+			const items = await readTodoItems({ mode });
 			res.json({
 				items: items.map((item) => ({
 					name: item.name,
@@ -175,9 +175,9 @@ export default function createTodoRoutes() {
 					probability: item.probability
 				})),
 				writable: !process.env.VERCEL,
-			formula: mode === "post"
-				? "round(Impact / (1 + (Cost/100)^2)), deps bumped +1"
-				: "round(Impact * (1 - (Cost/100)^2)), deps bumped +1"
+				formula: mode === "post"
+					? "round(Impact / (1 + (Cost/100)^2)), deps bumped +1"
+					: "round(Impact * (1 - (Cost/100)^2)), deps bumped +1"
 			});
 		} catch (error) {
 			res.status(500).json({ error: "Failed to read TODO.json." });

@@ -48,7 +48,7 @@ class AppRouteFeed extends HTMLElement {
       <div class="feed-route">
         <div class="route-header">
         <h3>Feed</h3>
-        <p>You will find a list of creations here based on factors like popularity, recent activity, your friends, and your interests.</p>
+        <p>See creations shared by friends and people you already follow, with the newest highlights at the top.</p>
         </div>
         <div class="route-cards route-cards-image-grid" data-feed-container>
         <div class="route-empty route-empty-image-grid">Loading...</div>

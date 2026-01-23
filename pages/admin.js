@@ -848,7 +848,7 @@ function renderServerCapabilities(capabilities) {
 async function testServer(serverId) {
 	const testBtn = document.querySelector("#server-test-btn");
 	const capabilitiesContainer = document.querySelector("#server-capabilities-container");
-	
+
 	if (!testBtn || !capabilitiesContainer) return;
 
 	const originalText = testBtn.textContent;
@@ -881,7 +881,7 @@ async function testServer(serverId) {
 async function refreshServerMethods(serverId) {
 	const refreshBtn = document.querySelector("#server-refresh-btn");
 	const capabilitiesContainer = document.querySelector("#server-capabilities-container");
-	
+
 	if (!refreshBtn || !capabilitiesContainer) return;
 
 	const originalText = refreshBtn.textContent;

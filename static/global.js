@@ -1,5 +1,6 @@
 // Global components that all pages will use
 import './components/header.js';
+import './components/mobile-bottom-nav.js';
 import './components/profile.js';
 import './components/credits.js';
 import './components/notifications.js';

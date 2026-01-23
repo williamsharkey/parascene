@@ -1,18 +1,18 @@
 const html = String.raw;
 
 class AppRouteCreate extends HTMLElement {
-  constructor() {
-    super();
-    this.creditsCount = 0;
-    this.selectedServer = null;
-    this.selectedMethod = null;
-    this.fieldValues = {};
-    this.servers = [];
-    this.handleCreditsUpdated = this.handleCreditsUpdated.bind(this);
-  }
+	constructor() {
+		super();
+		this.creditsCount = 0;
+		this.selectedServer = null;
+		this.selectedMethod = null;
+		this.fieldValues = {};
+		this.servers = [];
+		this.handleCreditsUpdated = this.handleCreditsUpdated.bind(this);
+	}
 
-  connectedCallback() {
-    this.innerHTML = html`
+	connectedCallback() {
+		this.innerHTML = html`
       <style>
         .create-route .create-form {
           display: flex;
@@ -131,474 +131,464 @@ class AppRouteCreate extends HTMLElement {
         </div>
       </div>
     `;
-    this.setupEventListeners();
-    this.loadServers();
-    this.loadCredits();
-  }
+		this.setupEventListeners();
+		this.loadServers();
+		this.loadCredits();
+	}
 
-  disconnectedCallback() {
-    document.removeEventListener('credits-updated', this.handleCreditsUpdated);
-  }
+	disconnectedCallback() {
+		document.removeEventListener('credits-updated', this.handleCreditsUpdated);
+	}
 
-  setupEventListeners() {
-    const createButton = this.querySelector("[data-create-button]");
-    if (createButton) {
-      createButton.addEventListener("click", () => this.handleCreate());
-    }
-    
-    const serverSelect = this.querySelector("[data-server-select]");
-    if (serverSelect) {
-      serverSelect.addEventListener("change", (e) => this.handleServerChange(e.target.value));
-    }
-    
-    const methodSelect = this.querySelector("[data-method-select]");
-    if (methodSelect) {
-      methodSelect.addEventListener("change", (e) => this.handleMethodChange(e.target.value));
-    }
-    
-    document.addEventListener('credits-updated', this.handleCreditsUpdated);
-  }
+	setupEventListeners() {
+		const createButton = this.querySelector("[data-create-button]");
+		if (createButton) {
+			createButton.addEventListener("click", () => this.handleCreate());
+		}
 
-  async loadServers() {
-    try {
-      const response = await fetch('/api/servers', { credentials: 'include' });
-      if (response.ok) {
-        const data = await response.json();
-        this.servers = Array.isArray(data.servers) ? data.servers : [];
-        // Parse server_config if it's a string
-        this.servers = this.servers.map(server => {
-          if (server.server_config && typeof server.server_config === 'string') {
-            try {
-              server.server_config = JSON.parse(server.server_config);
-            } catch (e) {
-              console.warn('Failed to parse server_config for server', server.id, e);
-              server.server_config = null;
-            }
-          }
-          return server;
-        });
-        this.renderServerOptions();
-        
-        // Auto-select first server if available
-        if (this.servers.length > 0) {
-          const firstServer = this.servers[0];
-          const serverSelect = this.querySelector("[data-server-select]");
-          if (serverSelect) {
-            serverSelect.value = firstServer.id;
-            this.handleServerChange(firstServer.id);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading servers:', error);
-    }
-  }
+		const serverSelect = this.querySelector("[data-server-select]");
+		if (serverSelect) {
+			serverSelect.addEventListener("change", (e) => this.handleServerChange(e.target.value));
+		}
 
-  renderServerOptions() {
-    const serverSelect = this.querySelector("[data-server-select]");
-    if (!serverSelect) return;
-    
-    // Clear existing options except the first one
-    while (serverSelect.children.length > 1) {
-      serverSelect.removeChild(serverSelect.lastChild);
-    }
-    
-    // Add server options
-    this.servers.forEach(server => {
-      const option = document.createElement('option');
-      option.value = server.id;
-      option.textContent = server.name;
-      serverSelect.appendChild(option);
-    });
-  }
+		const methodSelect = this.querySelector("[data-method-select]");
+		if (methodSelect) {
+			methodSelect.addEventListener("change", (e) => this.handleMethodChange(e.target.value));
+		}
 
-  handleServerChange(serverId) {
-    if (!serverId) {
-      this.selectedServer = null;
-      this.selectedMethod = null;
-      this.fieldValues = {};
-      this.hideMethodGroup();
-      this.hideFieldsGroup();
-      this.updateButtonState();
-      return;
-    }
+		document.addEventListener('credits-updated', this.handleCreditsUpdated);
+	}
 
-    const server = this.servers.find(s => s.id === Number(serverId));
-    if (!server) return;
+	async loadServers() {
+		try {
+			const response = await fetch('/api/servers', { credentials: 'include' });
+			if (response.ok) {
+				const data = await response.json();
+				this.servers = Array.isArray(data.servers) ? data.servers : [];
+				// Parse server_config if it's a string
+				this.servers = this.servers.map(server => {
+					if (server.server_config && typeof server.server_config === 'string') {
+						try {
+							server.server_config = JSON.parse(server.server_config);
+						} catch (e) {
+							console.warn('Failed to parse server_config for server', server.id, e);
+							server.server_config = null;
+						}
+					}
+					return server;
+				});
+				this.renderServerOptions();
 
-    this.selectedServer = server;
-    this.selectedMethod = null;
-    this.fieldValues = {};
-    this.renderMethodOptions();
-    this.hideFieldsGroup();
-    this.updateButtonState();
-  }
+				// Auto-select first server if available
+				if (this.servers.length > 0) {
+					const firstServer = this.servers[0];
+					const serverSelect = this.querySelector("[data-server-select]");
+					if (serverSelect) {
+						serverSelect.value = firstServer.id;
+						this.handleServerChange(firstServer.id);
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error loading servers:', error);
+		}
+	}
 
-  renderMethodOptions() {
-    const methodGroup = this.querySelector("[data-method-group]");
-    const methodSelect = this.querySelector("[data-method-select]");
-    if (!methodGroup || !methodSelect) return;
+	renderServerOptions() {
+		const serverSelect = this.querySelector("[data-server-select]");
+		if (!serverSelect) return;
 
-    // Clear existing options except the first one
-    while (methodSelect.children.length > 1) {
-      methodSelect.removeChild(methodSelect.lastChild);
-    }
+		// Clear existing options except the first one
+		while (serverSelect.children.length > 1) {
+			serverSelect.removeChild(serverSelect.lastChild);
+		}
 
-    if (!this.selectedServer) {
-      methodGroup.style.display = 'none';
-      return;
-    }
+		// Add server options
+		this.servers.forEach(server => {
+			const option = document.createElement('option');
+			option.value = server.id;
+			option.textContent = server.name;
+			serverSelect.appendChild(option);
+		});
+	}
 
-    // Ensure server_config is parsed
-    let serverConfig = this.selectedServer.server_config;
-    if (typeof serverConfig === 'string') {
-      try {
-        serverConfig = JSON.parse(serverConfig);
-        this.selectedServer.server_config = serverConfig;
-      } catch (e) {
-        console.warn('Failed to parse server_config:', e);
-        methodGroup.style.display = 'none';
-        return;
-      }
-    }
+	handleServerChange(serverId) {
+		if (!serverId) {
+			this.selectedServer = null;
+			this.selectedMethod = null;
+			this.fieldValues = {};
+			this.hideMethodGroup();
+			this.hideFieldsGroup();
+			this.updateButtonState();
+			return;
+		}
 
-    if (!serverConfig || !serverConfig.methods) {
-      methodGroup.style.display = 'none';
-      return;
-    }
+		const server = this.servers.find(s => s.id === Number(serverId));
+		if (!server) return;
 
-    // Add method options
-    const methods = serverConfig.methods;
-    const methodKeys = Object.keys(methods);
-    methodKeys.forEach(methodKey => {
-      const method = methods[methodKey];
-      const option = document.createElement('option');
-      option.value = methodKey;
-      option.textContent = method.name || methodKey;
-      methodSelect.appendChild(option);
-    });
+		this.selectedServer = server;
+		this.selectedMethod = null;
+		this.fieldValues = {};
+		this.renderMethodOptions();
+		this.hideFieldsGroup();
+		this.updateButtonState();
+	}
 
-    methodGroup.style.display = 'flex';
-    
-    // Auto-select first method if available
-    if (methodKeys.length > 0) {
-      const firstMethodKey = methodKeys[0];
-      methodSelect.value = firstMethodKey;
-      // Use microtask to ensure DOM is ready and method selection happens after render
-      Promise.resolve().then(() => {
-        this.handleMethodChange(firstMethodKey);
-      });
-    } else {
-      methodSelect.value = '';
-    }
-  }
+	renderMethodOptions() {
+		const methodGroup = this.querySelector("[data-method-group]");
+		const methodSelect = this.querySelector("[data-method-select]");
+		if (!methodGroup || !methodSelect) return;
 
-  handleMethodChange(methodKey) {
-    if (!methodKey) {
-      this.selectedMethod = null;
-      this.fieldValues = {};
-      this.hideFieldsGroup();
-      this.updateButtonState();
-      return;
-    }
+		// Clear existing options except the first one
+		while (methodSelect.children.length > 1) {
+			methodSelect.removeChild(methodSelect.lastChild);
+		}
 
-    if (!this.selectedServer) {
-      return;
-    }
+		if (!this.selectedServer) {
+			methodGroup.style.display = 'none';
+			return;
+		}
 
-    // Ensure server_config is parsed
-    let serverConfig = this.selectedServer.server_config;
-    if (typeof serverConfig === 'string') {
-      try {
-        serverConfig = JSON.parse(serverConfig);
-        this.selectedServer.server_config = serverConfig;
-      } catch (e) {
-        console.warn('Failed to parse server_config:', e);
-        return;
-      }
-    }
+		// Ensure server_config is parsed
+		let serverConfig = this.selectedServer.server_config;
+		if (typeof serverConfig === 'string') {
+			try {
+				serverConfig = JSON.parse(serverConfig);
+				this.selectedServer.server_config = serverConfig;
+			} catch (e) {
+				console.warn('Failed to parse server_config:', e);
+				methodGroup.style.display = 'none';
+				return;
+			}
+		}
 
-    if (!serverConfig || !serverConfig.methods || !serverConfig.methods[methodKey]) {
-      return;
-    }
+		if (!serverConfig || !serverConfig.methods) {
+			methodGroup.style.display = 'none';
+			return;
+		}
 
-    this.selectedMethod = serverConfig.methods[methodKey];
-    // Debug: log the method to verify credits is present
-    console.log('Selected method key:', methodKey);
-    console.log('Selected method object:', JSON.stringify(this.selectedMethod, null, 2));
-    console.log('Credits value:', this.selectedMethod?.credits);
-    this.fieldValues = {};
-    this.renderFields();
-    this.updateButtonState();
-  }
+		// Add method options
+		const methods = serverConfig.methods;
+		const methodKeys = Object.keys(methods);
+		methodKeys.forEach(methodKey => {
+			const method = methods[methodKey];
+			const option = document.createElement('option');
+			option.value = methodKey;
+			option.textContent = method.name || methodKey;
+			methodSelect.appendChild(option);
+		});
 
-  renderFields() {
-    const fieldsGroup = this.querySelector("[data-fields-group]");
-    const fieldsContainer = this.querySelector("[data-fields-container]");
-    if (!fieldsGroup || !fieldsContainer) return;
+		methodGroup.style.display = 'flex';
 
-    if (!this.selectedMethod || !this.selectedMethod.fields) {
-      fieldsGroup.style.display = 'none';
-      return;
-    }
+		// Auto-select first method if available
+		if (methodKeys.length > 0) {
+			const firstMethodKey = methodKeys[0];
+			methodSelect.value = firstMethodKey;
+			// Use microtask to ensure DOM is ready and method selection happens after render
+			Promise.resolve().then(() => {
+				this.handleMethodChange(firstMethodKey);
+			});
+		} else {
+			methodSelect.value = '';
+		}
+	}
 
-    fieldsContainer.innerHTML = '';
-    const fields = this.selectedMethod.fields;
+	handleMethodChange(methodKey) {
+		if (!methodKey) {
+			this.selectedMethod = null;
+			this.fieldValues = {};
+			this.hideFieldsGroup();
+			this.updateButtonState();
+			return;
+		}
 
-    if (Object.keys(fields).length === 0) {
-      fieldsGroup.style.display = 'none';
-      return;
-    }
+		if (!this.selectedServer) {
+			return;
+		}
 
-    Object.keys(fields).forEach(fieldKey => {
-      const field = fields[fieldKey];
-      const fieldGroup = document.createElement('div');
-      fieldGroup.className = 'form-group';
-      
-      const label = document.createElement('label');
-      label.className = 'form-label';
-      label.htmlFor = `field-${fieldKey}`;
-      // Append text and asterisk inline
-      label.appendChild(document.createTextNode(field.label || fieldKey));
-      if (field.required) {
-        const required = document.createElement('span');
-        required.className = 'field-required';
-        required.textContent = ' *';
-        label.appendChild(required);
-      }
-      
-      let input;
-      if (field.type === 'color') {
-        input = document.createElement('input');
-        input.type = 'color';
-        input.id = `field-${fieldKey}`;
-        input.name = fieldKey;
-        input.className = 'form-input';
-        // Set default color if not provided
-        input.value = '#000000';
-        if (field.required) {
-          input.required = true;
-        }
-        // Initialize field value with default
-        this.fieldValues[fieldKey] = input.value;
-        input.addEventListener('change', (e) => {
-          this.fieldValues[fieldKey] = e.target.value;
-          this.updateButtonState();
-        });
-        // Also listen to input event for color pickers
-        input.addEventListener('input', (e) => {
-          this.fieldValues[fieldKey] = e.target.value;
-          this.updateButtonState();
-        });
-      } else {
-        input = document.createElement('input');
-        input.type = field.type || 'text';
-        input.id = `field-${fieldKey}`;
-        input.name = fieldKey;
-        input.className = 'form-input';
-        input.placeholder = field.label || fieldKey;
-        if (field.required) {
-          input.required = true;
-        }
-        // Initialize field value
-        this.fieldValues[fieldKey] = '';
-        input.addEventListener('input', (e) => {
-          this.fieldValues[fieldKey] = e.target.value;
-          this.updateButtonState();
-        });
-        // Also listen to change event for text inputs
-        input.addEventListener('change', (e) => {
-          this.fieldValues[fieldKey] = e.target.value;
-          this.updateButtonState();
-        });
-      }
-      
-      fieldGroup.appendChild(label);
-      fieldGroup.appendChild(input);
-      fieldsContainer.appendChild(fieldGroup);
-    });
+		// Ensure server_config is parsed
+		let serverConfig = this.selectedServer.server_config;
+		if (typeof serverConfig === 'string') {
+			try {
+				serverConfig = JSON.parse(serverConfig);
+				this.selectedServer.server_config = serverConfig;
+			} catch (e) {
+				console.warn('Failed to parse server_config:', e);
+				return;
+			}
+		}
 
-    fieldsGroup.style.display = 'flex';
-  }
+		if (!serverConfig || !serverConfig.methods || !serverConfig.methods[methodKey]) {
+			return;
+		}
 
-  hideMethodGroup() {
-    const methodGroup = this.querySelector("[data-method-group]");
-    const methodSelect = this.querySelector("[data-method-select]");
-    if (methodGroup) methodGroup.style.display = 'none';
-    if (methodSelect) methodSelect.value = '';
-  }
+		this.selectedMethod = serverConfig.methods[methodKey];
+		this.fieldValues = {};
+		this.renderFields();
+		this.updateButtonState();
+	}
 
-  hideFieldsGroup() {
-    const fieldsGroup = this.querySelector("[data-fields-group]");
-    if (fieldsGroup) fieldsGroup.style.display = 'none';
-  }
+	renderFields() {
+		const fieldsGroup = this.querySelector("[data-fields-group]");
+		const fieldsContainer = this.querySelector("[data-fields-container]");
+		if (!fieldsGroup || !fieldsContainer) return;
 
-  handleCreditsUpdated(event) {
-    if (event.detail && typeof event.detail.count === 'number') {
-      this.creditsCount = event.detail.count;
-      this.updateButtonState();
-    } else {
-      this.loadCredits();
-    }
-  }
+		if (!this.selectedMethod || !this.selectedMethod.fields) {
+			fieldsGroup.style.display = 'none';
+			return;
+		}
 
-  async loadCredits() {
-    try {
-      const response = await fetch('/api/credits', { credentials: 'include' });
-      if (response.ok) {
-        const data = await response.json();
-        this.creditsCount = this.normalizeCredits(data?.balance ?? 0);
-        this.updateButtonState();
-      } else {
-        this.creditsCount = 0;
-        this.updateButtonState();
-      }
-    } catch {
-      // Fallback to localStorage if available
-      const stored = window.localStorage?.getItem('credits-balance');
-      this.creditsCount = stored !== null ? this.normalizeCredits(stored) : 0;
-      this.updateButtonState();
-    }
-  }
+		fieldsContainer.innerHTML = '';
+		const fields = this.selectedMethod.fields;
 
-  normalizeCredits(value) {
-    const count = Number(value);
-    if (!Number.isFinite(count)) return 0;
-    return Math.max(0, Math.round(count * 10) / 10);
-  }
+		if (Object.keys(fields).length === 0) {
+			fieldsGroup.style.display = 'none';
+			return;
+		}
 
-  updateButtonState() {
-    const button = this.querySelector("[data-create-button]");
-    const costElement = this.querySelector("[data-create-cost]");
-    
-    if (!button || !costElement) return;
+		Object.keys(fields).forEach(fieldKey => {
+			const field = fields[fieldKey];
+			const fieldGroup = document.createElement('div');
+			fieldGroup.className = 'form-group';
 
-    // Check if server and method are selected
-    if (!this.selectedServer || !this.selectedMethod) {
-      button.disabled = true;
-      costElement.textContent = 'Select a server and method to see cost';
-      costElement.classList.remove('insufficient');
-      return;
-    }
+			const label = document.createElement('label');
+			label.className = 'form-label';
+			label.htmlFor = `field-${fieldKey}`;
+			// Append text and asterisk inline
+			label.appendChild(document.createTextNode(field.label || fieldKey));
+			if (field.required) {
+				const required = document.createElement('span');
+				required.className = 'field-required';
+				required.textContent = ' *';
+				label.appendChild(required);
+			}
 
-    // Check if all required fields are filled
-    const fields = this.selectedMethod.fields || {};
-    const requiredFields = Object.keys(fields).filter(key => fields[key].required);
-    const allRequiredFilled = requiredFields.every(key => {
-      const value = this.fieldValues[key];
-      return value !== undefined && value !== null && value !== '';
-    });
+			let input;
+			if (field.type === 'color') {
+				input = document.createElement('input');
+				input.type = 'color';
+				input.id = `field-${fieldKey}`;
+				input.name = fieldKey;
+				input.className = 'form-input';
+				// Set default color if not provided
+				input.value = '#000000';
+				if (field.required) {
+					input.required = true;
+				}
+				// Initialize field value with default
+				this.fieldValues[fieldKey] = input.value;
+				input.addEventListener('change', (e) => {
+					this.fieldValues[fieldKey] = e.target.value;
+					this.updateButtonState();
+				});
+				// Also listen to input event for color pickers
+				input.addEventListener('input', (e) => {
+					this.fieldValues[fieldKey] = e.target.value;
+					this.updateButtonState();
+				});
+			} else {
+				input = document.createElement('input');
+				input.type = field.type || 'text';
+				input.id = `field-${fieldKey}`;
+				input.name = fieldKey;
+				input.className = 'form-input';
+				input.placeholder = field.label || fieldKey;
+				if (field.required) {
+					input.required = true;
+				}
+				// Initialize field value
+				this.fieldValues[fieldKey] = '';
+				input.addEventListener('input', (e) => {
+					this.fieldValues[fieldKey] = e.target.value;
+					this.updateButtonState();
+				});
+				// Also listen to change event for text inputs
+				input.addEventListener('change', (e) => {
+					this.fieldValues[fieldKey] = e.target.value;
+					this.updateButtonState();
+				});
+			}
 
-    if (!allRequiredFilled) {
-      button.disabled = true;
-      // Get cost from method config
-      let cost = 0.5; // default fallback
-      if (this.selectedMethod && typeof this.selectedMethod.credits === 'number') {
-        cost = this.selectedMethod.credits;
-      } else if (this.selectedMethod && this.selectedMethod.credits !== undefined) {
-        const parsedCost = parseFloat(this.selectedMethod.credits);
-        if (!isNaN(parsedCost)) {
-          cost = parsedCost;
-        }
-      }
-      costElement.textContent = `Costs ${cost} credits - Fill all required fields`;
-      costElement.classList.remove('insufficient');
-      return;
-    }
+			fieldGroup.appendChild(label);
+			fieldGroup.appendChild(input);
+			fieldsContainer.appendChild(fieldGroup);
+		});
 
-    // Check credits - get cost from method config
-    let cost = 0.5; // default fallback
-    if (this.selectedMethod) {
-      // Debug: log to see what we have
-      console.log('updateButtonState - Method object:', JSON.stringify(this.selectedMethod, null, 2));
-      console.log('updateButtonState - Credits value:', this.selectedMethod.credits, 'Type:', typeof this.selectedMethod.credits);
-      
-      if (typeof this.selectedMethod.credits === 'number') {
-        cost = this.selectedMethod.credits;
-        console.log('updateButtonState - Using numeric credits:', cost);
-      } else if (this.selectedMethod.credits !== undefined && this.selectedMethod.credits !== null) {
-        // Try to parse if it's a string
-        const parsedCost = parseFloat(this.selectedMethod.credits);
-        if (!isNaN(parsedCost)) {
-          cost = parsedCost;
-          console.log('updateButtonState - Parsed credits from string:', cost);
-        } else {
-          console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
-        }
-      } else {
-        console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
-      }
-    } else {
-      console.warn('updateButtonState - No selectedMethod');
-    }
-    
-    const hasEnoughCredits = this.creditsCount >= cost;
-    
-    button.disabled = !hasEnoughCredits;
-    
-    if (hasEnoughCredits) {
-      costElement.textContent = `Costs ${cost} credits`;
-      costElement.classList.remove('insufficient');
-    } else {
-      costElement.textContent = `Insufficient credits. You have ${this.creditsCount} credits, need ${cost} credits.`;
-      costElement.classList.add('insufficient');
-    }
-  }
+		fieldsGroup.style.display = 'flex';
+	}
 
-  async handleCreate() {
-    const button = this.querySelector("[data-create-button]");
-    
-    if (!button) return;
+	hideMethodGroup() {
+		const methodGroup = this.querySelector("[data-method-group]");
+		const methodSelect = this.querySelector("[data-method-select]");
+		if (methodGroup) methodGroup.style.display = 'none';
+		if (methodSelect) methodSelect.value = '';
+	}
 
-    if (!this.selectedServer || !this.selectedMethod) {
-      return;
-    }
+	hideFieldsGroup() {
+		const fieldsGroup = this.querySelector("[data-fields-group]");
+		if (fieldsGroup) fieldsGroup.style.display = 'none';
+	}
 
-    // Get the method key from the selected method
-    const methods = this.selectedServer.server_config?.methods || {};
-    const methodKey = Object.keys(methods).find(key => methods[key] === this.selectedMethod);
-    
-    if (!methodKey) {
-      return;
-    }
+	handleCreditsUpdated(event) {
+		if (event.detail && typeof event.detail.count === 'number') {
+			this.creditsCount = event.detail.count;
+			this.updateButtonState();
+		} else {
+			this.loadCredits();
+		}
+	}
 
-    // Collect all field values from inputs right before submission
-    const fields = this.selectedMethod.fields || {};
-    const collectedArgs = {};
-    Object.keys(fields).forEach(fieldKey => {
-      const input = this.querySelector(`#field-${fieldKey}`);
-      if (input) {
-        collectedArgs[fieldKey] = input.value || this.fieldValues[fieldKey] || '';
-      } else {
-        // Fallback to stored value
-        collectedArgs[fieldKey] = this.fieldValues[fieldKey] || '';
-      }
-    });
+	async loadCredits() {
+		try {
+			const response = await fetch('/api/credits', { credentials: 'include' });
+			if (response.ok) {
+				const data = await response.json();
+				this.creditsCount = this.normalizeCredits(data?.balance ?? 0);
+				this.updateButtonState();
+			} else {
+				this.creditsCount = 0;
+				this.updateButtonState();
+			}
+		} catch {
+			// Fallback to localStorage if available
+			const stored = window.localStorage?.getItem('credits-balance');
+			this.creditsCount = stored !== null ? this.normalizeCredits(stored) : 0;
+			this.updateButtonState();
+		}
+	}
 
-    // Get cost from method config
-    let cost = 0.5; // default fallback
-    if (this.selectedMethod && typeof this.selectedMethod.credits === 'number') {
-      cost = this.selectedMethod.credits;
-    } else if (this.selectedMethod && this.selectedMethod.credits !== undefined) {
-      const parsedCost = parseFloat(this.selectedMethod.credits);
-      if (!isNaN(parsedCost)) {
-        cost = parsedCost;
-      }
-    }
-    
-    if (this.creditsCount < cost) {
-      return;
-    }
+	normalizeCredits(value) {
+		const count = Number(value);
+		if (!Number.isFinite(count)) return 0;
+		return Math.max(0, Math.round(count * 10) / 10);
+	}
 
-    if (typeof this.onCreate === "function") {
-      this.onCreate({ 
-        button,
-        server_id: this.selectedServer.id,
-        method: methodKey,
-        args: collectedArgs
-      });
-    }
-  }
+	updateButtonState() {
+		const button = this.querySelector("[data-create-button]");
+		const costElement = this.querySelector("[data-create-cost]");
+
+		if (!button || !costElement) return;
+
+		// Check if server and method are selected
+		if (!this.selectedServer || !this.selectedMethod) {
+			button.disabled = true;
+			costElement.textContent = 'Select a server and method to see cost';
+			costElement.classList.remove('insufficient');
+			return;
+		}
+
+		// Check if all required fields are filled
+		const fields = this.selectedMethod.fields || {};
+		const requiredFields = Object.keys(fields).filter(key => fields[key].required);
+		const allRequiredFilled = requiredFields.every(key => {
+			const value = this.fieldValues[key];
+			return value !== undefined && value !== null && value !== '';
+		});
+
+		if (!allRequiredFilled) {
+			button.disabled = true;
+			// Get cost from method config
+			let cost = 0.5; // default fallback
+			if (this.selectedMethod && typeof this.selectedMethod.credits === 'number') {
+				cost = this.selectedMethod.credits;
+			} else if (this.selectedMethod && this.selectedMethod.credits !== undefined) {
+				const parsedCost = parseFloat(this.selectedMethod.credits);
+				if (!isNaN(parsedCost)) {
+					cost = parsedCost;
+				}
+			}
+			costElement.textContent = `Costs ${cost} credits - Fill all required fields`;
+			costElement.classList.remove('insufficient');
+			return;
+		}
+
+		// Check credits - get cost from method config
+		let cost = 0.5; // default fallback
+		if (this.selectedMethod) {
+			if (typeof this.selectedMethod.credits === 'number') {
+				cost = this.selectedMethod.credits;
+			} else if (this.selectedMethod.credits !== undefined && this.selectedMethod.credits !== null) {
+				// Try to parse if it's a string
+				const parsedCost = parseFloat(this.selectedMethod.credits);
+				if (!isNaN(parsedCost)) {
+					cost = parsedCost;
+				} else {
+					console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
+				}
+			} else {
+				console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
+			}
+		} else {
+			console.warn('updateButtonState - No selectedMethod');
+		}
+
+		const hasEnoughCredits = this.creditsCount >= cost;
+
+		button.disabled = !hasEnoughCredits;
+
+		if (hasEnoughCredits) {
+			costElement.textContent = `Costs ${cost} credits`;
+			costElement.classList.remove('insufficient');
+		} else {
+			costElement.textContent = `Insufficient credits. You have ${this.creditsCount} credits, need ${cost} credits.`;
+			costElement.classList.add('insufficient');
+		}
+	}
+
+	async handleCreate() {
+		const button = this.querySelector("[data-create-button]");
+
+		if (!button) return;
+
+		if (!this.selectedServer || !this.selectedMethod) {
+			return;
+		}
+
+		// Get the method key from the selected method
+		const methods = this.selectedServer.server_config?.methods || {};
+		const methodKey = Object.keys(methods).find(key => methods[key] === this.selectedMethod);
+
+		if (!methodKey) {
+			return;
+		}
+
+		// Collect all field values from inputs right before submission
+		const fields = this.selectedMethod.fields || {};
+		const collectedArgs = {};
+		Object.keys(fields).forEach(fieldKey => {
+			const input = this.querySelector(`#field-${fieldKey}`);
+			if (input) {
+				collectedArgs[fieldKey] = input.value || this.fieldValues[fieldKey] || '';
+			} else {
+				// Fallback to stored value
+				collectedArgs[fieldKey] = this.fieldValues[fieldKey] || '';
+			}
+		});
+
+		// Get cost from method config
+		let cost = 0.5; // default fallback
+		if (this.selectedMethod && typeof this.selectedMethod.credits === 'number') {
+			cost = this.selectedMethod.credits;
+		} else if (this.selectedMethod && this.selectedMethod.credits !== undefined) {
+			const parsedCost = parseFloat(this.selectedMethod.credits);
+			if (!isNaN(parsedCost)) {
+				cost = parsedCost;
+			}
+		}
+
+		if (this.creditsCount < cost) {
+			return;
+		}
+
+		if (typeof this.onCreate === "function") {
+			this.onCreate({
+				button,
+				server_id: this.selectedServer.id,
+				method: methodKey,
+				args: collectedArgs
+			});
+		}
+	}
 }
 
 customElements.define("app-route-create", AppRouteCreate);

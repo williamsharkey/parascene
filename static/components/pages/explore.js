@@ -2,15 +2,57 @@ import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
 
 const html = String.raw;
 
+function setRouteMediaBackgroundImage(mediaEl, url) {
+  if (!mediaEl || !url) return;
+
+  // Start in "no-image" state so placeholders show until load completes
+  mediaEl.classList.remove('route-media-has-image');
+  mediaEl.classList.remove('route-media-error');
+  mediaEl.style.backgroundImage = '';
+
+  const probe = new Image();
+  probe.decoding = 'async';
+  probe.onload = () => {
+    mediaEl.classList.remove('route-media-error');
+    mediaEl.classList.add('route-media-has-image');
+    mediaEl.style.backgroundImage = `url("${String(url).replace(/"/g, '\\"')}")`;
+  };
+  probe.onerror = () => {
+    mediaEl.classList.remove('route-media-has-image');
+    mediaEl.classList.add('route-media-error');
+    mediaEl.style.backgroundImage = '';
+  };
+  probe.src = url;
+}
+
 class AppRouteExplore extends HTMLElement {
   connectedCallback() {
     this.innerHTML = html`
-      <div class="route-header">
+      <style>
+        .explore-route .route-media:not(.route-media-has-image) {
+          background:
+            linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(5, 199, 111, 0.2)),
+            repeating-linear-gradient(
+              45deg,
+              rgba(255, 255, 255, 0.06) 0,
+              rgba(255, 255, 255, 0.06) 6px,
+              rgba(255, 255, 255, 0.02) 6px,
+              rgba(255, 255, 255, 0.02) 12px
+            );
+        }
+        .explore-route .route-media.route-media-has-image {
+          background-size: cover !important;
+          background-position: center !important;
+        }
+      </style>
+      <div class="explore-route">
+        <div class="route-header">
         <h3>Explore</h3>
-        <p>You will find a list of creations here based on factors that are outside you current configuration.</p>
-      </div>
-      <div class="route-cards cards-grid-auto" data-explore-container>
-        <div class="route-empty">Loading...</div>
+        <p>Discover creations from the broader community, including people you are not friends with yet.</p>
+        </div>
+        <div class="route-cards route-cards-image-grid" data-explore-container>
+        <div class="route-empty route-empty-image-grid">Loading...</div>
+        </div>
       </div>
     `;
     this.loadExplore();
@@ -21,7 +63,21 @@ class AppRouteExplore extends HTMLElement {
     if (!container) return;
 
     try {
-      const response = await fetch("/api/explore", {
+      // Get current user ID
+      let currentUserId = null;
+      try {
+        const profileResponse = await fetch('/api/profile', {
+          credentials: 'include'
+        });
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json();
+          currentUserId = profile.id;
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+
+      const response = await fetch("/api/feed", {
         credentials: 'include'
       });
       if (!response.ok) throw new Error("Failed to load explore.");
@@ -30,24 +86,73 @@ class AppRouteExplore extends HTMLElement {
 
       container.innerHTML = "";
       if (items.length === 0) {
-        container.innerHTML = html`<div class="route-empty">No explore items yet.</div>`;
+        container.innerHTML = html`
+          <div class="route-empty route-empty-image-grid feed-empty-state">
+            <div class="feed-empty-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </div>
+            <div class="route-empty-title">Your explore feed is empty</div>
+            <div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your explore feed.</div>
+          </div>
+        `;
         return;
       }
 
       for (const item of items) {
         const card = document.createElement("div");
-        card.className = "route-card";
-        const createdRel = formatRelativeTime(item.created_at);
-        const createdTitle = formatDateTime(item.created_at);
+        card.className = "route-card route-card-image";
+        
+        // If item has an image, make it clickable and use the image
+        if (item.image_url && item.created_image_id) {
+          card.style.cursor = 'pointer';
+          card.addEventListener('click', () => {
+            window.location.href = `/creations/${item.created_image_id}`;
+          });
+        }
+        
+        // Check if current user owns this item
+        const isOwned = currentUserId && item.user_id && currentUserId === item.user_id;
+        const ownedBadge = isOwned ? html`
+          <div class="creation-published-badge" title="Your creation">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+        ` : '';
+        
+        // Add class to indicate if there's an image (to override gradient)
+        const mediaClass = item.image_url ? '' : '';
+        
         card.innerHTML = html`
-          <div class="route-title">${item.title}</div>
-          <div>${item.summary}</div>
-          <div class="route-meta" title="${createdTitle}">${item.category} • ${createdRel}</div>
+          <div class="route-media ${mediaClass}" aria-hidden="true"></div>
+          ${ownedBadge}
+          <div class="route-details">
+            <div class="route-details-content">
+              <div class="route-title">${item.title}</div>
+              <div class="route-summary">${item.summary}</div>
+              <div class="route-meta" title="${formatDateTime(item.created_at)}">${formatRelativeTime(item.created_at)}</div>
+              <div class="route-meta">By ${item.author}</div>
+              <div class="route-meta route-meta-spacer"></div>
+              <div class="route-tags">${item.tags || ""}</div>
+            </div>
+          </div>
         `;
+
+        // Apply image background with proper load/error handling
+        if (item.image_url) {
+          const mediaEl = card.querySelector('.route-media');
+          const url = item.thumbnail_url || item.image_url;
+          setRouteMediaBackgroundImage(mediaEl, url);
+        }
         container.appendChild(card);
       }
     } catch (error) {
-      container.innerHTML = html`<div class="route-empty">Unable to load explore.</div>`;
+      container.innerHTML = html`<div class="route-empty route-empty-image-grid">Unable to load explore.</div>`;
     }
   }
 }
