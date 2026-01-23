@@ -7,6 +7,13 @@
     "dependsOn": []
   },
   {
+    "name": "Creation Failure",
+    "description": "sometimes a creation fails or results in a stuck image loading forever - this looks bad",
+    "cost": 40,
+    "impact": 52,
+    "dependsOn": []
+  },
+  {
     "name": "Comments",
     "description": "Persist comments on creations with UI support.",
     "cost": 78,
@@ -14,10 +21,10 @@
     "dependsOn": []
   },
   {
-    "name": "Creation Failure",
-    "description": "sometimes a creation fails or results in a stuck image loading forever - this looks bad",
-    "cost": 40,
-    "impact": 45,
+    "name": "Follows",
+    "description": "Add the ability to follow another user, adjust \"Explore\" and \"Feed\" to reflect this.  Provide ability to see follows and remove. Show following on user profile",
+    "cost": 78,
+    "impact": 97,
     "dependsOn": []
   },
   {
