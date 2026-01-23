@@ -25,7 +25,7 @@ class AppHeader extends HTMLElement {
   }
 
   static get observedAttributes() {
-    return ['show-notifications', 'hide-notifications', 'show-profile', 'show-create', 'show-mobile-menu', 'default-route', 'credits-count'];
+    return ['show-notifications', 'hide-notifications', 'show-profile', 'show-create', 'show-mobile-menu', 'hide-credits', 'default-route', 'credits-count'];
   }
 
   connectedCallback() {
@@ -656,7 +656,7 @@ class AppHeader extends HTMLElement {
     const showProfile = this.hasAttribute('show-profile');
     const showCreate = this.hasAttribute('show-create');
     const showMobileMenu = this.hasAttribute('show-mobile-menu');
-    const showCredits = this.hasAttribute('show-profile');
+    const showCredits = this.hasAttribute('show-profile') && !this.hasAttribute('hide-credits');
     const hasAuthLinks = (this.authLinks || []).length > 0;
     const hasMobileActions = showCreate || showNotifications || showCredits || showProfile;
 
