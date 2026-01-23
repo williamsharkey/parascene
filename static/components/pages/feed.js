@@ -50,12 +50,139 @@ class AppRouteFeed extends HTMLElement {
         <h3>Feed</h3>
         <p>See creations shared by friends and people you already follow, with the newest highlights at the top.</p>
         </div>
-        <div class="route-cards route-cards-image-grid" data-feed-container>
+        <div class="route-cards feed-cards" data-feed-container>
         <div class="route-empty route-empty-image-grid">Loading...</div>
         </div>
       </div>
     `;
+    this.feedItems = [];
+    this.feedIndex = 0;
+    this.feedBatchSize = 6;
+    this.setupInfiniteScroll();
     this.loadFeed();
+  }
+
+  disconnectedCallback() {
+    if (this.feedObserver) {
+      this.feedObserver.disconnect();
+      this.feedObserver = null;
+    }
+  }
+
+  setupInfiniteScroll() {
+    const container = this.querySelector("[data-feed-container]");
+    if (!container) return;
+
+    if (!this.feedSentinel) {
+      this.feedSentinel = document.createElement('div');
+      this.feedSentinel.className = 'feed-sentinel';
+      container.after(this.feedSentinel);
+    }
+
+    if (this.feedObserver) {
+      this.feedObserver.disconnect();
+    }
+
+    this.feedObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          this.renderNextBatch();
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '200px 0px',
+      threshold: 0.01
+    });
+
+    this.feedObserver.observe(this.feedSentinel);
+  }
+
+  renderNextBatch() {
+    const container = this.querySelector("[data-feed-container]");
+    if (!container) return;
+    if (!Array.isArray(this.feedItems) || this.feedItems.length === 0) return;
+
+    const start = this.feedIndex;
+    const end = Math.min(start + this.feedBatchSize, this.feedItems.length);
+    if (start >= end) return;
+
+    for (let i = start; i < end; i += 1) {
+      const card = this.buildFeedCard(this.feedItems[i]);
+      container.appendChild(card);
+    }
+
+    this.feedIndex = end;
+  }
+
+  buildFeedCard(item) {
+    const card = document.createElement("div");
+    card.className = "feed-card";
+
+    const author = item.author || "Anonymous";
+    const emailPrefix = typeof item.author === "string" && item.author.includes("@")
+      ? item.author.split("@")[0]
+      : author;
+    const handle = emailPrefix
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 24) || "creator";
+    const avatarInitial = author.trim().charAt(0).toUpperCase() || "?";
+    const relativeTime = formatRelativeTime(item.created_at) || "recently";
+    const summary = item.summary || item.title || "";
+
+    card.innerHTML = html`
+      <div class="feed-card-header">
+        <div class="feed-card-avatar" aria-hidden="true">${avatarInitial}</div>
+        <div class="feed-card-meta">
+          <div class="feed-card-author">
+            <span class="feed-card-name">@${handle}</span>
+          </div>
+          <div class="feed-card-time" title="${formatDateTime(item.created_at)}">Posted ${relativeTime}</div>
+        </div>
+        <button class="feed-card-follow" type="button">Follow</button>
+      </div>
+      <div class="feed-card-text">${summary}</div>
+      <div class="feed-card-image">
+        <img class="feed-card-img" alt="${item.title || 'Feed image'}" loading="lazy" decoding="async">
+      </div>
+      <div class="feed-card-actions">
+        <button class="feed-card-action" type="button" aria-label="Like">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l1.7 1.7L12 21l7.1-7.6 1.7-1.7a5 5 0 0 0 0-7.1z"></path>
+          </svg>
+          <span class="feed-card-action-count">${item.like_count ?? 0}</span>
+        </button>
+        <button class="feed-card-action" type="button" aria-label="Comment">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a4 4 0 0 1-4 4H8l-5 5V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+          </svg>
+          <span class="feed-card-action-count">${item.comment_count ?? 0}</span>
+        </button>
+        <button class="feed-card-action feed-card-action-more" type="button" aria-label="More">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.6"></circle>
+            <circle cx="12" cy="12" r="1.6"></circle>
+            <circle cx="12" cy="19" r="1.6"></circle>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    const imageEl = card.querySelector('.feed-card-img');
+    if (imageEl && item.image_url) {
+      imageEl.src = item.image_url;
+    }
+
+    if (item.image_url && item.created_image_id) {
+      const imageContainer = card.querySelector('.feed-card-image');
+      imageContainer.style.cursor = 'pointer';
+      imageContainer.addEventListener('click', () => {
+        window.location.href = `/creations/${item.created_image_id}`;
+      });
+    }
+
+    return card;
   }
 
   async loadFeed() {
@@ -102,55 +229,9 @@ class AppRouteFeed extends HTMLElement {
         return;
       }
 
-      for (const item of items) {
-        const card = document.createElement("div");
-        card.className = "route-card route-card-image";
-        
-        // If item has an image, make it clickable and use the image
-        if (item.image_url && item.created_image_id) {
-          card.style.cursor = 'pointer';
-          card.addEventListener('click', () => {
-            window.location.href = `/creations/${item.created_image_id}`;
-          });
-        }
-        
-        // Check if current user owns this item
-        const isOwned = currentUserId && item.user_id && currentUserId === item.user_id;
-        const ownedBadge = isOwned ? html`
-          <div class="creation-published-badge" title="Your creation">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-          </div>
-        ` : '';
-        
-        // Add class to indicate if there's an image (to override gradient)
-        const mediaClass = item.image_url ? '' : '';
-        
-        card.innerHTML = html`
-          <div class="route-media ${mediaClass}" aria-hidden="true"></div>
-          ${ownedBadge}
-          <div class="route-details">
-            <div class="route-details-content">
-              <div class="route-title">${item.title}</div>
-              <div class="route-summary">${item.summary}</div>
-              <div class="route-meta" title="${formatDateTime(item.created_at)}">${formatRelativeTime(item.created_at)}</div>
-              <div class="route-meta">By ${item.author}</div>
-              <div class="route-meta route-meta-spacer"></div>
-              <div class="route-tags">${item.tags || ""}</div>
-            </div>
-          </div>
-        `;
-
-        // Apply image background with proper load/error handling
-        if (item.image_url) {
-          const mediaEl = card.querySelector('.route-media');
-          const url = item.thumbnail_url || item.image_url;
-          setRouteMediaBackgroundImage(mediaEl, url);
-        }
-        container.appendChild(card);
-      }
+      this.feedItems = items;
+      this.feedIndex = 0;
+      this.renderNextBatch();
     } catch (error) {
       container.innerHTML = html`<div class="route-empty route-empty-image-grid">Unable to load feed.</div>`;
     }
