@@ -1655,6 +1655,34 @@ app-route-feed {
 	height: 18px;
 }
 
+.feed-card-action[data-like-button] {
+	transition: color 0.15s ease;
+}
+
+.feed-card-action[data-like-button] svg {
+	color: inherit;
+}
+
+.feed-card-action[data-like-button] svg path {
+	fill: none;
+	stroke: currentcolor;
+	transition: fill 0.15s ease;
+}
+
+.feed-card-action[data-like-button][aria-pressed="true"] svg path {
+	fill: currentcolor;
+	stroke: currentcolor;
+}
+
+.feed-card-action[data-like-button].is-like-animating svg {
+	animation: like-beat 1.35s cubic-bezier(0.2, 0.9, 0.2, 1);
+	transform-origin: center;
+}
+
+.feed-card-action[data-like-button].is-like-animating svg path {
+	fill: currentcolor;
+}
+
 .feed-card-action-count {
 	color: var(--text-muted);
 	font-size: 0.85rem;
@@ -1776,6 +1804,40 @@ app-route-feed {
 
 	100% {
 		background-position: -200% 0;
+	}
+}
+
+@keyframes like-beat {
+	0% {
+		transform: scale(1);
+	}
+
+	12% {
+		transform: scale(1.25);
+	}
+
+	22% {
+		transform: scale(1);
+	}
+
+	42% {
+		transform: scale(1.18);
+	}
+
+	52% {
+		transform: scale(1);
+	}
+
+	72% {
+		transform: scale(1.12);
+	}
+
+	82% {
+		transform: scale(1);
+	}
+
+	100% {
+		transform: scale(1.02);
 	}
 }
 

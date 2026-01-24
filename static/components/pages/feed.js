@@ -1,4 +1,5 @@
 import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
+import { enableLikeButtons, initLikeButton } from '../../shared/likes.js';
 
 const html = String.raw;
 
@@ -89,6 +90,7 @@ class AppRouteFeed extends HTMLElement {
 		this.feedItems = [];
 		this.feedIndex = 0;
 		this.feedBatchSize = 6;
+		enableLikeButtons(this);
 		this.setupInfiniteScroll();
 		this.loadFeed();
 	}
@@ -181,11 +183,11 @@ class AppRouteFeed extends HTMLElement {
         </div>
       </div>
       <div class="feed-card-actions">
-        <button class="feed-card-action" type="button" aria-label="Like">
+        <button class="feed-card-action" type="button" aria-label="Like" data-like-button>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l1.7 1.7L12 21l7.1-7.6 1.7-1.7a5 5 0 0 0 0-7.1z"></path>
           </svg>
-          <span class="feed-card-action-count">${item.like_count ?? 0}</span>
+          <span class="feed-card-action-count" data-like-count>${item.like_count ?? 0}</span>
         </button>
         <button class="feed-card-action" type="button" aria-label="Comment">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -202,6 +204,11 @@ class AppRouteFeed extends HTMLElement {
         </button>
       </div>
     `;
+
+		const likeButton = card.querySelector('button[data-like-button]');
+		if (likeButton) {
+			initLikeButton(likeButton, item);
+		}
 
 		const imageEl = card.querySelector('.feed-card-img');
 		const imageContainer = card.querySelector('.feed-card-image');

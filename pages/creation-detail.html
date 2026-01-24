@@ -146,6 +146,7 @@
 
     <script type="module">
       import { formatDateTime, formatRelativeTime } from '/shared/datetime.js';
+      import { getCreationLikeCount } from '/shared/likes.js';
 
       // Set up URL change detection BEFORE header component loads
       // This ensures we capture navigation events
@@ -221,6 +222,8 @@
           }
 
           const creation = await response.json();
+          const likeCount = getCreationLikeCount({ ...creation, created_image_id: creationId });
+          const likesText = likeCount === 1 ? 'like' : 'likes';
           
           // Set image and blurred background
           imageWrapper?.classList.remove('image-error');
@@ -342,7 +345,7 @@
               <span>•</span>
               <span>0 comments</span>
               <span>•</span>
-              <span>0 likes</span>
+              <span><span data-like-count>${likeCount}</span> ${likesText}</span>
             </div>
           `;
         } catch (error) {
