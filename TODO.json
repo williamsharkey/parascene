@@ -1,5 +1,12 @@
 [
   {
+    "name": "Credit Transfer",
+    "description": "Allows one user to give another user credits.",
+    "cost": 9,
+    "impact": 80,
+    "dependsOn": []
+  },
+  {
     "name": "Comments",
     "description": "Persist comments on creations with UI support.",
     "cost": 50,
@@ -18,6 +25,13 @@
     "description": "Define notification types and wire them to real delivery.",
     "cost": 50,
     "impact": 81,
+    "dependsOn": []
+  },
+  {
+    "name": "User Profile Page",
+    "description": "Current and other user view of a user.  Enables image upload and user name customization.",
+    "cost": 50,
+    "impact": 70,
     "dependsOn": []
   },
   {
@@ -48,13 +62,6 @@
     "description": "sometimes a creation fails or results in a stuck image loading forever - this looks bad",
     "cost": 70,
     "impact": 45,
-    "dependsOn": []
-  },
-  {
-    "name": "Credit pools",
-    "description": "Ledger and UI for provider pools used in giveaways and events.",
-    "cost": 75,
-    "impact": 50,
     "dependsOn": []
   },
   {
