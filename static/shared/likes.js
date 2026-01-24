@@ -51,7 +51,14 @@ export function getCreationBaseLikeCount(creation) {
 
 	// Prefer API-like naming, but allow a few variants.
 	if (creation.like_count !== undefined && creation.like_count !== null) {
-		return Math.max(0, toSafeInt(creation.like_count, 0));
+		const full = Math.max(0, toSafeInt(creation.like_count, 0));
+		// If API also provides viewer_liked, treat like_count as "full count"
+		// and compute a base that excludes the viewer's own like so optimistic
+		// toggles work and counts don't double-increment in detail views.
+		if (typeof creation.viewer_liked === 'boolean') {
+			return Math.max(0, full - (creation.viewer_liked ? 1 : 0));
+		}
+		return full;
 	}
 
 	if (creation.likeCount !== undefined && creation.likeCount !== null) {
@@ -72,6 +79,10 @@ export function getCreationLikeCount(creation) {
 }
 
 export function isCreationLiked(creation) {
+	if (creation && typeof creation.viewer_liked === 'boolean') {
+		return creation.viewer_liked;
+	}
+
 	const id = getCreationLikeId(creation);
 	if (!id) return false;
 
@@ -165,7 +176,11 @@ export function initLikeButton(buttonEl, creation) {
 	buttonEl.dataset.likeButton = 'true';
 	buttonEl.dataset.likeBaseCount = String(getCreationBaseLikeCount(creation));
 
+	// If API provides viewer_liked, sync our local cache to it.
 	const liked = isCreationLiked(creation);
+	if (creation && typeof creation.viewer_liked === 'boolean') {
+		setCreationLiked({ created_image_id: id }, creation.viewer_liked);
+	}
 	applyLikeButtonState(buttonEl, liked, false);
 	setDisplayedLikeCount(buttonEl, creation, liked);
 	return liked;
@@ -189,6 +204,8 @@ export function enableLikeButtons(root = document) {
 		const id = button.dataset.likeId;
 		if (!id) return;
 
+		if (button.dataset.likeBusy === '1') return;
+
 		const baseCount = toSafeInt(button.dataset.likeBaseCount, null);
 		const baseCreation = { like_count: baseCount !== null ? baseCount : undefined };
 
@@ -196,7 +213,8 @@ export function enableLikeButtons(root = document) {
 		e.stopPropagation();
 
 		const set = readLikedIdSet();
-		const next = !set.has(id);
+		const prev = set.has(id);
+		const next = !prev;
 		if (next) {
 			set.add(id);
 		} else {
@@ -207,6 +225,51 @@ export function enableLikeButtons(root = document) {
 		// Always recompute from base + local liked state (don’t trust rendered text).
 		setDisplayedLikeCount(button, baseCreation, next);
 		applyLikeButtonState(button, next, next);
+
+		const imageId = Number.parseInt(id, 10);
+		if (!Number.isFinite(imageId) || imageId <= 0) {
+			// Not a created-image id; keep local-only behavior for now.
+			return;
+		}
+
+		button.dataset.likeBusy = '1';
+
+		const url = `/api/created-images/${encodeURIComponent(String(imageId))}/like`;
+		const method = next ? 'POST' : 'DELETE';
+
+		fetch(url, { method, credentials: 'include' })
+			.then(async (res) => {
+				if (!res.ok) {
+					let detail = '';
+					try {
+						const json = await res.json();
+						detail = json?.error ? `: ${json.error}` : '';
+					} catch {
+						// ignore
+					}
+					throw new Error(`Like request failed (${res.status})${detail}`);
+				}
+				return res.json();
+			})
+			.then((meta) => {
+				const likeCount = Math.max(0, toSafeInt(meta?.like_count, 0));
+				const viewerLiked = Boolean(meta?.viewer_liked);
+				const newBase = Math.max(0, likeCount - (viewerLiked ? 1 : 0));
+
+				button.dataset.likeBaseCount = String(newBase);
+				setCreationLiked({ created_image_id: id }, viewerLiked);
+				setDisplayedLikeCount(button, { like_count: newBase }, viewerLiked);
+				applyLikeButtonState(button, viewerLiked, false);
+			})
+			.catch(() => {
+				// Revert optimistic state on failure.
+				setCreationLiked({ created_image_id: id }, prev);
+				setDisplayedLikeCount(button, baseCreation, prev);
+				applyLikeButtonState(button, prev, false);
+			})
+			.finally(() => {
+				delete button.dataset.likeBusy;
+			});
 	}, { capture: true });
 }
 

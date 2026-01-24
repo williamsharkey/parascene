@@ -13,6 +13,7 @@ import createPageRoutes from "../api_routes/pages.js";
 import createProviderRoutes from "../api_routes/provider.js";
 import createServersRoutes from "../api_routes/servers.js";
 import createTemplatesRoutes from "../api_routes/templates.js";
+import createLikesRoutes from "../api_routes/likes.js";
 import createUserRoutes from "../api_routes/user.js";
 import createTodoRoutes from "../api_routes/todo.js";
 import {
@@ -95,6 +96,7 @@ app.use(createFeedRoutes({ queries }));
 app.use(createExploreRoutes({ queries }));
 app.use(createCreateRoutes({ queries, storage }));
 app.use(createCreationsRoutes({ queries }));
+app.use(createLikesRoutes({ queries }));
 app.use(createProviderRoutes({ queries }));
 app.use(createServersRoutes({ queries }));
 app.use(createTemplatesRoutes({ queries }));

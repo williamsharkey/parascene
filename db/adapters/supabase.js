@@ -361,13 +361,61 @@ export function openDb() {
             filename,
             user_id,
             // Use file_path (which contains the URL) or fall back to constructing from filename
-            url: file_path || (filename ? `/api/images/created/${filename}` : null)
+            url: file_path || (filename ? `/api/images/created/${filename}` : null),
+            like_count: 0,
+            viewer_liked: false
           };
         });
-        if (!excludeUserId) {
-          return items;
+        const viewerId = excludeUserId ?? null;
+
+        // Exclude viewer's own creations from feed if requested (existing behavior)
+        const filtered = !excludeUserId
+          ? items
+          : items.filter((item) => item.user_id !== excludeUserId);
+
+        const createdImageIds = filtered
+          .map((item) => item.created_image_id)
+          .filter((id) => id !== null && id !== undefined);
+
+        if (createdImageIds.length === 0) {
+          return filtered;
         }
-        return items.filter((item) => item.user_id !== excludeUserId);
+
+        // Bulk like counts via view
+        const { data: countRows, error: countError } = await serviceClient
+          .from(prefixedTable("created_image_like_counts"))
+          .select("created_image_id, like_count")
+          .in("created_image_id", createdImageIds);
+        if (countError) throw countError;
+
+        const countById = new Map(
+          (countRows ?? []).map((row) => [String(row.created_image_id), Number(row.like_count ?? 0)])
+        );
+
+        // Bulk viewer liked lookup
+        let likedIdSet = null;
+        if (viewerId !== null && viewerId !== undefined) {
+          const { data: likedRows, error: likedError } = await serviceClient
+            .from(prefixedTable("likes_created_image"))
+            .select("created_image_id")
+            .eq("user_id", viewerId)
+            .in("created_image_id", createdImageIds);
+          if (likedError) throw likedError;
+          likedIdSet = new Set((likedRows ?? []).map((row) => String(row.created_image_id)));
+        }
+
+        return filtered.map((item) => {
+          const key = item.created_image_id === null || item.created_image_id === undefined
+            ? null
+            : String(item.created_image_id);
+          const likeCount = key ? (countById.get(key) ?? 0) : 0;
+          const viewerLiked = key && likedIdSet ? likedIdSet.has(key) : false;
+          return {
+            ...item,
+            like_count: likeCount,
+            viewer_liked: viewerLiked
+          };
+        });
       }
     },
     selectExploreItems: {
@@ -579,6 +627,55 @@ export function openDb() {
           .maybeSingle();
         if (error) throw error;
         return data ?? undefined;
+      }
+    },
+    insertCreatedImageLike: {
+      run: async (userId, createdImageId) => {
+        // Use serviceClient to bypass RLS for backend operations
+        const { data, error } = await serviceClient
+          .from(prefixedTable("likes_created_image"))
+          .upsert(
+            { user_id: userId, created_image_id: createdImageId },
+            { onConflict: "user_id,created_image_id", ignoreDuplicates: true }
+          )
+          .select("id");
+        if (error) throw error;
+        return { changes: data?.length ?? 0 };
+      }
+    },
+    deleteCreatedImageLike: {
+      run: async (userId, createdImageId) => {
+        const { data, error } = await serviceClient
+          .from(prefixedTable("likes_created_image"))
+          .delete()
+          .eq("user_id", userId)
+          .eq("created_image_id", createdImageId)
+          .select("id");
+        if (error) throw error;
+        return { changes: data?.length ?? 0 };
+      }
+    },
+    selectCreatedImageLikeCount: {
+      get: async (createdImageId) => {
+        const { data, error } = await serviceClient
+          .from(prefixedTable("created_image_like_counts"))
+          .select("created_image_id, like_count")
+          .eq("created_image_id", createdImageId)
+          .maybeSingle();
+        if (error) throw error;
+        return { like_count: Number(data?.like_count ?? 0) };
+      }
+    },
+    selectCreatedImageViewerLiked: {
+      get: async (userId, createdImageId) => {
+        const { data, error } = await serviceClient
+          .from(prefixedTable("likes_created_image"))
+          .select("id")
+          .eq("user_id", userId)
+          .eq("created_image_id", createdImageId)
+          .maybeSingle();
+        if (error) throw error;
+        return data ? { viewer_liked: 1 } : undefined;
       }
     },
     publishCreatedImage: {

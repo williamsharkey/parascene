@@ -1,5 +1,5 @@
 import { formatDateTime, formatRelativeTime } from '/shared/datetime.js';
-import { getCreationLikeCount } from '/shared/likes.js';
+import { enableLikeButtons, getCreationLikeCount, initLikeButton } from '/shared/likes.js';
 
 // Set up URL change detection BEFORE header component loads
 // This ensures we capture navigation events
@@ -76,7 +76,6 @@ async function loadCreation() {
 
 		const creation = await response.json();
 		const likeCount = getCreationLikeCount({ ...creation, created_image_id: creationId });
-		const likesText = likeCount === 1 ? 'like' : 'likes';
 
 		// Set image and blurred background
 		imageWrapper?.classList.remove('image-error');
@@ -198,9 +197,21 @@ async function loadCreation() {
 				<span>•</span>
 				<span>0 comments</span>
 				<span>•</span>
-				<span><span data-like-count>${likeCount}</span> ${likesText}</span>
+				<button class="feed-card-action" type="button" aria-label="Like" data-like-button>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l1.7 1.7L12 21l7.1-7.6 1.7-1.7a5 5 0 0 0 0-7.1z"></path>
+					</svg>
+					<span class="feed-card-action-count" data-like-count>${likeCount}</span>
+				</button>
 			</div>
 		`;
+
+		const likeButton = detailContent.querySelector('button[data-like-button]');
+		if (likeButton) {
+			initLikeButton(likeButton, { ...creation, created_image_id: creationId });
+		}
+
+		enableLikeButtons(detailContent);
 	} catch (error) {
 		console.error("Error loading creation detail:", error);
 		detailContent.innerHTML = `

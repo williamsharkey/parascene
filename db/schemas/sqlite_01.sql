@@ -123,3 +123,18 @@ CREATE TABLE IF NOT EXISTS user_credits (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS likes_created_image (
+  user_id INTEGER NOT NULL,
+  created_image_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (created_image_id) REFERENCES created_images(id),
+  UNIQUE(user_id, created_image_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_likes_created_image_created_image_id
+  ON likes_created_image(created_image_id);
+
+CREATE INDEX IF NOT EXISTS idx_likes_created_image_user_id
+  ON likes_created_image(user_id);

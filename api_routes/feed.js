@@ -29,7 +29,9 @@ export default function createFeedRoutes({ queries }) {
         image_url: imageUrl,
         thumbnail_url: getThumbnailUrl(imageUrl),
         created_image_id: item.created_image_id || null,
-        user_id: item.user_id || null
+        user_id: item.user_id || null,
+        like_count: Number(item.like_count ?? 0),
+        viewer_liked: Boolean(item.viewer_liked)
       };
     });
     

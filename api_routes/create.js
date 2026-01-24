@@ -302,6 +302,11 @@ export default function createCreateRoutes({ queries, storage }) {
         creator = await queries.selectUserById.get(image.user_id);
       }
 
+      const likeCountRow = await queries.selectCreatedImageLikeCount?.get(image.id);
+      const likeCount = Number(likeCountRow?.like_count ?? 0);
+      const viewerLikedRow = await queries.selectCreatedImageViewerLiked?.get(user.id, image.id);
+      const viewerLiked = Boolean(viewerLikedRow?.viewer_liked);
+
       return res.json({
         id: image.id,
         filename: image.filename,
@@ -315,6 +320,8 @@ export default function createCreateRoutes({ queries, storage }) {
         published_at: image.published_at || null,
         title: image.title || null,
         description: image.description || null,
+        like_count: likeCount,
+        viewer_liked: viewerLiked,
         user_id: image.user_id,
         creator: creator ? {
           id: creator.id,

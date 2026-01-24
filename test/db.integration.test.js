@@ -19,7 +19,9 @@ const expectedTables = [
   'prsn_creations',
   'prsn_templates',
   'prsn_created_images',
-  'prsn_feed_items'
+  'prsn_feed_items',
+  'prsn_user_credits',
+  'prsn_likes_created_image'
 ];
 
 describe('Database Integration Tests', () => {
@@ -185,6 +187,168 @@ describe('Database Integration Tests', () => {
         .single();
 
       expect(updatedNotification.acknowledged_at).not.toBeNull();
+    });
+  });
+
+  describe('Created Image Likes', () => {
+    let supabaseServiceClient;
+    let dbQueries;
+    let ownerUserId;
+    let viewerUserId;
+    let createdImageId;
+    let feedItemId;
+
+    beforeAll(async () => {
+      if (!serviceRoleKey) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for likes tests');
+      }
+      supabaseServiceClient = createClient(supabaseUrl, serviceRoleKey);
+
+      process.env.DB_ADAPTER = 'supabase';
+      const db = await openDb({ quiet: true });
+      dbQueries = db.queries;
+
+      const ownerEmail = `likes-owner-${Date.now()}@example.com`;
+      const viewerEmail = `likes-viewer-${Date.now()}@example.com`;
+
+      const { data: ownerData, error: ownerError } = await supabaseServiceClient
+        .from('prsn_users')
+        .insert({ email: ownerEmail, password_hash: 'test_hash', role: 'consumer' })
+        .select('id')
+        .single();
+      if (ownerError) throw new Error(`Failed to create owner user: ${ownerError.message}`);
+      ownerUserId = ownerData.id;
+
+      const { data: viewerData, error: viewerError } = await supabaseServiceClient
+        .from('prsn_users')
+        .insert({ email: viewerEmail, password_hash: 'test_hash', role: 'consumer' })
+        .select('id')
+        .single();
+      if (viewerError) throw new Error(`Failed to create viewer user: ${viewerError.message}`);
+      viewerUserId = viewerData.id;
+
+      const filename = `likes_test_${Date.now()}.png`;
+      const { data: imageData, error: imageError } = await supabaseServiceClient
+        .from('prsn_created_images')
+        .insert({
+          user_id: ownerUserId,
+          filename,
+          file_path: `/api/images/created/${filename}`,
+          width: 64,
+          height: 64,
+          color: '#000000',
+          status: 'completed',
+          published: true,
+          title: 'Likes test',
+          description: 'Likes test image'
+        })
+        .select('id')
+        .single();
+      if (imageError) throw new Error(`Failed to create test image: ${imageError.message}`);
+      createdImageId = imageData.id;
+
+      const { data: feedData, error: feedError } = await supabaseServiceClient
+        .from('prsn_feed_items')
+        .insert({
+          title: 'Likes feed item',
+          summary: 'Likes feed item summary',
+          author: 'likes-test',
+          tags: null,
+          created_image_id: createdImageId
+        })
+        .select('id')
+        .single();
+      if (feedError) throw new Error(`Failed to create feed item: ${feedError.message}`);
+      feedItemId = feedData.id;
+    });
+
+    afterAll(async () => {
+      // Clean up likes first (FK dependency)
+      if (createdImageId) {
+        try {
+          await supabaseServiceClient
+            .from('prsn_likes_created_image')
+            .delete()
+            .eq('created_image_id', createdImageId);
+        } catch (error) {
+          console.error('Error cleaning up likes:', error);
+        }
+      }
+
+      if (feedItemId) {
+        try {
+          await supabaseServiceClient
+            .from('prsn_feed_items')
+            .delete()
+            .eq('id', feedItemId);
+        } catch (error) {
+          console.error('Error cleaning up feed item:', error);
+        }
+      }
+
+      if (createdImageId) {
+        try {
+          await supabaseServiceClient
+            .from('prsn_created_images')
+            .delete()
+            .eq('id', createdImageId);
+        } catch (error) {
+          console.error('Error cleaning up created image:', error);
+        }
+      }
+
+      if (ownerUserId) {
+        try {
+          await supabaseServiceClient.from('prsn_users').delete().eq('id', ownerUserId);
+        } catch (error) {
+          console.error('Error cleaning up owner user:', error);
+        }
+      }
+
+      if (viewerUserId) {
+        try {
+          await supabaseServiceClient.from('prsn_users').delete().eq('id', viewerUserId);
+        } catch (error) {
+          console.error('Error cleaning up viewer user:', error);
+        }
+      }
+    });
+
+    it('should like/unlike idempotently and expose counts + viewer_liked', async () => {
+      // Initially 0
+      const initialCount = await dbQueries.selectCreatedImageLikeCount.get(createdImageId);
+      expect(Number(initialCount?.like_count ?? 0)).toBe(0);
+
+      const initialLiked = await dbQueries.selectCreatedImageViewerLiked.get(viewerUserId, createdImageId);
+      expect(Boolean(initialLiked?.viewer_liked)).toBe(false);
+
+      // Like
+      await dbQueries.insertCreatedImageLike.run(viewerUserId, createdImageId);
+      const afterLikeCount = await dbQueries.selectCreatedImageLikeCount.get(createdImageId);
+      expect(Number(afterLikeCount?.like_count ?? 0)).toBe(1);
+
+      const afterLikeLiked = await dbQueries.selectCreatedImageViewerLiked.get(viewerUserId, createdImageId);
+      expect(Boolean(afterLikeLiked?.viewer_liked)).toBe(true);
+
+      // Like again (idempotent)
+      await dbQueries.insertCreatedImageLike.run(viewerUserId, createdImageId);
+      const afterSecondLikeCount = await dbQueries.selectCreatedImageLikeCount.get(createdImageId);
+      expect(Number(afterSecondLikeCount?.like_count ?? 0)).toBe(1);
+
+      // Feed enrichment (viewer excludes self, but owner is different)
+      const feed = await dbQueries.selectFeedItems.all(viewerUserId);
+      const item = feed.find((x) => String(x.created_image_id) === String(createdImageId));
+      expect(item).toBeTruthy();
+      expect(Number(item.like_count ?? 0)).toBe(1);
+      expect(Boolean(item.viewer_liked)).toBe(true);
+
+      // Unlike
+      await dbQueries.deleteCreatedImageLike.run(viewerUserId, createdImageId);
+      const afterUnlikeCount = await dbQueries.selectCreatedImageLikeCount.get(createdImageId);
+      expect(Number(afterUnlikeCount?.like_count ?? 0)).toBe(0);
+
+      const afterUnlikeLiked = await dbQueries.selectCreatedImageViewerLiked.get(viewerUserId, createdImageId);
+      expect(Boolean(afterUnlikeLiked?.viewer_liked)).toBe(false);
     });
   });
 });

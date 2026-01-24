@@ -244,16 +244,27 @@ export async function openDb() {
     },
     selectFeedItems: {
       all: async (excludeUserId) => {
+        const viewerId = excludeUserId ?? null;
         const stmt = db.prepare(
           `SELECT fi.id, fi.title, fi.summary, fi.author, fi.tags, fi.created_at, 
                   fi.created_image_id, ci.filename, ci.file_path, ci.user_id,
-                  COALESCE(ci.file_path, CASE WHEN ci.filename IS NOT NULL THEN '/api/images/created/' || ci.filename ELSE NULL END) as url
+                  COALESCE(ci.file_path, CASE WHEN ci.filename IS NOT NULL THEN '/api/images/created/' || ci.filename ELSE NULL END) as url,
+                  COALESCE(lc.like_count, 0) AS like_count,
+                  CASE WHEN ? IS NOT NULL AND vl.user_id IS NOT NULL THEN 1 ELSE 0 END AS viewer_liked
            FROM feed_items fi
            LEFT JOIN created_images ci ON fi.created_image_id = ci.id
+           LEFT JOIN (
+             SELECT created_image_id, COUNT(*) AS like_count
+             FROM likes_created_image
+             GROUP BY created_image_id
+           ) lc ON lc.created_image_id = fi.created_image_id
+           LEFT JOIN likes_created_image vl
+             ON vl.created_image_id = fi.created_image_id
+            AND vl.user_id = ?
            WHERE ? IS NULL OR ci.user_id IS NULL OR ci.user_id != ?
            ORDER BY fi.created_at DESC`
         );
-        return Promise.resolve(stmt.all(excludeUserId ?? null, excludeUserId ?? null));
+        return Promise.resolve(stmt.all(viewerId, viewerId, excludeUserId ?? null, excludeUserId ?? null));
       }
     },
     selectExploreItems: {
@@ -454,6 +465,47 @@ export async function openDb() {
            WHERE filename = ?`
         );
         return Promise.resolve(stmt.get(filename));
+      }
+    },
+    insertCreatedImageLike: {
+      run: async (userId, createdImageId) => {
+        const stmt = db.prepare(
+          `INSERT OR IGNORE INTO likes_created_image (user_id, created_image_id)
+           VALUES (?, ?)`
+        );
+        const result = stmt.run(userId, createdImageId);
+        return Promise.resolve({ changes: result.changes });
+      }
+    },
+    deleteCreatedImageLike: {
+      run: async (userId, createdImageId) => {
+        const stmt = db.prepare(
+          `DELETE FROM likes_created_image
+           WHERE user_id = ? AND created_image_id = ?`
+        );
+        const result = stmt.run(userId, createdImageId);
+        return Promise.resolve({ changes: result.changes });
+      }
+    },
+    selectCreatedImageLikeCount: {
+      get: async (createdImageId) => {
+        const stmt = db.prepare(
+          `SELECT COUNT(*) AS like_count
+           FROM likes_created_image
+           WHERE created_image_id = ?`
+        );
+        return Promise.resolve(stmt.get(createdImageId));
+      }
+    },
+    selectCreatedImageViewerLiked: {
+      get: async (userId, createdImageId) => {
+        const stmt = db.prepare(
+          `SELECT 1 AS viewer_liked
+           FROM likes_created_image
+           WHERE user_id = ? AND created_image_id = ?
+           LIMIT 1`
+        );
+        return Promise.resolve(stmt.get(userId, createdImageId));
       }
     },
     publishCreatedImage: {
