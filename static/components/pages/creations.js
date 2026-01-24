@@ -257,11 +257,8 @@ class AppRouteCreations extends HTMLElement {
           const isPublished = item.published === true || item.published === 1;
           let publishedBadge = '';
           let publishedInfo = '';
-          
-          if (isPublished && item.published_at) {
-            const publishedDate = new Date(item.published_at);
-            const publishedTimeAgo = formatRelativeTime(publishedDate);
-            
+
+          if (isPublished) {
             publishedBadge = html`
               <div class="creation-published-badge" title="Published">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -271,7 +268,11 @@ class AppRouteCreations extends HTMLElement {
                 </svg>
               </div>
             `;
-            
+          }
+
+          if (isPublished && item.published_at) {
+            const publishedDate = new Date(item.published_at);
+            const publishedTimeAgo = formatRelativeTime(publishedDate);
             publishedInfo = html`<div class="route-meta" title="${formatDateTime(item.published_at)}">Published ${publishedTimeAgo}</div>`;
           }
           

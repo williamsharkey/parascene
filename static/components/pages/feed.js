@@ -295,18 +295,18 @@ class AppRouteFeed extends HTMLElement {
 			container.innerHTML = "";
 			if (items.length === 0) {
 				container.innerHTML = html`
-          <div class="route-empty route-empty-image-grid feed-empty-state">
-            <div class="feed-empty-icon">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-            </div>
-            <div class="route-empty-title">Your feed is empty</div>
-            <div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your feed.</div>
-          </div>
-        `;
+					<div class="route-empty route-empty-image-grid feed-empty-state">
+						<div class="feed-empty-icon">
+						<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="12" cy="12" r="10"></circle>
+							<line x1="2" y1="12" x2="22" y2="12"></line>
+							<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+						</svg>
+						</div>
+						<div class="route-empty-title">Your feed is empty</div>
+						<div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your feed.</div>
+					</div>
+				`;
 				return;
 			}
 
