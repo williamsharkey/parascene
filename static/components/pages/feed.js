@@ -2,32 +2,61 @@ import { formatDateTime, formatRelativeTime } from '../../shared/datetime.js';
 
 const html = String.raw;
 
+// Color palette for avatar backgrounds - distinct, vibrant colors
+const avatarColors = [
+	'#7c3aed', // Purple
+	'#05c76f', // Green
+	'#3b82f6', // Blue
+	'#f59e0b', // Amber
+	'#ef4444', // Red
+	'#ec4899', // Pink
+	'#14b8a6', // Teal
+	'#8b5cf6', // Violet
+	'#f97316', // Orange
+	'#06b6d4', // Cyan
+	'#84cc16', // Lime
+	'#a855f7', // Purple variant
+	'#10b981', // Emerald
+	'#6366f1', // Indigo
+	'#f43f5e', // Rose
+	'#0ea5e9', // Sky
+];
+
+function getAvatarColor(character) {
+	if (!character) return avatarColors[0];
+
+	// Get character code and map to color palette
+	const charCode = character.toUpperCase().charCodeAt(0);
+	const index = charCode % avatarColors.length;
+	return avatarColors[index];
+}
+
 function setRouteMediaBackgroundImage(mediaEl, url) {
-  if (!mediaEl || !url) return;
+	if (!mediaEl || !url) return;
 
-  // Start in "no-image" state so placeholders show until load completes
-  mediaEl.classList.remove('route-media-has-image');
-  mediaEl.classList.remove('route-media-error');
-  mediaEl.style.backgroundImage = '';
+	// Start in "no-image" state so placeholders show until load completes
+	mediaEl.classList.remove('route-media-has-image');
+	mediaEl.classList.remove('route-media-error');
+	mediaEl.style.backgroundImage = '';
 
-  const probe = new Image();
-  probe.decoding = 'async';
-  probe.onload = () => {
-    mediaEl.classList.remove('route-media-error');
-    mediaEl.classList.add('route-media-has-image');
-    mediaEl.style.backgroundImage = `url("${String(url).replace(/"/g, '\\"')}")`;
-  };
-  probe.onerror = () => {
-    mediaEl.classList.remove('route-media-has-image');
-    mediaEl.classList.add('route-media-error');
-    mediaEl.style.backgroundImage = '';
-  };
-  probe.src = url;
+	const probe = new Image();
+	probe.decoding = 'async';
+	probe.onload = () => {
+		mediaEl.classList.remove('route-media-error');
+		mediaEl.classList.add('route-media-has-image');
+		mediaEl.style.backgroundImage = `url("${String(url).replace(/"/g, '\\"')}")`;
+	};
+	probe.onerror = () => {
+		mediaEl.classList.remove('route-media-has-image');
+		mediaEl.classList.add('route-media-error');
+		mediaEl.style.backgroundImage = '';
+	};
+	probe.src = url;
 }
 
 class AppRouteFeed extends HTMLElement {
-  connectedCallback() {
-    this.innerHTML = html`
+	connectedCallback() {
+		this.innerHTML = html`
       <style>
         .feed-route .route-media:not(.route-media-has-image) {
           background:
@@ -46,105 +75,110 @@ class AppRouteFeed extends HTMLElement {
         }
       </style>
       <div class="feed-route">
-        <div class="route-header">
-        <h3>Feed</h3>
-        <p>See creations shared by friends and people you already follow, with the newest highlights at the top.</p>
+	  	<!-- 
+	  	<div class="route-header">
+			<h3>Home</h3>
+			<p>See creations shared by friends and people you already follow, with the newest highlights at the top.</p>
         </div>
+		-->
         <div class="route-cards feed-cards" data-feed-container>
         <div class="route-empty route-empty-image-grid">Loading...</div>
         </div>
       </div>
     `;
-    this.feedItems = [];
-    this.feedIndex = 0;
-    this.feedBatchSize = 6;
-    this.setupInfiniteScroll();
-    this.loadFeed();
-  }
+		this.feedItems = [];
+		this.feedIndex = 0;
+		this.feedBatchSize = 6;
+		this.setupInfiniteScroll();
+		this.loadFeed();
+	}
 
-  disconnectedCallback() {
-    if (this.feedObserver) {
-      this.feedObserver.disconnect();
-      this.feedObserver = null;
-    }
-  }
+	disconnectedCallback() {
+		if (this.feedObserver) {
+			this.feedObserver.disconnect();
+			this.feedObserver = null;
+		}
+	}
 
-  setupInfiniteScroll() {
-    const container = this.querySelector("[data-feed-container]");
-    if (!container) return;
+	setupInfiniteScroll() {
+		const container = this.querySelector("[data-feed-container]");
+		if (!container) return;
 
-    if (!this.feedSentinel) {
-      this.feedSentinel = document.createElement('div');
-      this.feedSentinel.className = 'feed-sentinel';
-      container.after(this.feedSentinel);
-    }
+		if (!this.feedSentinel) {
+			this.feedSentinel = document.createElement('div');
+			this.feedSentinel.className = 'feed-sentinel';
+			container.after(this.feedSentinel);
+		}
 
-    if (this.feedObserver) {
-      this.feedObserver.disconnect();
-    }
+		if (this.feedObserver) {
+			this.feedObserver.disconnect();
+		}
 
-    this.feedObserver = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          this.renderNextBatch();
-        }
-      });
-    }, {
-      root: null,
-      rootMargin: '200px 0px',
-      threshold: 0.01
-    });
+		this.feedObserver = new IntersectionObserver((entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					this.renderNextBatch();
+				}
+			});
+		}, {
+			root: null,
+			rootMargin: '200px 0px',
+			threshold: 0.01
+		});
 
-    this.feedObserver.observe(this.feedSentinel);
-  }
+		this.feedObserver.observe(this.feedSentinel);
+	}
 
-  renderNextBatch() {
-    const container = this.querySelector("[data-feed-container]");
-    if (!container) return;
-    if (!Array.isArray(this.feedItems) || this.feedItems.length === 0) return;
+	renderNextBatch() {
+		const container = this.querySelector("[data-feed-container]");
+		if (!container) return;
+		if (!Array.isArray(this.feedItems) || this.feedItems.length === 0) return;
 
-    const start = this.feedIndex;
-    const end = Math.min(start + this.feedBatchSize, this.feedItems.length);
-    if (start >= end) return;
+		const start = this.feedIndex;
+		// Use smaller batch size (3) for initial load, then 6 for subsequent loads
+		const batchSize = start === 0 ? 3 : this.feedBatchSize;
+		const end = Math.min(start + batchSize, this.feedItems.length);
+		if (start >= end) return;
 
-    for (let i = start; i < end; i += 1) {
-      const card = this.buildFeedCard(this.feedItems[i]);
-      container.appendChild(card);
-    }
+		for (let i = start; i < end; i += 1) {
+			const card = this.buildFeedCard(this.feedItems[i]);
+			container.appendChild(card);
+		}
 
-    this.feedIndex = end;
-  }
+		this.feedIndex = end;
+	}
 
-  buildFeedCard(item) {
-    const card = document.createElement("div");
-    card.className = "feed-card";
+	buildFeedCard(item) {
+		const card = document.createElement("div");
+		card.className = "feed-card";
 
-    const author = item.author || "Anonymous";
-    const emailPrefix = typeof item.author === "string" && item.author.includes("@")
-      ? item.author.split("@")[0]
-      : author;
-    const handle = emailPrefix
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-      .slice(0, 24) || "creator";
-    const avatarInitial = author.trim().charAt(0).toUpperCase() || "?";
-    const relativeTime = formatRelativeTime(item.created_at) || "recently";
-    const summary = item.summary || item.title || "";
+		const author = item.author || "Anonymous";
+		const emailPrefix = typeof item.author === "string" && item.author.includes("@")
+			? item.author.split("@")[0]
+			: author;
+		const handle = emailPrefix
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, '')
+			.slice(0, 24) || "creator";
+		const avatarInitial = author.trim().charAt(0).toUpperCase() || "?";
+		const avatarColor = getAvatarColor(avatarInitial);
+		const relativeTime = formatRelativeTime(item.created_at) || "recently";
+		const title = item.title || "";
+		const likeCount = item.like_count ?? 0;
+		const likesText = likeCount === 1 ? "like" : "likes";
 
-    card.innerHTML = html`
-      <div class="feed-card-header">
-        <div class="feed-card-avatar" aria-hidden="true">${avatarInitial}</div>
-        <div class="feed-card-meta">
-          <div class="feed-card-author">
-            <span class="feed-card-name">@${handle}</span>
-          </div>
-          <div class="feed-card-time" title="${formatDateTime(item.created_at)}">Posted ${relativeTime}</div>
-        </div>
-        <button class="feed-card-follow" type="button">Follow</button>
-      </div>
-      <div class="feed-card-text">${summary}</div>
+		card.innerHTML = html`
       <div class="feed-card-image">
         <img class="feed-card-img" alt="${item.title || 'Feed image'}" loading="lazy" decoding="async">
+      </div>
+      <div class="feed-card-footer-grid">
+        <div class="feed-card-avatar" style="background: ${avatarColor};" aria-hidden="true">${avatarInitial}</div>
+        <div class="feed-card-content">
+          <div class="feed-card-title">${title}</div>
+          <div class="feed-card-metadata" title="${formatDateTime(item.created_at)}">
+            @${handle} • ${relativeTime}
+          </div>
+        </div>
       </div>
       <div class="feed-card-actions">
         <button class="feed-card-action" type="button" aria-label="Like">
@@ -169,51 +203,91 @@ class AppRouteFeed extends HTMLElement {
       </div>
     `;
 
-    const imageEl = card.querySelector('.feed-card-img');
-    if (imageEl && item.image_url) {
-      imageEl.src = item.image_url;
-    }
+		const imageEl = card.querySelector('.feed-card-img');
+		const imageContainer = card.querySelector('.feed-card-image');
 
-    if (item.image_url && item.created_image_id) {
-      const imageContainer = card.querySelector('.feed-card-image');
-      imageContainer.style.cursor = 'pointer';
-      imageContainer.addEventListener('click', () => {
-        window.location.href = `/creations/${item.created_image_id}`;
-      });
-    }
+		if (imageEl && item.image_url) {
+			// Add loading class initially
+			imageContainer.classList.add('loading');
 
-    return card;
-  }
+			// Handle image load
+			imageEl.onload = () => {
+				imageContainer.classList.remove('loading');
+				imageContainer.classList.add('loaded');
+			};
 
-  async loadFeed() {
-    const container = this.querySelector("[data-feed-container]");
-    if (!container) return;
+			// Handle image error
+			imageEl.onerror = () => {
+				imageContainer.classList.remove('loading');
+				imageContainer.classList.add('error');
+			};
 
-    try {
-      // Get current user ID
-      let currentUserId = null;
-      try {
-        const profileResponse = await fetch('/api/profile', {
-          credentials: 'include'
-        });
-        if (profileResponse.ok) {
-          const profile = await profileResponse.json();
-          currentUserId = profile.id;
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-      }
+			// Set src - if cached, onload will fire immediately
+			imageEl.src = item.image_url;
 
-      const response = await fetch("/api/feed", {
-        credentials: 'include'
-      });
-      if (!response.ok) throw new Error("Failed to load feed.");
-      const data = await response.json();
-      const items = Array.isArray(data.items) ? data.items : [];
+			// Check if image was already cached and loaded
+			if (imageEl.complete && imageEl.naturalHeight !== 0) {
+				imageContainer.classList.remove('loading');
+				imageContainer.classList.add('loaded');
+			}
+		}
 
-      container.innerHTML = "";
-      if (items.length === 0) {
-        container.innerHTML = html`
+		if (item.image_url && item.created_image_id) {
+			// Make the entire card clickable except the actions row
+			card.style.cursor = 'pointer';
+
+			// Add click handler to the card
+			card.addEventListener('click', (e) => {
+				// Don't navigate if clicking on actions row or its children
+				const actionsRow = card.querySelector('.feed-card-actions');
+				if (actionsRow && actionsRow.contains(e.target)) {
+					return;
+				}
+				window.location.href = `/creations/${item.created_image_id}`;
+			});
+
+			// Prevent actions row from triggering card click
+			const actionsRow = card.querySelector('.feed-card-actions');
+			if (actionsRow) {
+				actionsRow.style.cursor = 'default';
+				actionsRow.addEventListener('click', (e) => {
+					e.stopPropagation();
+				});
+			}
+		}
+
+		return card;
+	}
+
+	async loadFeed() {
+		const container = this.querySelector("[data-feed-container]");
+		if (!container) return;
+
+		try {
+			// Get current user ID
+			let currentUserId = null;
+			try {
+				const profileResponse = await fetch('/api/profile', {
+					credentials: 'include'
+				});
+				if (profileResponse.ok) {
+					const profile = await profileResponse.json();
+					currentUserId = profile.id;
+				}
+			} catch (error) {
+				console.error('Error fetching user profile:', error);
+			}
+
+			const response = await fetch("/api/feed", {
+				credentials: 'include'
+			});
+			if (!response.ok) throw new Error("Failed to load feed.");
+			const data = await response.json();
+			const items = Array.isArray(data.items) ? data.items : [];
+
+			container.innerHTML = "";
+			if (items.length === 0) {
+				container.innerHTML = html`
           <div class="route-empty route-empty-image-grid feed-empty-state">
             <div class="feed-empty-icon">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -226,16 +300,16 @@ class AppRouteFeed extends HTMLElement {
             <div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your feed.</div>
           </div>
         `;
-        return;
-      }
+				return;
+			}
 
-      this.feedItems = items;
-      this.feedIndex = 0;
-      this.renderNextBatch();
-    } catch (error) {
-      container.innerHTML = html`<div class="route-empty route-empty-image-grid">Unable to load feed.</div>`;
-    }
-  }
+			this.feedItems = items;
+			this.feedIndex = 0;
+			this.renderNextBatch();
+		} catch (error) {
+			container.innerHTML = html`<div class="route-empty route-empty-image-grid">Unable to load feed.</div>`;
+		}
+	}
 }
 
 customElements.define("app-route-feed", AppRouteFeed);

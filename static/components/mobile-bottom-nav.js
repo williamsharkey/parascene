@@ -96,12 +96,11 @@ class AppMobileBottomNav extends HTMLElement {
       <div class="mobile-bottom-nav-wrap" aria-label="Mobile actions">
         <div class="mobile-bottom-nav-bar" aria-hidden="true"></div>
         <div class="mobile-bottom-nav-buttons" role="navigation" aria-label="Mobile actions">
-          <button class="mobile-bottom-nav-item" data-route="feed" aria-label="Feed">
-            <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2c-2.2 2.1-5 4.6-5 8.6a5 5 0 0 0 10 0c0-4-2.8-6.5-5-8.6z"></path>
-              <path d="M9.5 14.5a2.5 2.5 0 0 0 5 0c0-1.4-1-2.2-2.5-4-1.5 1.8-2.5 2.6-2.5 4z"></path>
-            </svg>
-            <span class="mobile-bottom-nav-text" aria-hidden="true">Feed</span>
+          <button class="mobile-bottom-nav-item" data-route="feed" aria-label="Home">
+			<svg class="mobile-bottom-nav-icon mobile-bottom-nav-icon-home" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path class="home-house" d="M 3 9 L 12 2 L 21 9 L 21 20 C 21 21.105 20.105 22 19 22 L 15 22 L 15 12 L 9 12 L 9 22 L 5 22 C 3.895 22 3 21.105 3 20 Z"></path>
+			</svg>
+            <span class="mobile-bottom-nav-text" aria-hidden="true">Home</span>
           </button>
           <button class="mobile-bottom-nav-item" data-route="creations" aria-label="Creations">
             <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
