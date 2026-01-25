@@ -128,9 +128,8 @@ async function loadCreation() {
 		imageEl.dataset.currentUrl = creation.url;
 		imageEl.src = creation.url;
 
-		// Format date
+		// Format date (tooltip only; no visible "time ago" on this page)
 		const date = new Date(creation.created_at);
-		const timeAgo = formatRelativeTime(date);
 		const createdAtTitle = formatDateTime(date);
 
 		// Generate title from published title, filename, or use default
@@ -155,6 +154,15 @@ async function loadCreation() {
 		}
 
 		const isOwner = currentUserId && creation.user_id && currentUserId === creation.user_id;
+
+		function escapeHtml(value) {
+			return String(value ?? '')
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#39;');
+		}
 
 		// Update publish button - hide if not owner, disable if already published
 		const publishBtn = document.querySelector('[data-publish-btn]');
@@ -213,18 +221,32 @@ async function loadCreation() {
 			actionsEl.style.display = anyVisible ? '' : 'none';
 		}
 
-		// Build published info if published
-		let publishedInfo = '';
-		if (isPublished && creation.published_at) {
-			const publishedDate = new Date(creation.published_at);
-			const publishedTimeAgo = formatRelativeTime(publishedDate);
-			const publishedAtTitle = formatDateTime(publishedDate);
-			publishedInfo = `
-				<div class="creation-detail-published">
-					<div class="creation-detail-published-label" title="${publishedAtTitle}">Published ${publishedTimeAgo}</div>
-					${creation.description ? `<div class="creation-detail-description">${creation.description}</div>` : ''}
+		// Published display:
+		// - Show "Published {time ago}" directly under the user identification line.
+		// - Keep description as its own block further down.
+		let publishedLabel = '';
+		let publishedDescription = '';
+		if (isPublished) {
+			const publishedDateRaw = creation.published_at || creation.created_at || null;
+			const publishedDate = publishedDateRaw ? new Date(publishedDateRaw) : null;
+			const hasPublishedDate = publishedDate instanceof Date && Number.isFinite(publishedDate.valueOf());
+			const publishedTimeAgo = hasPublishedDate ? formatRelativeTime(publishedDate) : '';
+			const publishedAtTitle = hasPublishedDate ? formatDateTime(publishedDate) : '';
+
+			publishedLabel = `
+				<div class="creation-detail-author-published" ${publishedAtTitle ? `title="${publishedAtTitle}"` : ''}>
+					Published${publishedTimeAgo ? ` ${publishedTimeAgo}` : ''}
 				</div>
 			`;
+
+			const descriptionText = typeof creation.description === 'string' ? creation.description.trim() : '';
+			if (descriptionText) {
+				publishedDescription = `
+					<div class="creation-detail-published">
+						<div class="creation-detail-description">${escapeHtml(descriptionText)}</div>
+					</div>
+				`;
+			}
 		}
 
 		// Get creator information
@@ -253,28 +275,47 @@ async function loadCreation() {
 		const viewerAvatarUrl = typeof currentUserProfile?.avatar_url === 'string' ? currentUserProfile.avatar_url.trim() : '';
 		const viewerColor = getAvatarColor(viewerUserName || viewerEmailPrefix || String(currentUserId || '') || viewerName);
 
+		const authorAvatar = `
+			<span class="creation-detail-author-icon" style="background: ${creatorColor};">
+				${creatorAvatarUrl ? `<img class="creation-detail-author-avatar" src="${creatorAvatarUrl}" alt="">` : creatorInitial}
+			</span>
+		`;
+
+		const authorIdentification = `
+			<span class="creation-detail-author-name">${creatorName}</span>
+			<span class="creation-detail-author-handle">${creatorHandle}</span>
+		`;
+
 		detailContent.innerHTML = `
 			<div class="creation-detail-author">
 				${creatorProfileHref ? `
-					<a class="user-link creation-detail-author-link" href="${creatorProfileHref}">
-						<span class="creation-detail-author-icon" style="background: ${creatorColor};">${creatorAvatarUrl ? `<img class="creation-detail-author-avatar" src="${creatorAvatarUrl}" alt="">` : creatorInitial}</span>
-						<span class="creation-detail-author-name">${creatorName}</span>
-						<span class="creation-detail-author-handle">${creatorHandle}</span>
+					<a class="user-link creation-detail-author-avatar-slot" href="${creatorProfileHref}" aria-label="View ${creatorName} profile">
+						${authorAvatar}
 					</a>
 				` : `
-					<span class="creation-detail-author-icon" style="background: ${creatorColor};">${creatorAvatarUrl ? `<img class="creation-detail-author-avatar" src="${creatorAvatarUrl}" alt="">` : creatorInitial}</span>
-					<span class="creation-detail-author-name">${creatorName}</span>
-					<span class="creation-detail-author-handle">${creatorHandle}</span>
+					<div class="creation-detail-author-avatar-slot" aria-hidden="true">
+						${authorAvatar}
+					</div>
 				`}
-				<span class="creation-detail-date" title="${createdAtTitle}">${timeAgo}</span>
+
+				<div class="creation-detail-author-id">
+					${creatorProfileHref ? `
+						<a class="user-link creation-detail-author-id-link" href="${creatorProfileHref}">
+							${authorIdentification}
+						</a>
+					` : authorIdentification}
+				</div>
+
+				${publishedLabel}
 			</div>
 			<div class="creation-detail-title">${displayTitle}</div>
-			${publishedInfo}
+			${publishedDescription}
 			<div class="creation-detail-meta">
-				<span title="${createdAtTitle}">Created ${timeAgo}</span>
-				<span>•</span>
-				<a class="creation-detail-comments-link" href="#comments" data-comments-link>
-					<span data-comment-count>0</span> comments
+				<a class="feed-card-action creation-detail-comments-link" href="#comments" data-comments-link aria-label="Comments">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M21 15a4 4 0 0 1-4 4H8l-5 5V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+					</svg>
+					<span class="feed-card-action-count" data-comment-count>0</span>
 				</a>
 				<span>•</span>
 				<button class="feed-card-action" type="button" aria-label="Like" data-like-button>
@@ -331,15 +372,6 @@ async function loadCreation() {
 
 		enableLikeButtons(detailContent);
 
-		function escapeHtml(value) {
-			return String(value ?? '')
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;')
-				.replace(/"/g, '&quot;')
-				.replace(/'/g, '&#39;');
-		}
-
 		function scrollToComments() {
 			const el = detailContent.querySelector('#comments');
 			if (!el) return;
@@ -394,6 +426,8 @@ async function loadCreation() {
 				const name = displayName || fallbackName;
 				const handle = userName ? `@${userName}` : '';
 				const avatarUrl = typeof c?.avatar_url === 'string' ? c.avatar_url.trim() : '';
+				const commenterId = Number(c?.user_id ?? 0);
+				const profileHref = Number.isFinite(commenterId) && commenterId > 0 ? `/user/${commenterId}` : null;
 				const seed = userName || String(c?.user_id ?? '') || name;
 				const color = getAvatarColor(seed);
 				const initial = name.charAt(0).toUpperCase() || '?';
@@ -404,15 +438,28 @@ async function loadCreation() {
 
 				return `
 					<div class="comment-item">
-						<div class="comment-avatar" style="background: ${color};">
-							${avatarUrl ? `<img class="comment-avatar-img" src="${avatarUrl}" alt="">` : initial}
-						</div>
+						${profileHref ? `
+							<a class="user-link user-avatar-link comment-avatar" href="${profileHref}" aria-label="View ${escapeHtml(name)} profile" style="background: ${color};">
+								${avatarUrl ? `<img class="comment-avatar-img" src="${avatarUrl}" alt="">` : initial}
+							</a>
+						` : `
+							<div class="comment-avatar" style="background: ${color};">
+								${avatarUrl ? `<img class="comment-avatar-img" src="${avatarUrl}" alt="">` : initial}
+							</div>
+						`}
 						<div class="comment-body">
 							<div class="comment-top">
-								<div class="comment-top-left">
-									<span class="comment-author-name">${escapeHtml(name)}</span>
-									${handle ? `<span class="comment-author-handle">${escapeHtml(handle)}</span>` : ''}
-								</div>
+								${profileHref ? `
+									<a class="user-link comment-top-left comment-author-link" href="${profileHref}">
+										<span class="comment-author-name">${escapeHtml(name)}</span>
+										${handle ? `<span class="comment-author-handle">${escapeHtml(handle)}</span>` : ''}
+									</a>
+								` : `
+									<div class="comment-top-left">
+										<span class="comment-author-name">${escapeHtml(name)}</span>
+										${handle ? `<span class="comment-author-handle">${escapeHtml(handle)}</span>` : ''}
+									</div>
+								`}
 							</div>
 							<div class="comment-text">${safeText}</div>
 							${timeAgo ? `<div class="comment-time-row"><span class="comment-time" title="${escapeHtml(timeTitle)}">${escapeHtml(timeAgo)}</span></div>` : ''}

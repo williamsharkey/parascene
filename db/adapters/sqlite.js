@@ -917,6 +917,18 @@ export async function openDb() {
 				});
 			}
 		},
+		selectFeedItemByCreatedImageId: {
+			get: async (createdImageId) => {
+				const stmt = db.prepare(
+					`SELECT id, title, summary, author, tags, created_at, created_image_id
+           FROM feed_items
+           WHERE created_image_id = ?
+           ORDER BY created_at DESC
+           LIMIT 1`
+				);
+				return Promise.resolve(stmt.get(createdImageId));
+			}
+		},
 		selectUserCredits: {
 			get: async (userId) => {
 				const stmt = db.prepare(

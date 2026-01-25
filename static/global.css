@@ -1777,7 +1777,8 @@ app-route-feed {
 }
 
 .creation-detail-comments-link:hover {
-	text-decoration: underline;
+	text-decoration: none;
+	color: var(--text);
 }
 
 .comments-sort {
@@ -1904,6 +1905,10 @@ app-route-feed {
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
+}
+
+.comment-author-link:hover {
+	text-decoration: underline;
 }
 
 .comment-author-name {

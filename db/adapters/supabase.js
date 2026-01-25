@@ -1252,6 +1252,19 @@ export function openDb() {
 				};
 			}
 		},
+		selectFeedItemByCreatedImageId: {
+			get: async (createdImageId) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("feed_items"))
+					.select("id, title, summary, author, tags, created_at, created_image_id")
+					.eq("created_image_id", createdImageId)
+					.order("created_at", { ascending: false })
+					.limit(1)
+					.maybeSingle();
+				if (error) throw error;
+				return data ?? undefined;
+			}
+		},
 		selectUserCredits: {
 			get: async (userId) => {
 				// Use serviceClient to bypass RLS for backend operations

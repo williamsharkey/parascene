@@ -16,7 +16,7 @@
 			color-mix(in srgb, var(--text) 12%, transparent),
 			color-mix(in srgb, var(--text) 6%, transparent));
 	background-size: 220% 100%;
-	animation: image-loading-shimmer 1.4s ease-in-out infinite;
+	animation: image-loading-shimmer 2.6s ease-in-out infinite;
 	/* Keep it calm initially, then shimmer */
 	animation-delay: 650ms;
 }
@@ -125,6 +125,11 @@ body.creation-detail-page main>section:first-of-type {
 	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 	border-radius: 8px;
 	object-fit: contain;
+}
+
+.creation-detail-image:not([src]),
+.creation-detail-image[src=""] {
+	display: none;
 }
 
 .creation-detail-footer {
@@ -358,32 +363,35 @@ body.creation-detail-page main>section:first-of-type {
 }
 
 .creation-detail-author {
-	display: flex;
-	align-items: center;
-	gap: 8px;
+	display: grid;
+	grid-template-columns: 32px minmax(0, 1fr);
+	grid-template-rows: auto auto;
+	column-gap: 12px;
+	row-gap: 2px;
+	align-items: start;
 	margin-bottom: 12px;
 	font-size: 0.9rem;
 	color: var(--text-muted);
 }
 
-.creation-detail-author-link {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-	line-height: 1.2;
+.creation-detail-author-avatar-slot {
+	grid-column: 1;
+	grid-row: 1 / span 2;
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-start;
 }
 
 .creation-detail-author-icon {
-	width: 24px;
-	height: 24px;
+	width: 32px;
+	height: 32px;
 	border-radius: 50%;
 	background: var(--accent);
 	color: var(--accent-text);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 0.75rem;
+	font-size: 0.85rem;
 	font-weight: 600;
 	flex-shrink: 0;
 }
@@ -396,12 +404,33 @@ body.creation-detail-page main>section:first-of-type {
 	object-fit: cover;
 }
 
+.creation-detail-author-id {
+	grid-column: 2;
+	grid-row: 1;
+	min-width: 0;
+	line-height: 1.2;
+}
+
+.creation-detail-author-id-link {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
 .creation-detail-author-name {
 	font-weight: 600;
 	color: var(--text);
 }
 
 .creation-detail-author-handle {
+	color: var(--text-muted);
+}
+
+.creation-detail-author-published {
+	grid-column: 2;
+	grid-row: 2;
+	font-size: 0.85rem;
 	color: var(--text-muted);
 }
 
@@ -431,7 +460,7 @@ body.creation-detail-page main>section:first-of-type {
 
 .creation-detail-description {
 	font-size: 1rem;
-	color: var(--text);
+	color: var(--text-muted);
 	line-height: 1.5;
 	margin-top: 8px;
 	white-space: pre-wrap;

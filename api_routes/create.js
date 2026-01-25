@@ -310,6 +310,20 @@ export default function createCreateRoutes({ queries, storage }) {
       const viewerLikedRow = await queries.selectCreatedImageViewerLiked?.get(user.id, image.id);
       const viewerLiked = Boolean(viewerLikedRow?.viewer_liked);
 
+      const isPublished = image.published === 1 || image.published === true;
+      let description = typeof image.description === "string" ? image.description.trim() : "";
+      if (!description && isPublished && queries.selectFeedItemByCreatedImageId?.get) {
+        try {
+          const feedItem = await queries.selectFeedItemByCreatedImageId.get(image.id);
+          const summary = typeof feedItem?.summary === "string" ? feedItem.summary.trim() : "";
+          if (summary) {
+            description = summary;
+          }
+        } catch {
+          // ignore fallback failures
+        }
+      }
+
       return res.json({
         id: image.id,
         filename: image.filename,
@@ -319,10 +333,10 @@ export default function createCreateRoutes({ queries, storage }) {
         color: image.color,
         status: image.status || 'completed',
         created_at: image.created_at,
-        published: image.published === 1 || image.published === true,
+        published: isPublished,
         published_at: image.published_at || null,
         title: image.title || null,
-        description: image.description || null,
+        description: description || null,
         like_count: likeCount,
         viewer_liked: viewerLiked,
         user_id: image.user_id,
