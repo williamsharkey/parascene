@@ -559,11 +559,24 @@ export default function createProfileRoutes({ queries }) {
 				member_since: target.created_at ?? null
 			};
 
+			const viewerFollowsRow = isSelf
+				? null
+				: queries.selectUserFollowStatus?.get
+					? await queries.selectUserFollowStatus.get(req.auth.userId, targetUserId)
+					: null;
+			const viewerFollows = Boolean(viewerFollowsRow?.viewer_follows);
+
 			const publicUser = isSelf
 				? { id: target.id, email: target.email, role: target.role, created_at: target.created_at }
 				: { id: target.id, role: target.role, created_at: target.created_at, email_prefix: emailPrefix };
 
-			return res.json({ user: publicUser, profile, stats, is_self: isSelf });
+			return res.json({
+				user: publicUser,
+				profile,
+				stats,
+				is_self: isSelf,
+				viewer_follows: viewerFollows
+			});
 		} catch (error) {
 			console.error("Error loading user profile summary:", error);
 			return res.status(500).json({ error: "Internal server error" });

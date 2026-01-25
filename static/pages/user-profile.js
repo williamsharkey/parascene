@@ -94,7 +94,7 @@ function normalizeWebsite(raw) {
 	}
 }
 
-function renderProfilePage(container, { user, profile, stats, isSelf }) {
+function renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows }) {
 	const fallbackName =
 		(user?.email_prefix && String(user.email_prefix).trim()) ||
 		(isSelf && user?.email ? String(user.email).split('@')[0] : '') ||
@@ -134,6 +134,11 @@ function renderProfilePage(container, { user, profile, stats, isSelf }) {
 						<div class="user-profile-name">${escapeHtml(displayName)}</div>
 						<div class="user-profile-actions">
 							${isSelf ? html`<button class="btn-primary user-profile-edit" type="button">Edit Profile</button>` : ''}
+							${!isSelf ? html`
+								<button class="${viewerFollows ? 'btn-secondary' : 'btn-primary'} user-profile-follow" type="button" data-follow-button data-follow-user-id="${escapeHtml(user?.id ?? '')}">
+									${viewerFollows ? 'Unfollow' : 'Follow'}
+								</button>
+							` : ''}
 							<!--
 							<button class="btn-secondary user-profile-share" type="button">Share</button>
 							-->
@@ -420,13 +425,14 @@ async function init() {
 	const profile = summary.profile || {};
 	const stats = summary.stats || {};
 	const isSelf = Boolean(summary.is_self);
+	const viewerFollows = Boolean(summary.viewer_follows);
 
 	// Normalize json fields in case adapter returned strings (sqlite)
 	profile.socials = safeJsonParse(profile.socials, {});
 	profile.badges = safeJsonParse(profile.badges, []);
 	profile.meta = safeJsonParse(profile.meta, {});
 
-	renderProfilePage(container, { user, profile, stats, isSelf });
+	renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows });
 
 	const grid = container.querySelector('[data-profile-grid]');
 	const tabButtons = Array.from(container.querySelectorAll('.user-profile-tab'));
@@ -466,6 +472,47 @@ async function init() {
 			const ok = await copyTextToClipboard(link);
 			shareButton.textContent = ok ? 'Copied' : 'Copy failed';
 			setTimeout(() => { shareButton.textContent = 'Share'; }, 1200);
+		});
+	}
+
+	const followButton = container.querySelector('[data-follow-button]');
+	if (followButton && !isSelf) {
+		let busy = false;
+		let following = viewerFollows;
+
+		function updateButton() {
+			followButton.textContent = following ? 'Unfollow' : 'Follow';
+			followButton.classList.toggle('btn-secondary', following);
+			followButton.classList.toggle('btn-primary', !following);
+			followButton.disabled = busy;
+		}
+
+		updateButton();
+
+		followButton.addEventListener('click', async () => {
+			if (busy) return;
+			const targetIdRaw = followButton.getAttribute('data-follow-user-id') || '';
+			const targetId = Number.parseInt(targetIdRaw, 10);
+			if (!Number.isFinite(targetId) || targetId <= 0) return;
+
+			busy = true;
+			const prev = following;
+			// Optimistic toggle
+			following = !following;
+			updateButton();
+
+			const method = prev ? 'DELETE' : 'POST';
+			const result = await fetchJsonWithStatusDeduped(`/api/users/${targetId}/follow`, {
+				method,
+				credentials: 'include'
+			}, { windowMs: 0 }).catch(() => ({ ok: false, status: 0, data: null }));
+
+			if (!result.ok) {
+				// Roll back optimistic change
+				following = prev;
+			}
+			busy = false;
+			updateButton();
 		});
 	}
 

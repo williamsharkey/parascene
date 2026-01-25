@@ -348,9 +348,25 @@ class AppRouteFeed extends HTMLElement {
 						</svg>
 						</div>
 						<div class="route-empty-title">Your feed is empty</div>
-						<div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your feed.</div>
+						<div class="route-empty-message">Your feed shows creations from people you follow. Explore the community, follow a few creators, and your feed will start filling up.</div>
+						<a class="route-empty-button" href="/explore" data-route="explore">Explore creators</a>
 					</div>
 				`;
+
+				// Use client-side routing for the CTA (matches other routes’ empty states).
+				const button = container.querySelector('.route-empty-button[data-route="explore"]');
+				if (button) {
+					button.addEventListener('click', (e) => {
+						e.preventDefault();
+						const header = document.querySelector('app-header');
+						if (header && typeof header.navigateToRoute === 'function') {
+							header.navigateToRoute('explore');
+							return;
+						}
+						window.location.href = '/explore';
+					});
+				}
+
 				return;
 			}
 

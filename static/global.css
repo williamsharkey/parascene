@@ -2250,6 +2250,7 @@ app-route-feed {
 	cursor: pointer;
 	text-decoration: none;
 	transition: background 0.2s ease, transform 0.1s ease;
+	margin-top: 1em;
 }
 
 .route-empty-button:hover {

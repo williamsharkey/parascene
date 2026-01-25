@@ -1,51 +1,44 @@
 [
   {
-    "name": "Follows",
-    "description": "Ability to follow user, adjust \"Explore\" and \"Feed\".  Ability to list/CRUD follows.",
-    "cost": 50,
-    "impact": 100,
-    "dependsOn": []
-  },
-  {
     "name": "Invite credits",
     "description": "Grant starter credits on invite acceptance; record inviter and source.",
     "cost": 1,
-    "impact": 26,
+    "impact": 56,
     "dependsOn": []
   },
   {
     "name": "Provider boosts",
     "description": "Server-scoped boosts increase provider credit yield with caps, no discovery lift.",
     "cost": 51,
-    "impact": 34,
+    "impact": 74,
     "dependsOn": []
   },
   {
     "name": "BUG: Creation Failure",
     "description": "sometimes a creation fails or results in a stuck image loading forever - this looks bad",
     "cost": 70,
-    "impact": 46,
+    "impact": 100,
     "dependsOn": []
   },
   {
     "name": "Templates",
     "description": "Define template model, storage, and UI flow for reusable prompts.",
     "cost": 51,
-    "impact": 8,
+    "impact": 16,
     "dependsOn": []
   },
   {
     "name": "Edit / un-publish creations",
     "description": "Allow owners to edit a creation's title/description after publishing, and optionally un-publish.",
     "cost": 15,
-    "impact": 5,
+    "impact": 10,
     "dependsOn": []
   },
   {
     "name": "Re-generate",
     "description": "Regenerate from stored generation info.",
     "cost": 80,
-    "impact": 5,
+    "impact": 10,
     "dependsOn": []
   },
   {
@@ -61,7 +54,7 @@
     "name": "Role Progression",
     "description": "Define role transition rules and whether roles can be relaxed.",
     "cost": 100,
-    "impact": 43,
+    "impact": 93,
     "dependsOn": []
   }
 ]

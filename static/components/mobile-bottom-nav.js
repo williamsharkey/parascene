@@ -36,7 +36,9 @@ class AppMobileBottomNav extends HTMLElement {
 		if (!route) return;
 
 		const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
-			window.location.pathname.startsWith('/help/');
+			window.location.pathname.startsWith('/help/') ||
+			window.location.pathname === '/user' ||
+			/^\/user\/\d+$/.test(window.location.pathname);
 		if (isServerSentPage) {
 			window.location.href = `/${route}`;
 			return;
@@ -79,6 +81,9 @@ class AppMobileBottomNav extends HTMLElement {
 		const defaultRoute = header?.getAttribute('default-route') || 'feed';
 		let currentRoute = pathname === '/' || pathname === '' ? defaultRoute : pathname.slice(1);
 		if (pathname.startsWith('/creations/')) {
+			currentRoute = null;
+		}
+		if (pathname === '/user' || /^\/user\/\d+$/.test(pathname)) {
 			currentRoute = null;
 		}
 		navButtons.forEach(button => {

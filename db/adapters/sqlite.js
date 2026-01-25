@@ -186,6 +186,71 @@ export async function openDb() {
 				return Promise.resolve({ changes: result.changes });
 			}
 		},
+		insertUserFollow: {
+			run: async (followerId, followingId) => {
+				const stmt = db.prepare(
+					`INSERT OR IGNORE INTO user_follows (follower_id, following_id)
+           VALUES (?, ?)`
+				);
+				const result = stmt.run(followerId, followingId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		deleteUserFollow: {
+			run: async (followerId, followingId) => {
+				const stmt = db.prepare(
+					`DELETE FROM user_follows
+           WHERE follower_id = ? AND following_id = ?`
+				);
+				const result = stmt.run(followerId, followingId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		selectUserFollowStatus: {
+			get: async (followerId, followingId) => {
+				const stmt = db.prepare(
+					`SELECT 1 AS viewer_follows
+           FROM user_follows
+           WHERE follower_id = ? AND following_id = ?
+           LIMIT 1`
+				);
+				return Promise.resolve(stmt.get(followerId, followingId));
+			}
+		},
+		selectUserFollowers: {
+			all: async (userId) => {
+				const stmt = db.prepare(
+					`SELECT
+            uf.follower_id AS user_id,
+            uf.created_at AS followed_at,
+            up.user_name,
+            up.display_name,
+            up.avatar_url
+           FROM user_follows uf
+           LEFT JOIN user_profiles up ON up.user_id = uf.follower_id
+           WHERE uf.following_id = ?
+           ORDER BY uf.created_at DESC`
+				);
+				return Promise.resolve(stmt.all(userId));
+			}
+		},
+		selectUserFollowing: {
+			all: async (userId) => {
+				const stmt = db.prepare(
+					`SELECT
+            uf.following_id AS user_id,
+            uf.created_at AS followed_at,
+            up.user_name,
+            up.display_name,
+            up.avatar_url
+           FROM user_follows uf
+           LEFT JOIN user_profiles up ON up.user_id = uf.following_id
+           WHERE uf.follower_id = ?
+           ORDER BY uf.created_at DESC`
+				);
+				return Promise.resolve(stmt.all(userId));
+			}
+		},
 		selectSessionByTokenHash: {
 			get: async (tokenHash, userId) => {
 				const stmt = db.prepare(
@@ -396,9 +461,12 @@ export async function openDb() {
 				});
 			}
 		},
-		selectFeedItems: {
-			all: async (excludeUserId) => {
-				const viewerId = excludeUserId ?? null;
+		selectExploreFeedItems: {
+			all: async (viewerId) => {
+				const id = viewerId ?? null;
+				if (id === null || id === undefined) {
+					return Promise.resolve([]);
+				}
 				const stmt = db.prepare(
 					`SELECT fi.id, fi.title, fi.summary, fi.author, fi.tags, fi.created_at, 
                   fi.created_image_id, ci.filename, ci.file_path, ci.user_id,
@@ -425,10 +493,54 @@ export async function openDb() {
            LEFT JOIN likes_created_image vl
              ON vl.created_image_id = fi.created_image_id
             AND vl.user_id = ?
-           WHERE ? IS NULL OR ci.user_id IS NULL OR ci.user_id != ?
+           WHERE ci.user_id IS NOT NULL
            ORDER BY fi.created_at DESC`
 				);
-				return Promise.resolve(stmt.all(viewerId, viewerId, excludeUserId ?? null, excludeUserId ?? null));
+				return Promise.resolve(stmt.all(id, id));
+			}
+		},
+		selectFeedItems: {
+			all: async (excludeUserId) => {
+				const viewerId = excludeUserId ?? null;
+				if (viewerId === null || viewerId === undefined) {
+					return Promise.resolve([]);
+				}
+				const stmt = db.prepare(
+					`SELECT fi.id, fi.title, fi.summary, fi.author, fi.tags, fi.created_at, 
+                  fi.created_image_id, ci.filename, ci.file_path, ci.user_id,
+                  up.user_name AS author_user_name,
+                  up.display_name AS author_display_name,
+                  up.avatar_url AS author_avatar_url,
+                  COALESCE(ci.file_path, CASE WHEN ci.filename IS NOT NULL THEN '/api/images/created/' || ci.filename ELSE NULL END) as url,
+                  COALESCE(lc.like_count, 0) AS like_count,
+                  COALESCE(cc.comment_count, 0) AS comment_count,
+                  CASE WHEN ? IS NOT NULL AND vl.user_id IS NOT NULL THEN 1 ELSE 0 END AS viewer_liked
+           FROM feed_items fi
+           LEFT JOIN created_images ci ON fi.created_image_id = ci.id
+           LEFT JOIN user_profiles up ON up.user_id = ci.user_id
+           LEFT JOIN (
+             SELECT created_image_id, COUNT(*) AS like_count
+             FROM likes_created_image
+             GROUP BY created_image_id
+           ) lc ON lc.created_image_id = fi.created_image_id
+           LEFT JOIN (
+             SELECT created_image_id, COUNT(*) AS comment_count
+             FROM comments_created_image
+             GROUP BY created_image_id
+           ) cc ON cc.created_image_id = fi.created_image_id
+           LEFT JOIN likes_created_image vl
+             ON vl.created_image_id = fi.created_image_id
+            AND vl.user_id = ?
+           WHERE ci.user_id IS NOT NULL
+             AND EXISTS (
+               SELECT 1
+               FROM user_follows uf
+               WHERE uf.follower_id = ?
+                 AND uf.following_id = ci.user_id
+             )
+           ORDER BY fi.created_at DESC`
+				);
+				return Promise.resolve(stmt.all(viewerId, viewerId, viewerId));
 			}
 		},
 		selectExploreItems: {

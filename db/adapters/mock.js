@@ -15,6 +15,7 @@ const feed_items = [];
 const explore_items = [];
 const creations = [];
 const templates = [];
+const user_follows = [];
 
 const created_images = [];
 const sessions = [];
@@ -62,7 +63,8 @@ const TABLE_TIMESTAMP_FIELDS = {
   explore_items: ["created_at"],
   creations: ["created_at"],
   templates: ["created_at"],
-  created_images: ["created_at"]
+  created_images: ["created_at"],
+  user_follows: ["created_at"]
 };
 
 export function openDb() {
@@ -295,7 +297,23 @@ export function openDb() {
     },
     selectFeedItems: {
       all: async (excludeUserId) => {
-        const filtered = feed_items.filter((item) => item.user_id !== Number(excludeUserId));
+        const viewerId = excludeUserId ?? null;
+        if (viewerId === null || viewerId === undefined) {
+          return [];
+        }
+
+        const followingIdSet = new Set(
+          user_follows
+            .filter((row) => row.follower_id === Number(viewerId))
+            .map((row) => String(row.following_id))
+        );
+
+        const filtered = feed_items.filter((item) => {
+          const authorId = item.user_id ?? null;
+          if (authorId === null || authorId === undefined) return false;
+          return followingIdSet.has(String(authorId));
+        });
+
         return filtered.map((item) => {
           const profile = user_profiles.find((p) => p.user_id === Number(item.user_id));
           return {
@@ -303,6 +321,95 @@ export function openDb() {
             author_user_name: profile?.user_name ?? null,
             author_display_name: profile?.display_name ?? null,
             author_avatar_url: profile?.avatar_url ?? null
+          };
+        });
+      }
+    },
+    selectExploreFeedItems: {
+      all: async (viewerId) => {
+        const id = viewerId ?? null;
+        if (id === null || id === undefined) {
+          return [];
+        }
+
+        const filtered = feed_items
+          .filter((item) => item.user_id !== null && item.user_id !== undefined)
+          .slice()
+          .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+
+        return filtered.map((item) => {
+          const profile = user_profiles.find((p) => p.user_id === Number(item.user_id));
+          return {
+            ...item,
+            author_user_name: profile?.user_name ?? null,
+            author_display_name: profile?.display_name ?? null,
+            author_avatar_url: profile?.avatar_url ?? null
+          };
+        });
+      }
+    },
+    insertUserFollow: {
+      run: async (followerId, followingId) => {
+        const a = Number(followerId);
+        const b = Number(followingId);
+        if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return { changes: 0 };
+        if (a === b) return { changes: 0 };
+        const exists = user_follows.some((row) => row.follower_id === a && row.following_id === b);
+        if (exists) return { changes: 0 };
+        user_follows.push({ follower_id: a, following_id: b, created_at: new Date().toISOString() });
+        return { changes: 1 };
+      }
+    },
+    deleteUserFollow: {
+      run: async (followerId, followingId) => {
+        const a = Number(followerId);
+        const b = Number(followingId);
+        const idx = user_follows.findIndex((row) => row.follower_id === a && row.following_id === b);
+        if (idx === -1) return { changes: 0 };
+        user_follows.splice(idx, 1);
+        return { changes: 1 };
+      }
+    },
+    selectUserFollowStatus: {
+      get: async (followerId, followingId) => {
+        const a = Number(followerId);
+        const b = Number(followingId);
+        const exists = user_follows.some((row) => row.follower_id === a && row.following_id === b);
+        return exists ? { viewer_follows: 1 } : undefined;
+      }
+    },
+    selectUserFollowers: {
+      all: async (userId) => {
+        const id = Number(userId);
+        const rows = user_follows
+          .filter((row) => row.following_id === id)
+          .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        return rows.map((row) => {
+          const profile = user_profiles.find((p) => p.user_id === Number(row.follower_id));
+          return {
+            user_id: row.follower_id,
+            followed_at: row.created_at,
+            user_name: profile?.user_name ?? null,
+            display_name: profile?.display_name ?? null,
+            avatar_url: profile?.avatar_url ?? null
+          };
+        });
+      }
+    },
+    selectUserFollowing: {
+      all: async (userId) => {
+        const id = Number(userId);
+        const rows = user_follows
+          .filter((row) => row.follower_id === id)
+          .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+        return rows.map((row) => {
+          const profile = user_profiles.find((p) => p.user_id === Number(row.following_id));
+          return {
+            user_id: row.following_id,
+            followed_at: row.created_at,
+            user_name: profile?.user_name ?? null,
+            display_name: profile?.display_name ?? null,
+            avatar_url: profile?.avatar_url ?? null
           };
         });
       }
@@ -634,6 +741,9 @@ export function openDb() {
         break;
       case "created_images":
         targetArray = created_images;
+        break;
+      case "user_follows":
+        targetArray = user_follows;
         break;
       default:
         console.warn(`Unknown table: ${tableName}`);

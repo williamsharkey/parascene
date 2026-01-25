@@ -17,6 +17,7 @@ import createTemplatesRoutes from "../api_routes/templates.js";
 import createLikesRoutes from "../api_routes/likes.js";
 import createCommentsRoutes from "../api_routes/comments.js";
 import createUserRoutes from "../api_routes/user.js";
+import createFollowsRoutes from "../api_routes/follows.js";
 import createTodoRoutes from "../api_routes/todo.js";
 import {
 	authMiddleware,
@@ -95,6 +96,7 @@ app.use(authMiddleware());
 app.use(sessionMiddleware(queries));
 app.use(probabilisticSessionCleanup(queries));
 app.use(createUserRoutes({ queries }));
+app.use(createFollowsRoutes({ queries }));
 
 app.use(createAdminRoutes({ queries }));
 app.use(createFeedRoutes({ queries }));

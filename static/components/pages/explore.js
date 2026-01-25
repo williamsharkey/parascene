@@ -309,7 +309,7 @@ class AppRouteExplore extends HTMLElement {
         currentUserId = profile.data?.id ?? null;
       }
 
-      const feed = await fetchJsonWithStatusDeduped("/api/feed", {
+      const feed = await fetchJsonWithStatusDeduped("/api/explore/feed", {
         credentials: 'include'
       }, { windowMs: 2000 });
       if (!feed.ok) throw new Error("Failed to load explore.");
