@@ -7,13 +7,6 @@
     "dependsOn": []
   },
   {
-    "name": "Follows",
-    "description": "Ability to follow user, adjust \"Explore\" and \"Feed\".  Ability to list/CRUD follows.",
-    "cost": 50,
-    "impact": 97,
-    "dependsOn": []
-  },
-  {
     "name": "User Profile Page",
     "description": "Current and other user view of a user.  Enables image upload and user name customization.",
     "cost": 50,
@@ -21,20 +14,20 @@
     "dependsOn": []
   },
   {
-    "name": "Invites & redemption",
-    "description": "Optional invite onboarding via email or shareable token, with stored invite context.",
-    "cost": 38,
-    "impact": 1,
-    "dependsOn": []
+    "name": "Follows",
+    "description": "Ability to follow user, adjust \"Explore\" and \"Feed\".  Ability to list/CRUD follows.",
+    "cost": 50,
+    "impact": 97,
+    "dependsOn": [
+      "User Profile Page"
+    ]
   },
   {
     "name": "Invite credits",
     "description": "Grant starter credits on invite acceptance; record inviter and source.",
     "cost": 1,
     "impact": 25,
-    "dependsOn": [
-      "Invites & redemption"
-    ]
+    "dependsOn": []
   },
   {
     "name": "Provider boosts",
@@ -56,6 +49,29 @@
     "cost": 51,
     "impact": 8,
     "dependsOn": []
+  },
+  {
+    "name": "Edit / un-publish creations",
+    "description": "Allow owners to edit a creation's title/description after publishing, and optionally un-publish.",
+    "cost": 15,
+    "impact": 5,
+    "dependsOn": []
+  },
+  {
+    "name": "Re-generate",
+    "description": "Regenerate from stored generation info.",
+    "cost": 80,
+    "impact": 5,
+    "dependsOn": []
+  },
+  {
+    "name": "Invites & redemption",
+    "description": "Optional invite onboarding via email or shareable token, with stored invite context.",
+    "cost": 38,
+    "impact": 1,
+    "dependsOn": [
+      "Invite credits"
+    ]
   },
   {
     "name": "Role Progression",
