@@ -14,7 +14,32 @@ function escapeHtml(value) {
 		.replace(/'/g, "&#39;");
 }
 
-function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl, footerText }) {
+function renderImpersonationBar({ originalRecipient, reason } = {}) {
+	if (!originalRecipient) return "";
+	const safeName = escapeHtml(originalRecipient?.name || "Unknown");
+	const safeEmail = escapeHtml(originalRecipient?.email || "unknown");
+	const safeUserId = escapeHtml(
+		Number.isFinite(Number(originalRecipient?.userId)) ? Number(originalRecipient.userId) : "unknown"
+	);
+	const safeReason = escapeHtml(reason || "Suppressed recipient");
+
+	return html`
+    <tr>
+      <td style="background:#fff7ed; border-bottom:1px solid #ea580c; padding:12px 24px; text-align:left;">
+        <div style="color:#9a3412; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin:0 0 6px;">
+          Delegated delivery
+        </div>
+        <div style="color:#7c2d12; font-size:13px; line-height:1.6;">
+          <div><strong>Original recipient</strong>: ${safeName} (${safeEmail})</div>
+          <div><strong>User ID</strong>: ${safeUserId}</div>
+          <div><strong>Reason</strong>: ${safeReason}</div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl, footerText, topNotice }) {
 	const safePreheader = escapeHtml(preheader || "");
 	const safeTitle = escapeHtml(title || "");
 	const safeFooter = escapeHtml(footerText || `© ${new Date().getFullYear()} ${BRAND_NAME}. All rights reserved.`);
@@ -30,6 +55,13 @@ function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl, footerTe
     `
 		: "";
 
+	const emailNotice =
+		topNotice?.type === "impersonation" ?
+			`<table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+				${renderImpersonationBar(topNotice.data)}
+			</table>`
+			: "";
+
 	return html`
 <!DOCTYPE html>
 <html lang="en">
@@ -42,6 +74,7 @@ function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl, footerTe
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
       ${safePreheader}
     </div>
+    ${emailNotice}
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f5f7fb; padding:24px 0;">
       <tr>
         <td align="center">
@@ -122,7 +155,8 @@ export function renderCommentReceived({
 	commenterName = "Someone",
 	commentText = "",
 	creationTitle = "",
-	creationUrl = DEFAULT_APP_URL
+	creationUrl = DEFAULT_APP_URL,
+	impersonation = null
 } = {}) {
 	const safeRecipient = escapeHtml(recipientName);
 	const safeCommenter = escapeHtml(commenterName);
@@ -147,12 +181,33 @@ export function renderCommentReceived({
 		preheader,
 		title: "You got a comment",
 		bodyHtml,
+		topNotice: impersonation ? { type: "impersonation", data: impersonation } : null,
 		ctaText: "View the creation",
 		ctaUrl: creationUrl || DEFAULT_APP_URL,
 		footerText: "You’re receiving this email because someone commented on your creation."
 	});
 
-	const text = [
+	const impersonationText = impersonation?.originalRecipient
+		? [
+			"",
+			"--- Delegated delivery ---",
+			`Original recipient: ${impersonation.originalRecipient?.name || "Unknown"} (${impersonation.originalRecipient?.email || "unknown"})`,
+			`User ID: ${Number.isFinite(Number(impersonation.originalRecipient?.userId))
+				? Number(impersonation.originalRecipient.userId)
+				: "unknown"
+			}`,
+			`Reason: ${impersonation.reason || "Suppressed recipient"}`,
+			"---"
+		].join("\n")
+		: "";
+
+	const textLines = [];
+
+	if (impersonationText) {
+		textLines.push(impersonationText, "");
+	}
+
+	textLines.push(
 		`Hi ${recipientName},`,
 		"",
 		`${commenterName} commented on ${creationTitle || "your creation"}:`,
@@ -160,7 +215,9 @@ export function renderCommentReceived({
 		truncateMiddle(commentText, 1200),
 		"",
 		`View the creation: ${creationUrl || DEFAULT_APP_URL}`
-	].join("\n");
+	);
+
+	const text = textLines.join("\n");
 
 	return { subject, html: emailHtml, text };
 }

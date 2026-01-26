@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 import { templates } from "./templates.js";
 
+const SYSTEM_IMPERSONATION_EMAIL = "parascene.system@crosshj.com";
+
 function getRequiredEnv(name) {
 	const value = process.env[name];
 	if (!value) {
@@ -61,4 +63,27 @@ export async function sendTemplatedEmail({ to, template, data, replyTo } = {}) {
 	});
 
 	return responseData;
+}
+
+export async function sendDelegatedEmail({
+	template,
+	data,
+	originalRecipient,
+	reason,
+	replyTo
+} = {}) {
+	const delegatedData = {
+		...(data || {}),
+		impersonation: {
+			originalRecipient: originalRecipient || null,
+			reason: reason || ""
+		}
+	};
+
+	return sendTemplatedEmail({
+		to: SYSTEM_IMPERSONATION_EMAIL,
+		template,
+		data: delegatedData,
+		replyTo
+	});
 }

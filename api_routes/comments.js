@@ -1,5 +1,5 @@
 import express from "express";
-import { sendTemplatedEmail } from "../email/index.js";
+import { sendDelegatedEmail, sendTemplatedEmail } from "../email/index.js";
 
 async function requireUser(req, res, queries) {
 	if (!req.auth?.userId) {
@@ -175,20 +175,43 @@ export default function createCommentsRoutes({ queries }) {
 					} else {
 						const ownerEmailLower = ownerEmail.toLowerCase();
 						const shouldSuppress = ownerEmailLower.includes("example.com");
-						if (shouldSuppress) {
-							// Explicit exception requested: suppress emails for example.com users.
-							console.log("[Comments] Skipping comment email: suppressed domain match (example.com)", {
-								imageId,
-								ownerUserId,
-								ownerEmailDomain: ownerEmailLower.split("@")[1] || null
-							});
-						} else if (!process.env.RESEND_API_KEY || !process.env.RESEND_SYSTEM_EMAIL) {
+						if (!process.env.RESEND_API_KEY || !process.env.RESEND_SYSTEM_EMAIL) {
 							// Most common local/dev issue: missing env vars.
 							console.warn("[Comments] Skipping comment email: Resend env missing", {
 								imageId,
 								ownerUserId,
 								hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
 								hasResendSystemEmail: Boolean(process.env.RESEND_SYSTEM_EMAIL)
+							});
+						} else if (shouldSuppress) {
+							console.log("[Comments] Sending delegated comment email: suppressed domain match (example.com)", {
+								imageId,
+								ownerUserId,
+								ownerEmailDomain: ownerEmailLower.split("@")[1] || null
+							});
+
+							const baseUrl = getBaseAppUrl();
+							const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
+							const creationUrl = new URL(creationPath, baseUrl).toString();
+							const commenterName = getUserDisplayName(user);
+							const recipientName = getUserDisplayName(owner);
+							const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
+
+							await sendDelegatedEmail({
+								template: "commentReceived",
+								reason: "Suppressed domain match (example.com)",
+								originalRecipient: {
+									name: recipientName,
+									email: ownerEmail,
+									userId: ownerUserId
+								},
+								data: {
+									recipientName,
+									commenterName,
+									commentText: text,
+									creationTitle,
+									creationUrl
+								}
 							});
 						} else {
 							const baseUrl = getBaseAppUrl();
