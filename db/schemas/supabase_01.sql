@@ -217,7 +217,8 @@ CREATE TABLE IF NOT EXISTS prsn_likes_created_image (
   UNIQUE(user_id, created_image_id)
 );
 
-CREATE OR REPLACE VIEW prsn_created_image_like_counts AS
+CREATE OR REPLACE VIEW prsn_created_image_like_counts
+  WITH (security_invoker = true) AS
   SELECT
     created_image_id,
     COUNT(*)::bigint AS like_count
@@ -239,7 +240,8 @@ CREATE INDEX IF NOT EXISTS prsn_comments_created_image_created_image_id_created_
 CREATE INDEX IF NOT EXISTS prsn_comments_created_image_user_id_idx
   ON prsn_comments_created_image (user_id);
 
-CREATE OR REPLACE VIEW prsn_created_image_comment_counts AS
+CREATE OR REPLACE VIEW prsn_created_image_comment_counts
+  WITH (security_invoker = true) AS
   SELECT
     created_image_id,
     COUNT(*)::bigint AS comment_count
@@ -296,3 +298,19 @@ COMMENT ON TABLE prsn_comments_created_image IS 'Parascene: user comments on cre
 
 ALTER TABLE prsn_user_profiles ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE prsn_user_profiles IS 'Parascene: public profile fields (username, display name, bio, socials, avatar/cover URLs, badges, meta). RLS enabled without policies - only service role can access. All access controlled via API layer.';
+
+-- Views with RLS policies
+COMMENT ON VIEW prsn_created_image_like_counts IS 'Parascene: aggregated like counts per created image. RLS enabled with restrictive policy - only service role can access. All access controlled via API layer.';
+
+COMMENT ON VIEW prsn_created_image_comment_counts IS 'Parascene: aggregated comment counts per created image. RLS enabled with restrictive policy - only service role can access. All access controlled via API layer.';
+
+-- Create restrictive RLS policies on views (service role bypasses RLS)
+CREATE POLICY "Service role only - like counts" ON prsn_created_image_like_counts
+  FOR ALL
+  USING (false)
+  WITH CHECK (false);
+
+CREATE POLICY "Service role only - comment counts" ON prsn_created_image_comment_counts
+  FOR ALL
+  USING (false)
+  WITH CHECK (false);
