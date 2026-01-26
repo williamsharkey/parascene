@@ -520,9 +520,16 @@ export async function openDb() {
              ON vl.created_image_id = fi.created_image_id
             AND vl.user_id = ?
            WHERE ci.user_id IS NOT NULL
+             AND ci.user_id != ?
+             AND NOT EXISTS (
+               SELECT 1
+               FROM user_follows uf
+               WHERE uf.follower_id = ?
+                 AND uf.following_id = ci.user_id
+             )
            ORDER BY fi.created_at DESC`
 				);
-				return Promise.resolve(stmt.all(id, id));
+				return Promise.resolve(stmt.all(id, id, id, id));
 			}
 		},
 		selectFeedItems: {

@@ -346,8 +346,23 @@ export function openDb() {
 					return [];
 				}
 
+				// Get list of users the viewer follows to exclude them from explore
+				const viewerIdNum = Number(id);
+				const followingIds = new Set(
+					user_follows
+						.filter((row) => row.follower_id === viewerIdNum)
+						.map((row) => Number(row.following_id))
+				);
+
 				const filtered = feed_items
-					.filter((item) => item.user_id !== null && item.user_id !== undefined)
+					.filter((item) => {
+						if (item.user_id === null || item.user_id === undefined) return false;
+						const itemUserId = Number(item.user_id);
+						// Exclude items from the viewer themselves
+						if (itemUserId === viewerIdNum) return false;
+						// Exclude items from users the viewer follows
+						return !followingIds.has(itemUserId);
+					})
 					.slice()
 					.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 

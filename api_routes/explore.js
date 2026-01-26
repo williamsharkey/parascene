@@ -19,7 +19,7 @@ export default function createExploreRoutes({ queries }) {
   });
 
   // Explore feed: show all published creations (newest first).
-  // This is intentionally NOT filtered by follows.
+  // Excludes items from users that the current user follows.
   router.get("/api/explore/feed", async (req, res) => {
     if (!req.auth?.userId) {
       return res.status(401).json({ error: "Unauthorized" });

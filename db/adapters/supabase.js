@@ -700,6 +700,20 @@ export function openDb() {
 					return [];
 				}
 
+				// Get list of users the viewer follows to exclude them from explore
+				const { data: followRows, error: followError } = await serviceClient
+					.from(prefixedTable("user_follows"))
+					.select("following_id")
+					.eq("follower_id", id);
+				if (followError) throw followError;
+
+				const followingIdSet = new Set(
+					(followRows ?? [])
+						.map((row) => row?.following_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => String(id))
+				);
+
 				// Use serviceClient to bypass RLS for backend operations
 				const { data, error } = await serviceClient
 					.from(prefixedTable("feed_items"))
@@ -725,8 +739,15 @@ export function openDb() {
 					};
 				});
 
-				// Explore shows all authored creations (not follows-filtered).
-				const filtered = items.filter((item) => item.user_id !== null && item.user_id !== undefined);
+				// Explore shows all authored creations, excluding those from users the viewer follows and the viewer themselves.
+				const viewerIdStr = String(id);
+				const filtered = items.filter((item) => {
+					if (item.user_id === null || item.user_id === undefined) return false;
+					// Exclude items from the viewer themselves
+					if (String(item.user_id) === viewerIdStr) return false;
+					// Exclude items from users the viewer follows
+					return !followingIdSet.has(String(item.user_id));
+				});
 
 				const createdImageIds = filtered
 					.map((item) => item.created_image_id)

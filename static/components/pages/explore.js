@@ -323,19 +323,68 @@ class AppRouteExplore extends HTMLElement {
       this.setupImageLazyLoading();
 
       if (items.length === 0) {
-        container.innerHTML = html`
-          <div class="route-empty route-empty-image-grid feed-empty-state">
-            <div class="feed-empty-icon">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
+        // Check if user has any follows to determine if they've followed everyone
+        let hasFollows = false;
+        if (currentUserId) {
+          try {
+            const following = await fetchJsonWithStatusDeduped(`/api/users/${currentUserId}/following`, {
+              credentials: 'include'
+            }, { windowMs: 2000 }).catch(() => ({ ok: false, status: 0, data: null }));
+            if (following.ok && Array.isArray(following.data?.following)) {
+              hasFollows = following.data.following.length > 0;
+            }
+          } catch (e) {
+            // If check fails, default to regular empty message
+          }
+        }
+
+        if (hasFollows) {
+          // User has followed everyone (or at least everyone with published content)
+          container.innerHTML = html`
+            <div class="route-empty route-empty-image-grid feed-empty-state">
+              <div class="feed-empty-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+              </div>
+              <div class="route-empty-title">Wow, it looks like everyone is your friend!</div>
+              <div class="route-empty-message">Go check out your feed to see what they're up to!</div>
+              <a class="route-empty-button" href="/feed" data-route="feed">View Your Feed</a>
             </div>
-            <div class="route-empty-title">Your explore feed is empty</div>
-            <div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your explore feed.</div>
-          </div>
-        `;
+          `;
+
+          // Use client-side routing for the CTA
+          const button = container.querySelector('.route-empty-button[data-route="feed"]');
+          if (button) {
+            button.addEventListener('click', (e) => {
+              e.preventDefault();
+              const header = document.querySelector('app-header');
+              if (header && typeof header.navigateToRoute === 'function') {
+                header.navigateToRoute('feed');
+                return;
+              }
+              window.location.href = '/feed';
+            });
+          }
+        } else {
+          // Regular empty state - no content available
+          container.innerHTML = html`
+            <div class="route-empty route-empty-image-grid feed-empty-state">
+              <div class="feed-empty-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </div>
+              <div class="route-empty-title">Your explore feed is empty</div>
+              <div class="route-empty-message">Published creations from the community will appear here. Start creating and sharing to see content in your explore feed.</div>
+            </div>
+          `;
+        }
         return;
       }
 
