@@ -1,9 +1,10 @@
+import { getBaseAppUrl } from "../api_routes/utils/url.js";
+
 const html = String.raw;
 
 const BRAND_NAME = "parascene";
 const BRAND_COLOR = "#0f172a";
 const ACCENT_COLOR = "#7c3aed";
-const DEFAULT_APP_URL = "https://parascene.crosshj.com";
 
 function escapeHtml(value) {
 	return String(value ?? "")
@@ -39,15 +40,18 @@ function renderImpersonationBar({ originalRecipient, reason } = {}) {
   `;
 }
 
-function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl, footerText, topNotice }) {
+// Base email layout function
+// ctaText: Text for the call-to-action button (e.g., "Visit Us", "View the creation")
+// ctaUrl: Full URL for the CTA link (e.g., "https://parascene.crosshj.com" or "https://parascene.crosshj.com/creations/123")
+//         Defaults to base URL (homepage) if not provided
+function baseEmailLayout({ preheader, title, bodyHtml, ctaText, ctaUrl = getBaseAppUrl(), footerText, topNotice }) {
 	const safePreheader = escapeHtml(preheader || "");
 	const safeTitle = escapeHtml(title || "");
 	const safeFooter = escapeHtml(footerText || `© ${new Date().getFullYear()} ${BRAND_NAME}. All rights reserved.`);
-	const resolvedCtaUrl = ctaUrl || DEFAULT_APP_URL;
 	const ctaBlock = ctaText
 		? html`
       <div style="margin:28px 0 12px; text-align:center;">
-        <a href="${resolvedCtaUrl}"
+        <a href="${ctaUrl}"
            style="background:${ACCENT_COLOR}; color:#ffffff; text-decoration:none; padding:14px 28px; border-radius:18px; font-weight:600; font-size:16px; letter-spacing:0.2px; display:inline-block; min-width:240px; text-align:center;">
           ${escapeHtml(ctaText)}
         </a>
@@ -125,7 +129,7 @@ export function renderHelloFromParascene({ recipientName = "there" } = {}) {
 		title: subject,
 		bodyHtml,
 		ctaText: "Visit Us",
-		ctaUrl: DEFAULT_APP_URL,
+		ctaUrl: getBaseAppUrl(),
 		footerText: "You’re receiving this email because you’re connected to parascene."
 	});
 	const text = [
@@ -150,12 +154,15 @@ function truncateMiddle(value, max = 240) {
 	return `${s.slice(0, keepStart)}…${s.slice(s.length - keepEnd)}`;
 }
 
+// Render comment received email template
+// creationUrl: Full URL to the specific creation (e.g., "https://parascene.crosshj.com/creations/123")
+//              Defaults to base URL (homepage) if not provided
 export function renderCommentReceived({
 	recipientName = "there",
 	commenterName = "Someone",
 	commentText = "",
 	creationTitle = "",
-	creationUrl = DEFAULT_APP_URL,
+	creationUrl = getBaseAppUrl(), // Full URL to creation, falls back to homepage if not provided
 	impersonation = null
 } = {}) {
 	const safeRecipient = escapeHtml(recipientName);
@@ -183,7 +190,7 @@ export function renderCommentReceived({
 		bodyHtml,
 		topNotice: impersonation ? { type: "impersonation", data: impersonation } : null,
 		ctaText: "View the creation",
-		ctaUrl: creationUrl || DEFAULT_APP_URL,
+		ctaUrl: creationUrl,
 		footerText: "You’re receiving this email because someone commented on your creation."
 	});
 
@@ -214,7 +221,7 @@ export function renderCommentReceived({
 		"",
 		truncateMiddle(commentText, 1200),
 		"",
-		`View the creation: ${creationUrl || DEFAULT_APP_URL}`
+		`View the creation: ${creationUrl}`
 	);
 
 	const text = textLines.join("\n");

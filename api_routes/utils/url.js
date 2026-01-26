@@ -1,3 +1,9 @@
+// Returns the base URL (homepage) for the application
+// Use this to construct full URLs by combining with paths (e.g., new URL("/creations/123", getBaseAppUrl()))
+export function getBaseAppUrl() {
+	return "https://parascene.crosshj.com";
+}
+
 export function getThumbnailUrl(url) {
   if (!url) return url;
   try {

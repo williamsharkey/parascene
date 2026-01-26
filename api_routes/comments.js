@@ -1,5 +1,6 @@
 import express from "express";
 import { sendDelegatedEmail, sendTemplatedEmail } from "../email/index.js";
+import { getBaseAppUrl } from "./utils/url.js";
 
 async function requireUser(req, res, queries) {
 	if (!req.auth?.userId) {
@@ -51,26 +52,6 @@ function normalizeOffset(raw) {
 	const n = Number.parseInt(String(raw ?? ""), 10);
 	if (!Number.isFinite(n)) return 0;
 	return Math.max(0, n);
-}
-
-function getBaseAppUrl() {
-	// Prefer explicit env configuration, fall back to production URL.
-	const raw =
-		process.env.APP_URL ||
-		process.env.PUBLIC_APP_URL ||
-		process.env.BASE_APP_URL ||
-		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-		"https://parascene.crosshj.com";
-
-	try {
-		// Ensure a scheme exists so URL parsing behaves.
-		const normalized = String(raw || "").trim();
-		if (!normalized) return "https://parascene.crosshj.com";
-		if (normalized.startsWith("http://") || normalized.startsWith("https://")) return normalized;
-		return `https://${normalized}`;
-	} catch {
-		return "https://parascene.crosshj.com";
-	}
 }
 
 function getUserDisplayName(user) {
