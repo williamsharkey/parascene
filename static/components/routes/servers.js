@@ -191,49 +191,87 @@ class AppRouteServers extends HTMLElement {
 
 		container.appendChild(ghostCard);
 
-		// AI Server Generator section
-		this.renderAIGeneratorSection(container);
+		// AI Server Generator card (opens modal)
+		const aiCard = document.createElement('button');
+		aiCard.type = 'button';
+		aiCard.className = 'card server-card server-card-ghost';
+		aiCard.setAttribute('aria-label', 'Create server with AI');
+
+		const aiTitle = document.createElement('div');
+		aiTitle.className = 'server-card-ghost-title';
+		aiTitle.textContent = 'Create with AI';
+
+		const aiSubtitle = document.createElement('div');
+		aiSubtitle.className = 'server-card-ghost-subtitle';
+		aiSubtitle.textContent = 'Generate instructions for AI to build and deploy a server.';
+
+		aiCard.appendChild(aiTitle);
+		aiCard.appendChild(aiSubtitle);
+		aiCard.addEventListener('click', () => this.openAIGeneratorModal());
+
+		container.appendChild(aiCard);
 	}
 
-	renderAIGeneratorSection(container) {
-		const section = document.createElement('div');
-		section.className = 'ai-generator-section';
+	openAIGeneratorModal() {
+		// Remove existing modal if any
+		const existing = document.querySelector('.ai-generator-overlay');
+		if (existing) existing.remove();
 
-		section.innerHTML = html`
-			<div class="ai-generator-header">
-				<h4>Create Server with AI</h4>
-				<p>Generate a prompt that AI assistants (like Claude) can use to create and deploy a custom image generation server for you in one shot.</p>
-			</div>
+		const overlay = document.createElement('div');
+		overlay.className = 'ai-generator-overlay';
 
-			<div class="ai-generator-form">
-				<label class="ai-generator-label">
-					<span>Describe what you want to generate:</span>
-					<textarea
-						class="ai-generator-textarea"
-						data-ai-prompt
-						placeholder="voxel hat generator, rotate 3d 360 degrees, gif loop animation"
-						rows="3"
-					></textarea>
-				</label>
-
-				<div class="ai-generator-options">
-					<label class="ai-generator-checkbox-label">
-						<input type="checkbox" data-include-token />
-						<span>Include auth token for auto-registration</span>
-					</label>
-					<div class="ai-generator-security-note" data-security-note style="display: none;">
-						<strong>Security Note:</strong> When checked, your Parascene session token will be included in the prompt. This allows the AI to automatically register the server under your account without manual steps.
-						<br/><br/>
-						<strong>What's included:</strong>
-						<ul>
-							<li>Your current Parascene URL (${window.location.origin})</li>
-							<li>A session cookie that can register servers on your behalf</li>
-						</ul>
-						<strong>Risks:</strong> Anyone who sees this prompt can register servers under your account. Only share with trusted AI assistants in private conversations. The token is session-based and will expire.
-					</div>
+		overlay.innerHTML = html`
+			<div class="ai-generator-modal">
+				<div class="ai-generator-modal-header">
+					<h3>Create Server with AI</h3>
+					<button type="button" class="ai-generator-modal-close" data-close>&times;</button>
 				</div>
 
-				<div class="ai-generator-actions">
+				<div class="ai-generator-modal-body">
+					<p class="ai-generator-intro">
+						Describe what you want and get complete instructions that an AI assistant (like Claude) can use to create, deploy, and register a custom image generation server for you.
+					</p>
+
+					<label class="ai-generator-label">
+						<span>I want to create a Parascene server that...</span>
+						<textarea
+							class="ai-generator-textarea"
+							data-ai-prompt
+							placeholder="generates voxel hats, rotating 360 degrees as an animated GIF loop"
+							rows="3"
+						></textarea>
+					</label>
+
+					<label class="ai-generator-checkbox-label">
+						<input type="checkbox" data-include-token />
+						<span>Include credentials for auto-registration</span>
+					</label>
+
+					<div class="ai-generator-security-note" data-security-note style="display: none;">
+						<strong>Security:</strong> Your session cookie will be included, allowing the AI to register the server under your account automatically. Only use in private, trusted AI conversations. Token expires with your session.
+					</div>
+
+					<details class="ai-generator-details">
+						<summary>What does the AI need to complete this?</summary>
+						<div class="ai-generator-requirements">
+							<p>The AI assistant needs access to:</p>
+							<ul>
+								<li><strong>Terminal/Bash</strong> - to run commands and create files</li>
+								<li><strong>Vercel CLI</strong> - installed and logged in (<code>npm i -g vercel && vercel login</code>)</li>
+								<li><strong>Git</strong> - to create and push to a repository</li>
+								<li><strong>Node.js & npm</strong> - to install dependencies</li>
+								<li><strong>Network access</strong> - to deploy and register the server</li>
+							</ul>
+							<p><strong>What is Vercel?</strong> A free cloud platform for hosting serverless APIs. The AI will create a project, deploy it to Vercel, and give you a public URL.</p>
+							<p><strong>What happens?</strong> The AI creates the code, deploys it, and (if credentials included) registers it here so you just refresh and it appears.</p>
+						</div>
+					</details>
+				</div>
+
+				<div class="ai-generator-modal-actions">
+					<div class="ai-generator-copied" data-copied-msg style="display: none;">
+						Copied to clipboard!
+					</div>
 					<button type="button" class="ai-generator-btn ai-generator-btn-secondary" data-view-prompt>
 						View Instructions
 					</button>
@@ -241,20 +279,23 @@ class AppRouteServers extends HTMLElement {
 						Copy to Clipboard
 					</button>
 				</div>
-
-				<div class="ai-generator-copied" data-copied-msg style="display: none;">
-					Copied to clipboard!
-				</div>
 			</div>
 		`;
 
 		// Setup event listeners
-		const tokenCheckbox = section.querySelector('[data-include-token]');
-		const securityNote = section.querySelector('[data-security-note]');
-		const viewBtn = section.querySelector('[data-view-prompt]');
-		const copyBtn = section.querySelector('[data-copy-prompt]');
-		const promptTextarea = section.querySelector('[data-ai-prompt]');
-		const copiedMsg = section.querySelector('[data-copied-msg]');
+		const closeModal = () => overlay.remove();
+
+		overlay.querySelector('[data-close]').addEventListener('click', closeModal);
+		overlay.addEventListener('click', (e) => {
+			if (e.target === overlay) closeModal();
+		});
+
+		const tokenCheckbox = overlay.querySelector('[data-include-token]');
+		const securityNote = overlay.querySelector('[data-security-note]');
+		const viewBtn = overlay.querySelector('[data-view-prompt]');
+		const copyBtn = overlay.querySelector('[data-copy-prompt]');
+		const promptTextarea = overlay.querySelector('[data-ai-prompt]');
+		const copiedMsg = overlay.querySelector('[data-copied-msg]');
 
 		tokenCheckbox.addEventListener('change', () => {
 			securityNote.style.display = tokenCheckbox.checked ? 'block' : 'none';
@@ -269,17 +310,18 @@ class AppRouteServers extends HTMLElement {
 			const markdown = this.generateAIPrompt(promptTextarea.value, tokenCheckbox.checked);
 			try {
 				await navigator.clipboard.writeText(markdown);
-				copiedMsg.style.display = 'block';
+				copiedMsg.style.display = 'flex';
 				setTimeout(() => {
 					copiedMsg.style.display = 'none';
 				}, 2000);
 			} catch (err) {
 				console.error('Failed to copy:', err);
-				alert('Failed to copy to clipboard. Please try the View button instead.');
+				this.showMarkdownModal(markdown);
 			}
 		});
 
-		container.appendChild(section);
+		document.body.appendChild(overlay);
+		promptTextarea.focus();
 	}
 
 	generateAIPrompt(userDescription, includeToken) {
