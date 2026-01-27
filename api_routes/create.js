@@ -138,6 +138,8 @@ export default function createCreateRoutes({ queries, storage }) {
 			let color = null;
 			let width = 1024;
 			let height = 1024;
+			let suggestedTitle = null;
+			let suggestedDescription = null;
 
 			try {
 				const providerResponse = await fetch(server.server_url, {
@@ -169,10 +171,14 @@ export default function createCreateRoutes({ queries, storage }) {
 				const headerColor = providerResponse.headers.get('X-Image-Color');
 				const headerWidth = providerResponse.headers.get('X-Image-Width');
 				const headerHeight = providerResponse.headers.get('X-Image-Height');
+				const headerName = providerResponse.headers.get('X-Image-Name');
+				const headerDescription = providerResponse.headers.get('X-Image-Description');
 
 				if (headerColor) color = headerColor;
 				if (headerWidth) width = parseInt(headerWidth, 10);
 				if (headerHeight) height = parseInt(headerHeight, 10);
+				if (headerName) suggestedTitle = headerName;
+				if (headerDescription) suggestedDescription = decodeURIComponent(headerDescription);
 			} catch (fetchError) {
 				// Refund credits on fetch error
 				await queries.updateUserCreditsBalance.run(user.id, CREATION_CREDIT_COST);
@@ -223,6 +229,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			const updatedCredits = await queries.selectUserCredits.get(user.id);
 
 			// Return with completed status
+			// Include suggested_title and suggested_description if provider sent them (optional)
 			res.json({
 				id: result.insertId,
 				filename,
@@ -232,7 +239,9 @@ export default function createCreateRoutes({ queries, storage }) {
 				height,
 				status: 'completed',
 				created_at: new Date().toISOString(),
-				credits_remaining: updatedCredits?.balance ?? 0
+				credits_remaining: updatedCredits?.balance ?? 0,
+				suggested_title: suggestedTitle,
+				suggested_description: suggestedDescription
 			});
 		} catch (error) {
 			console.error("Error initiating image creation:", error);

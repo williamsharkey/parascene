@@ -613,8 +613,27 @@ function openPublishModal() {
 		// Body scroll prevention is handled globally in global.js
 		// Hide any existing alert
 		hidePublishAlert();
-		// Focus on title input
+		// Pre-fill with provider suggestions if available (optional feature)
+		const creationId = getCreationId();
 		const titleInput = document.getElementById('publish-title');
+		const descriptionTextarea = document.getElementById('publish-description');
+		if (creationId && titleInput && descriptionTextarea) {
+			try {
+				const stored = localStorage.getItem(`creation_suggestions_${creationId}`);
+				if (stored) {
+					const suggestions = JSON.parse(stored);
+					if (suggestions.title && !titleInput.value) {
+						titleInput.value = suggestions.title;
+					}
+					if (suggestions.description && !descriptionTextarea.value) {
+						descriptionTextarea.value = suggestions.description;
+					}
+				}
+			} catch (e) {
+				// Ignore localStorage errors
+			}
+		}
+		// Focus on title input
 		if (titleInput) {
 			setTimeout(() => titleInput.focus(), 100);
 		}

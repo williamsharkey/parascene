@@ -641,6 +641,17 @@ class AppRouteCreate extends HTMLElement {
 						detail: { count: data.credits_remaining }
 					}));
 				}
+				// Store suggested title/description if provider sent them (optional)
+				if (data.id && (data.suggested_title || data.suggested_description)) {
+					try {
+						localStorage.setItem(`creation_suggestions_${data.id}`, JSON.stringify({
+							title: data.suggested_title || '',
+							description: data.suggested_description || ''
+						}));
+					} catch (e) {
+						// Ignore localStorage errors
+					}
+				}
 				return null;
 			})
 			.then(() => {
