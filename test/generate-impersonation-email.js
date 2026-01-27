@@ -17,7 +17,7 @@ const result = renderCommentReceived({
 	}
 });
 
-const outputPath = "./test-impersonation-email.html";
+const outputPath = "./.output/test-impersonation-email.html";
 writeFileSync(outputPath, result.html, "utf8");
 
 console.log(`✅ Email HTML written to: ${outputPath}`);
