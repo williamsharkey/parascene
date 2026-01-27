@@ -14,6 +14,12 @@ body {
 	margin-top: -90px;
 }
 
+.auth-logo-link {
+	display: inline-block;
+	text-decoration: none;
+	cursor: pointer;
+}
+
 .auth-logo .logo {
 	display: block;
 }
@@ -60,4 +66,40 @@ section[id="signup"]:target {
 
 section[id="signup"]:target~section[id="login"] {
 	display: none;
+}
+
+/* Auth Page Typography Hierarchy */
+
+/* Large, bold header */
+section[id] h3 {
+	font-size: 1.75rem;
+	font-weight: 700;
+	margin-bottom: 32px;
+	color: var(--text);
+	letter-spacing: -0.01em;
+}
+
+/* Smaller, lighter, muted labels */
+section[id] form label {
+	font-size: 0.8125rem;
+	font-weight: 400;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+/* More space before submit button */
+section[id] form button[type="submit"] {
+	margin-top: 8px;
+}
+
+/* Auth page links - no underline, accent color, bold */
+section[id] p {
+	text-align: center;
+}
+
+section[id] p a {
+	text-decoration: none;
+	color: var(--accent);
+	font-weight: 700;
 }

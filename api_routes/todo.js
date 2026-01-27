@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const TODO_PATH = path.resolve(__dirname, "..", "TODO.json");
+const TODO_PATH = path.resolve(__dirname, "..", "_docs", "TODO.json");
 
 // pre-release
 // priority: 100 (highest) .. 1 (lowest)
@@ -190,8 +190,8 @@ function wouldCreateCycle({ items, itemName, dependsOn }) {
 async function readTodoItems({ mode } = {}) {
 	const normalizedMode =
 		mode === "post" ? "ratio"
-		: mode === "pre" ? "gated"
-		: mode;
+			: mode === "pre" ? "gated"
+				: mode;
 
 	const computeFn =
 		normalizedMode === "ratio"
@@ -237,10 +237,10 @@ export default function createTodoRoutes() {
 			const rawMode = String(req.query?.mode || "");
 			const mode =
 				rawMode === "post" ? "ratio"
-				: rawMode === "pre" ? "gated"
-				: rawMode === "ratio" || rawMode === "impact" || rawMode === "cost"
-					? rawMode
-					: "gated";
+					: rawMode === "pre" ? "gated"
+						: rawMode === "ratio" || rawMode === "impact" || rawMode === "cost"
+							? rawMode
+							: "gated";
 
 			const items = await readTodoItems({ mode });
 			const formula = mode === "ratio"

@@ -120,3 +120,11 @@ Examples:
 	}
 }
 ```
+
+## TODO Files
+
+When the user asks about TODOs or wants to manage TODO items:
+- **Read and edit** `_docs/TODO.json` - This is the main TODO data file that contains the list of tasks
+- **Read** `_docs/TODO.md` - This contains documentation about how TODO.json works (cost, impact, rebalancing, etc.)
+- The TODO.json file is used by the API route at `api_routes/todo.js` to serve and manage TODO items
+- Do not modify TODO.md when TODO.json changes - TODO.md is documentation only

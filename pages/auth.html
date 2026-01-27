@@ -6,7 +6,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="color-scheme" content="light dark" />
 	<meta name="supported-color-schemes" content="light dark" />
-	<title>parascene</title>
+	<title>parascene - auth</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link
@@ -26,17 +26,18 @@
 <body>
 	<main>
 		<div class="auth-logo">
-			<svg class="logo" width="300" height="60" viewBox="0 0 200 40">
-				<text x="1" y="30" class="logo-text">
-					<tspan opacity="1">par</tspan>
-					<tspan opacity="0.7" dx="-7">asc</tspan>
-					<tspan opacity="1" dx="-7">ene</tspan>
-				</text>
-			</svg>
+			<a href="/" class="auth-logo-link">
+				<svg class="logo" width="300" height="60" viewBox="0 0 200 40">
+					<text x="1" y="30" class="logo-text">
+						<tspan opacity="1">par</tspan>
+						<tspan opacity="0.7" dx="-7">asc</tspan>
+						<tspan opacity="1" dx="-7">ene</tspan>
+					</text>
+				</svg>
+			</a>
 		</div>
 
 		<section id="signup">
-			<h3>Signup</h3>
 			<form action="/signup" method="post" autocomplete="on">
 				<input type="hidden" name="returnUrl" value="/" data-return-url />
 				<label>
@@ -50,11 +51,10 @@
 				<button type="submit">Create account</button>
 			</form>
 			<br />
-			<p>Already have an account? <a href="#login">Click here to log in.</a></p>
+			<p>Already have an account? <a href="#login">Login</a></p>
 		</section>
 
 		<section id="login">
-			<h3>Login</h3>
 			<div id="fail" class="alert error margin-bottom-1">
 				<strong>Login failed</strong>
 				<p>Please check your email and password, then try again.</p>
@@ -72,7 +72,7 @@
 				<button type="submit">Login</button>
 			</form>
 			<br />
-			<p>New here? <a href="#signup">Click here to sign up.</a></p>
+			<p>Don't have an account? <a href="#signup">Signup</a></p>
 		</section>
 
 	</main>
