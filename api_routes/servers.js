@@ -298,6 +298,14 @@ export default function createServersRoutes({ queries }) {
 				return res.status(500).json({ error: "Failed to retrieve created server" });
 			}
 
+			// Auto-add owner as a member so the server appears in their list
+			try {
+				await queries.addServerMember.run(insertResult.insertId, user.id);
+			} catch (memberError) {
+				// Log but don't fail - server was created successfully
+				console.error("Failed to auto-add owner as member:", memberError);
+			}
+
 			// Add permission flags
 			const isAdmin = user.role === 'admin';
 			const serversWithFlags = await addPermissionFlags([newServer], user.id, isAdmin);
