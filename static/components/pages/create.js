@@ -565,29 +565,97 @@ class AppRouteCreate extends HTMLElement {
 			}
 		});
 
-		// Get cost from method config
-		let cost = 0.5; // default fallback
-		if (this.selectedMethod && typeof this.selectedMethod.credits === 'number') {
-			cost = this.selectedMethod.credits;
-		} else if (this.selectedMethod && this.selectedMethod.credits !== undefined) {
-			const parsedCost = parseFloat(this.selectedMethod.credits);
-			if (!isNaN(parsedCost)) {
-				cost = parsedCost;
-			}
-		}
-
-		if (this.creditsCount < cost) {
+		// Validate required data
+		if (!this.selectedServer.id || !methodKey) {
+			console.error('Missing required data: server_id and method are required');
 			return;
 		}
 
-		if (typeof this.onCreate === "function") {
-			this.onCreate({
-				button,
+		button.disabled = true;
+
+		// Create pending creation item
+		const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+		const pendingItem = {
+			id: pendingId,
+			status: "creating",
+			created_at: new Date().toISOString()
+		};
+		const pendingKey = "pendingCreations";
+		const pendingList = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
+		pendingList.unshift(pendingItem);
+		sessionStorage.setItem(pendingKey, JSON.stringify(pendingList));
+
+		document.dispatchEvent(new CustomEvent("creations-pending-updated"));
+		const creationsRoute = document.querySelector("app-route-creations");
+		if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
+			await creationsRoute.loadCreations();
+		}
+
+		// Navigate to Creations page immediately (optimistic UI)
+		const header = document.querySelector('app-header');
+		if (header && typeof header.handleRouteChange === 'function') {
+			window.history.pushState({ route: 'creations' }, '', '/creations');
+			header.handleRouteChange();
+		} else {
+			// Fallback: use hash-based routing
+			window.location.hash = 'creations';
+		}
+
+		// Make API call to create image
+		fetch("/api/create", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			credentials: "include",
+			body: JSON.stringify({
 				server_id: this.selectedServer.id,
 				method: methodKey,
-				args: collectedArgs
+				args: collectedArgs || {}
+			})
+		})
+			.then(async (response) => {
+				if (!response.ok) {
+					const error = await response.json();
+					// Handle insufficient credits error specifically
+					if (response.status === 402) {
+						// Refresh credits to get updated balance
+						document.dispatchEvent(new CustomEvent('credits-updated', {
+							detail: { count: error.current ?? 0 }
+						}));
+						// Trigger credits refresh in create component
+						await this.loadCredits();
+						throw new Error(error.message || "Insufficient credits");
+					}
+					throw new Error(error.error || "Failed to create image");
+				}
+				const data = await response.json();
+				// Update credits if returned in response
+				if (typeof data.credits_remaining === 'number') {
+					document.dispatchEvent(new CustomEvent('credits-updated', {
+						detail: { count: data.credits_remaining }
+					}));
+				}
+				return null;
+			})
+			.then(() => {
+				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
+				const next = current.filter(item => item.id !== pendingId);
+				sessionStorage.setItem(pendingKey, JSON.stringify(next));
+				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
+			})
+			.catch(async (error) => {
+				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
+				const next = current.filter(item => item.id !== pendingId);
+				sessionStorage.setItem(pendingKey, JSON.stringify(next));
+				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
+				console.error("Error creating image:", error);
+				// Refresh credits display in case of error
+				await this.loadCredits();
+			})
+			.finally(() => {
+				button.disabled = false;
 			});
-		}
 	}
 }
 
