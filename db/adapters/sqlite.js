@@ -41,12 +41,25 @@ function ensureServersAuthTokenColumn(db) {
 	}
 }
 
+function ensureCreatedImagesSeedColumn(db) {
+	try {
+		const columns = db.prepare("PRAGMA table_info(created_images)").all();
+		const hasSeed = columns.some((column) => column.name === "seed");
+		if (!hasSeed) {
+			db.exec("ALTER TABLE created_images ADD COLUMN seed TEXT");
+		}
+	} catch (error) {
+		console.warn("Failed to ensure seed column on created_images:", error);
+	}
+}
+
 export async function openDb() {
 	const DbClass = await loadDatabase();
 	ensureDataDir();
 	const db = new DbClass(dbPath);
 	initSchema(db);
 	ensureServersAuthTokenColumn(db);
+	ensureCreatedImagesSeedColumn(db);
 
 	const transferCreditsTxn = db.transaction((fromUserId, toUserId, amount) => {
 		const ensureCreditsRowStmt = db.prepare(
@@ -803,12 +816,12 @@ export async function openDb() {
 			}
 		},
 		insertCreatedImage: {
-			run: async (userId, filename, filePath, width, height, color, status = 'creating') => {
+			run: async (userId, filename, filePath, width, height, color, status = 'creating', seed = null) => {
 				const stmt = db.prepare(
-					`INSERT INTO created_images (user_id, filename, file_path, width, height, color, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+					`INSERT INTO created_images (user_id, filename, file_path, width, height, color, status, seed)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 				);
-				const result = stmt.run(userId, filename, filePath, width, height, color, status);
+				const result = stmt.run(userId, filename, filePath, width, height, color, status, seed);
 				return Promise.resolve({
 					insertId: result.lastInsertRowid,
 					lastInsertRowid: result.lastInsertRowid,

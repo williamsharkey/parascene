@@ -140,6 +140,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			let height = 1024;
 			let suggestedTitle = null;
 			let suggestedDescription = null;
+			let seed = null;
 
 			try {
 				const providerResponse = await fetch(server.server_url, {
@@ -167,18 +168,20 @@ export default function createCreateRoutes({ queries, storage }) {
 				// Get image buffer from response
 				imageBuffer = Buffer.from(await providerResponse.arrayBuffer());
 
-				// Try to get metadata from headers if available
+				// Try to get metadata from headers if available (all optional)
 				const headerColor = providerResponse.headers.get('X-Image-Color');
 				const headerWidth = providerResponse.headers.get('X-Image-Width');
 				const headerHeight = providerResponse.headers.get('X-Image-Height');
 				const headerName = providerResponse.headers.get('X-Image-Name');
 				const headerDescription = providerResponse.headers.get('X-Image-Description');
+				const headerSeed = providerResponse.headers.get('X-Image-Seed');
 
 				if (headerColor) color = headerColor;
 				if (headerWidth) width = parseInt(headerWidth, 10);
 				if (headerHeight) height = parseInt(headerHeight, 10);
 				if (headerName) suggestedTitle = headerName;
 				if (headerDescription) suggestedDescription = decodeURIComponent(headerDescription);
+				if (headerSeed) seed = String(headerSeed);
 			} catch (fetchError) {
 				// Refund credits on fetch error
 				await queries.updateUserCreditsBalance.run(user.id, CREATION_CREDIT_COST);
@@ -204,6 +207,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			const imageUrl = await storage.uploadImage(imageBuffer, filename);
 
 			// Create entry in database with completed status
+			// Seed is optional - only stored if provider sends X-Image-Seed header
 			const result = await queries.insertCreatedImage.run(
 				user.id,
 				filename,
@@ -211,7 +215,8 @@ export default function createCreateRoutes({ queries, storage }) {
 				width,
 				height,
 				color,
-				'completed'
+				'completed',
+				seed
 			);
 
 			// Credit server owner (30% of what user was charged)
@@ -334,6 +339,9 @@ export default function createCreateRoutes({ queries, storage }) {
 				}
 			}
 
+			// Only include seed if user is the owner (private to creator)
+			const isOwner = user.id === image.user_id;
+
 			return res.json({
 				id: image.id,
 				filename: image.filename,
@@ -341,6 +349,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				width: image.width,
 				height: image.height,
 				color: image.color,
+				seed: isOwner ? (image.seed || null) : null,
 				status: image.status || 'completed',
 				created_at: image.created_at,
 				published: isPublished,

@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS created_images (
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
   color TEXT,
+  seed TEXT,
   status TEXT NOT NULL DEFAULT 'creating',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   published INTEGER NOT NULL DEFAULT 0,

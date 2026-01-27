@@ -1081,19 +1081,24 @@ export function openDb() {
 			}
 		},
 		insertCreatedImage: {
-			run: async (userId, filename, filePath, width, height, color, status = "creating") => {
+			run: async (userId, filename, filePath, width, height, color, status = "creating", seed = null) => {
 				// Use serviceClient to bypass RLS for backend operations
+				const insertData = {
+					user_id: userId,
+					filename,
+					file_path: filePath,
+					width,
+					height,
+					color,
+					status
+				};
+				// Only include seed if provided (optional field)
+				if (seed !== null) {
+					insertData.seed = seed;
+				}
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
-					.insert({
-						user_id: userId,
-						filename,
-						file_path: filePath,
-						width,
-						height,
-						color,
-						status
-					})
+					.insert(insertData)
 					.select("id")
 					.single();
 				if (error) throw error;
