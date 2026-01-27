@@ -21,13 +21,21 @@ class AppRouteServers extends HTMLElement {
     `;
 
 		this.loadServers();
+		this.setupEventListeners();
+	}
+
+	disconnectedCallback() {
+		if (this._serverUpdatedHandler) {
+			document.removeEventListener('server-updated', this._serverUpdatedHandler);
+		}
 	}
 
 	// Listen for server updates from modal
 	setupEventListeners() {
-		document.addEventListener('server-updated', () => {
+		this._serverUpdatedHandler = () => {
 			this.loadServers({ force: true });
-		});
+		};
+		document.addEventListener('server-updated', this._serverUpdatedHandler);
 	}
 
 	async loadServers({ force = false } = {}) {
