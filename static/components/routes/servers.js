@@ -248,7 +248,7 @@ class AppRouteServers extends HTMLElement {
 					</label>
 
 					<div class="ai-generator-security-note" data-security-note style="display: none;">
-						<strong>Security:</strong> Your session cookie will be included, allowing the AI to register the server under your account automatically. Only use in private, trusted AI conversations. The session expires when you log out or after 7 days.
+						<strong>Security:</strong> A temporary registration token will be included, allowing the AI to register the server under your account automatically. Only use in private, trusted AI conversations. Token expires in 1 hour.
 					</div>
 
 					<details class="ai-generator-details">
@@ -328,26 +328,24 @@ class AppRouteServers extends HTMLElement {
 		promptTextarea.focus();
 	}
 
-	getSessionCookie() {
-		// Extract ps_session cookie from document.cookie
-		const cookies = document.cookie.split(';');
-		for (const cookie of cookies) {
-			const [name, ...valueParts] = cookie.trim().split('=');
-			if (name === 'ps_session') {
-				return valueParts.join('='); // Handle '=' in JWT
-			}
-		}
-		return null;
-	}
-
 	async fetchRegistrationToken() {
-		// Use the actual session cookie for reliability
-		const sessionCookie = this.getSessionCookie();
-		if (!sessionCookie) {
-			alert('You must be logged in to generate registration credentials.');
+		try {
+			const response = await fetch('/api/servers/registration-token', {
+				method: 'GET',
+				credentials: 'include'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				alert(data.error || 'Failed to generate registration token. Please try again.');
+				return null;
+			}
+			const data = await response.json();
+			return data.token;
+		} catch (error) {
+			console.error('Error fetching registration token:', error);
+			alert('Failed to generate registration token. Please check your connection.');
 			return null;
 		}
-		return sessionCookie;
 	}
 
 	generateAIPrompt(userDescription, registrationToken) {
@@ -377,7 +375,7 @@ curl -X POST "${parasceneUrl}/api/servers" \\
   }'
 \`\`\`
 
-**Note:** This session token expires when you log out or after 7 days of inactivity.
+**Note:** This token expires in 1 hour. Complete the registration before it expires.
 `;
 		}
 

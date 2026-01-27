@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { buildProviderHeaders, resolveProviderAuthToken } from "./utils/providerAuth.js";
+import { hashToken } from "./auth.js";
 
 function getJwtSecret() {
 	return process.env.SESSION_SECRET || "dev-secret-change-me";
@@ -123,6 +124,16 @@ export default function createServersRoutes({ queries }) {
 			getJwtSecret(),
 			{ expiresIn: "1h" }
 		);
+
+		// Store the token in the sessions table so it's recognized by session middleware
+		try {
+			const tokenHash = hashToken(token);
+			const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+			await queries.insertSession.run(user.id, tokenHash, expiresAt);
+		} catch (sessionError) {
+			console.error("Failed to store registration token session:", sessionError);
+			return res.status(500).json({ error: "Failed to generate registration token" });
+		}
 
 		return res.json({
 			token,
