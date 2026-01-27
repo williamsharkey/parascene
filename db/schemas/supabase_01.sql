@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS prsn_created_images (
   width integer NOT NULL,
   height integer NOT NULL,
   color text,
+  seed text,
   status text NOT NULL DEFAULT 'creating',
   created_at timestamptz NOT NULL DEFAULT now(),
   published boolean NOT NULL DEFAULT false,
