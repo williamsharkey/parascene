@@ -111,9 +111,19 @@ class AppRouteCreate extends HTMLElement {
         <form class="create-form" data-create-form>
           <div class="form-group">
             <label class="form-label" for="server-select">Server</label>
-            <select class="form-select" id="server-select" data-server-select required>
-              <option value="">Select a server...</option>
-            </select>
+            <div class="server-select-row" style="display: flex; gap: 8px; align-items: center;">
+              <select class="form-select" id="server-select" data-server-select required style="flex: 1;">
+                <option value="">Select a server...</option>
+              </select>
+              <button type="button" class="refresh-server-btn" data-refresh-server title="Refresh server methods" style="display: none; padding: 8px; background: var(--color-surface-2, #333); border: 1px solid var(--color-border, #444); border-radius: 4px; cursor: pointer; color: inherit;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 2v6h-6"></path>
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                  <path d="M3 22v-6h6"></path>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="form-group" data-method-group style="display: none;">
             <label class="form-label" for="method-select">Generation Method</label>
@@ -140,6 +150,7 @@ class AppRouteCreate extends HTMLElement {
 
 	disconnectedCallback() {
 		document.removeEventListener('credits-updated', this.handleCreditsUpdated);
+		document.removeEventListener('server-updated', this.handleServerUpdated);
 	}
 
 	setupEventListeners() {
@@ -158,7 +169,16 @@ class AppRouteCreate extends HTMLElement {
 			methodSelect.addEventListener("change", (e) => this.handleMethodChange(e.target.value));
 		}
 
+		const refreshBtn = this.querySelector("[data-refresh-server]");
+		if (refreshBtn) {
+			refreshBtn.addEventListener("click", () => this.handleRefreshServer());
+		}
+
 		document.addEventListener('credits-updated', this.handleCreditsUpdated);
+
+		// Refresh server list when a server is added/updated
+		this.handleServerUpdated = () => this.loadServers();
+		document.addEventListener('server-updated', this.handleServerUpdated);
 	}
 
 	async loadServers() {
@@ -219,6 +239,8 @@ class AppRouteCreate extends HTMLElement {
 	}
 
 	handleServerChange(serverId) {
+		const refreshBtn = this.querySelector("[data-refresh-server]");
+
 		if (!serverId) {
 			this.selectedServer = null;
 			this.selectedMethod = null;
@@ -226,6 +248,7 @@ class AppRouteCreate extends HTMLElement {
 			this.hideMethodGroup();
 			this.hideFieldsGroup();
 			this.updateButtonState();
+			if (refreshBtn) refreshBtn.style.display = 'none';
 			return;
 		}
 
@@ -238,6 +261,54 @@ class AppRouteCreate extends HTMLElement {
 		this.renderMethodOptions();
 		this.hideFieldsGroup();
 		this.updateButtonState();
+		// Show refresh button when a server is selected (but not for built-in server id=1)
+		if (refreshBtn) refreshBtn.style.display = server.id !== 1 ? 'block' : 'none';
+	}
+
+	async handleRefreshServer() {
+		if (!this.selectedServer) return;
+
+		const refreshBtn = this.querySelector("[data-refresh-server]");
+		if (refreshBtn) {
+			refreshBtn.disabled = true;
+			refreshBtn.style.opacity = '0.5';
+		}
+
+		try {
+			const response = await fetch(`/api/servers/${this.selectedServer.id}/refresh`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+
+			const data = await response.json();
+			if (!response.ok) {
+				alert(data.error || 'Failed to refresh server');
+				return;
+			}
+
+			// Update local server config with new capabilities
+			this.selectedServer.server_config = data.capabilities;
+
+			// Also update in the servers array
+			const serverIndex = this.servers.findIndex(s => s.id === this.selectedServer.id);
+			if (serverIndex !== -1) {
+				this.servers[serverIndex].server_config = data.capabilities;
+			}
+
+			// Re-render method options with updated config
+			this.selectedMethod = null;
+			this.fieldValues = {};
+			this.renderMethodOptions();
+			this.hideFieldsGroup();
+			this.updateButtonState();
+		} catch (error) {
+			alert(error.message || 'Failed to refresh server');
+		} finally {
+			if (refreshBtn) {
+				refreshBtn.disabled = false;
+				refreshBtn.style.opacity = '1';
+			}
+		}
 	}
 
 	renderMethodOptions() {
