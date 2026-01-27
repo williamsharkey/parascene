@@ -866,7 +866,7 @@ class AppNavigation extends HTMLElement {
             <a href="/" style="text-decoration: none; display: block;">
               <svg class="logo" width="280" height="40" viewBox="0 0 280 40">
                 <text x="1" y="27" class="logo-text">
-                  <tspan opacity="1">para</tspan><tspan opacity="0.7" dx="-7">shark</tspan><tspan opacity="1" dx="-7">god</tspan>
+                  <tspan opacity="1">para</tspan><tspan opacity="0.7" dx="-1">shark</tspan><tspan opacity="1" dx="-1">god</tspan>
                 </text>
               </svg>
             </a>
