@@ -301,13 +301,17 @@ class AppRouteServers extends HTMLElement {
 			securityNote.style.display = tokenCheckbox.checked ? 'block' : 'none';
 		});
 
-		viewBtn.addEventListener('click', () => {
-			const markdown = this.generateAIPrompt(promptTextarea.value, tokenCheckbox.checked);
+		viewBtn.addEventListener('click', async () => {
+			const token = tokenCheckbox.checked ? await this.fetchRegistrationToken() : null;
+			if (tokenCheckbox.checked && !token) return; // Failed to get token
+			const markdown = this.generateAIPrompt(promptTextarea.value, token);
 			this.showMarkdownModal(markdown);
 		});
 
 		copyBtn.addEventListener('click', async () => {
-			const markdown = this.generateAIPrompt(promptTextarea.value, tokenCheckbox.checked);
+			const token = tokenCheckbox.checked ? await this.fetchRegistrationToken() : null;
+			if (tokenCheckbox.checked && !token) return; // Failed to get token
+			const markdown = this.generateAIPrompt(promptTextarea.value, token);
 			try {
 				await navigator.clipboard.writeText(markdown);
 				copiedMsg.style.display = 'flex';
@@ -324,27 +328,45 @@ class AppRouteServers extends HTMLElement {
 		promptTextarea.focus();
 	}
 
-	generateAIPrompt(userDescription, includeToken) {
+	async fetchRegistrationToken() {
+		try {
+			const response = await fetch('/api/servers/registration-token', {
+				method: 'GET',
+				credentials: 'include'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				alert(data.error || 'Failed to generate registration token. Please try again.');
+				return null;
+			}
+			const data = await response.json();
+			return data.token;
+		} catch (error) {
+			console.error('Error fetching registration token:', error);
+			alert('Failed to generate registration token. Please check your connection.');
+			return null;
+		}
+	}
+
+	generateAIPrompt(userDescription, registrationToken) {
 		const parasceneUrl = window.location.origin;
 		const description = userDescription.trim() || 'custom image generator';
 
 		let authSection = '';
-		if (includeToken) {
-			// Get session cookie for auto-registration
-			const cookies = document.cookie;
+		if (registrationToken) {
 			authSection = `
 ## Auto-Registration Credentials
 
 The user has authorized automatic server registration. Use these credentials to register the server after deployment:
 
 - **Parascene URL:** ${parasceneUrl}
-- **Session Cookie:** \`${cookies}\`
+- **Registration Token:** \`${registrationToken}\`
 
 To register the server, make a POST request:
 \`\`\`bash
 curl -X POST "${parasceneUrl}/api/servers" \\
   -H "Content-Type: application/json" \\
-  -H "Cookie: ${cookies}" \\
+  -H "Cookie: ps_session=${registrationToken}" \\
   -d '{
     "name": "YOUR_SERVER_NAME",
     "server_url": "YOUR_DEPLOYED_URL",
@@ -352,6 +374,8 @@ curl -X POST "${parasceneUrl}/api/servers" \\
     "description": "YOUR_DESCRIPTION"
   }'
 \`\`\`
+
+**Note:** This token expires in 1 hour. Complete the registration before it expires.
 `;
 		}
 
@@ -369,7 +393,7 @@ To complete this task, you need access to:
 4. **GitHub CLI (gh)** - Optional but helpful for creating repos (\`gh repo create\`)
 5. **Node.js & npm** - To install dependencies and test locally
 6. **File system access** - To create project files and directories
-7. **Network access** - To deploy to Vercel and${includeToken ? ' register with Parascene' : ' test the deployment'}
+7. **Network access** - To deploy to Vercel and${registrationToken ? ' register with Parascene' : ' test the deployment'}
 
 **Verify Vercel is ready:**
 \`\`\`bash
@@ -532,7 +556,7 @@ Requirements:
 ${authSection}
 ## After Deployment
 
-${includeToken ? `Use the auto-registration credentials above to register the server automatically.` : `The user will manually register the server at ${parasceneUrl}/servers using:
+${registrationToken ? `Use the auto-registration credentials above to register the server automatically.` : `The user will manually register the server at ${parasceneUrl}/servers using:
 - The deployed Vercel URL
 - The API key set in Vercel environment variables`}
 

@@ -1,5 +1,10 @@
 import express from "express";
+import jwt from "jsonwebtoken";
 import { buildProviderHeaders, resolveProviderAuthToken } from "./utils/providerAuth.js";
+
+function getJwtSecret() {
+	return process.env.SESSION_SECRET || "dev-secret-change-me";
+}
 
 export default function createServersRoutes({ queries }) {
 	const router = express.Router();
@@ -101,6 +106,29 @@ export default function createServersRoutes({ queries }) {
 		const serversWithFlags = await addPermissionFlags(servers, user.id, isAdmin);
 
 		return res.json({ servers: serversWithFlags });
+	});
+
+	// GET /api/servers/registration-token - Get a temporary token for server registration
+	// This token can be shared with AI assistants to allow them to register servers
+	router.get("/api/servers/registration-token", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		// Create a short-lived JWT (1 hour) specifically for server registration
+		const token = jwt.sign(
+			{
+				userId: user.id,
+				purpose: "server-registration",
+			},
+			getJwtSecret(),
+			{ expiresIn: "1h" }
+		);
+
+		return res.json({
+			token,
+			expiresIn: "1 hour",
+			usage: "Include this token in the Cookie header as 'ps_session=TOKEN' when making the POST /api/servers request"
+		});
 	});
 
 	// GET /api/servers/:id - Get server details with permission-based filtering
