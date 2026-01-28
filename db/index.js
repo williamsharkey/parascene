@@ -7,22 +7,14 @@ async function openDb(options = {}) {
   const log = quiet ? () => {} : console.log;
 
   // Determine which adapter to use based on environment
-  // On Vercel, check adapter preference
+  // On Vercel, prefer Supabase if credentials are available, otherwise use mock
   if (process.env.VERCEL) {
-    // Check for Blob adapter first (simple test server)
-    if (process.env.DB_ADAPTER === "blob" && process.env.BLOB_READ_WRITE_TOKEN) {
-      log("Using Vercel Blob adapter for deployment.");
-      const { openDb: openBlobDb } = await import("./adapters/blob.js");
-      const dbInstance = openBlobDb();
-      await seedDatabase(dbInstance);
-      return dbInstance;
-    }
     // Check if Supabase credentials are available
     if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
       log("Using Supabase adapter for Vercel deployment.");
       return openSupabaseDb();
     } else {
-      log("Using mock database for Vercel deployment (no persistence).");
+      log("Using mock database for Vercel deployment (Supabase credentials not found).");
       const dbInstance = openMockDb();
       await seedDatabase(dbInstance);
       return dbInstance;
@@ -37,14 +29,6 @@ async function openDb(options = {}) {
     case "supabase":
       log("Using Supabase adapter.");
       return openSupabaseDb();
-    case "blob":
-      log("Using Vercel Blob adapter.");
-      {
-        const { openDb: openBlobDb } = await import("./adapters/blob.js");
-        const dbInstance = openBlobDb();
-        await seedDatabase(dbInstance);
-        return dbInstance;
-      }
     case "mock":
       log("Using mock database adapter.");
       {
@@ -62,4 +46,3 @@ async function openDb(options = {}) {
 }
 
 export { openDb };
-

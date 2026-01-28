@@ -1,6 +1,6 @@
 # parascene
 
-> **This is a fork of [crosshj/parascene](https://github.com/crosshj/parascene)** with added Vercel Blob storage adapter for simple serverless persistence.
+> **This is a fork of [crosshj/parascene](https://github.com/crosshj/parascene)**
 
 ## Live Demo
 
@@ -11,26 +11,6 @@ Test accounts (password: `p123@#`):
 - creator@example.com
 - provider@example.com
 - admin@example.com
-
-## Fork Changes
-
-This fork adds a **Vercel Blob adapter** (`db/adapters/blob.js`) that stores the entire database state in a single JSON blob. This is useful for:
-- Simple test deployments without a real database
-- Prototyping on Vercel's free tier
-- Environments where SQLite/Supabase setup is overkill
-
-### How it works
-- All database state (users, images, likes, etc.) is stored in one JSON file on Vercel Blob storage
-- State is loaded on first request and saved after mutations
-- Works within Vercel's free tier limits
-
-### Setup for your own deployment
-1. Create a Vercel Blob store: `vercel blob stores create parascene-db`
-2. Connect it to your project in the Vercel dashboard
-3. Set environment variables:
-   - `DB_ADAPTER=blob`
-   - `BLOB_READ_WRITE_TOKEN` (auto-added when you connect the store)
-   - `SESSION_SECRET` (any random string)
 
 ---
 
