@@ -116,7 +116,9 @@ const mockRes = {
           NODE_ENV: 'sandbox',
           // Provide access to node_modules for sharp, etc.
           NODE_PATH: path.join(process.cwd(), 'node_modules'),
-          PATH: process.env.PATH
+          PATH: process.env.PATH,
+          // Set API_KEY for auth in generated code
+          API_KEY: process.env.HOSTED_SERVER_INTERNAL_KEY || 'internal'
         }
       });
 
