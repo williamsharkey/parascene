@@ -27,6 +27,13 @@ function initSchema(db) {
 	const schemaPath = path.join(__dirname, "..", "schemas", "sqlite_01.sql");
 	const schemaSql = fs.readFileSync(schemaPath, "utf8");
 	db.exec(schemaSql);
+
+	// Load AI servers schema
+	const aiServersSchemaPath = path.join(__dirname, "..", "schemas", "sqlite_02_ai_servers.sql");
+	if (fs.existsSync(aiServersSchemaPath)) {
+		const aiServersSchemaSql = fs.readFileSync(aiServersSchemaPath, "utf8");
+		db.exec(aiServersSchemaSql);
+	}
 }
 
 function ensureServersAuthTokenColumn(db) {
@@ -1201,6 +1208,249 @@ export async function openDb() {
 			run: async (fromUserId, toUserId, amount) => {
 				const result = transferCreditsTxn(Number(fromUserId), Number(toUserId), Number(amount));
 				return Promise.resolve(result);
+			}
+		},
+
+		// AI Server Projects queries
+		selectAiServerProjects: {
+			all: async (userId) => {
+				const stmt = db.prepare(
+					`SELECT
+						p.id, p.user_id, p.name, p.description, p.status, p.hosting_type,
+						p.live_version_id, p.deployed_server_id, p.banner_url, p.icon_url,
+						p.created_at, p.updated_at,
+						(SELECT COUNT(*) FROM ai_server_versions WHERE project_id = p.id) as version_count
+					FROM ai_server_projects p
+					WHERE p.user_id = ?
+					ORDER BY p.updated_at DESC`
+				);
+				return Promise.resolve(stmt.all(userId));
+			}
+		},
+		selectAiServerProjectById: {
+			get: async (projectId) => {
+				const stmt = db.prepare(
+					`SELECT
+						p.id, p.user_id, p.name, p.description, p.status, p.hosting_type,
+						p.live_version_id, p.deployed_server_id, p.banner_url, p.icon_url,
+						p.created_at, p.updated_at
+					FROM ai_server_projects p
+					WHERE p.id = ?`
+				);
+				return Promise.resolve(stmt.get(projectId));
+			}
+		},
+		insertAiServerProject: {
+			run: async (userId, name, description = null) => {
+				const stmt = db.prepare(
+					`INSERT INTO ai_server_projects (user_id, name, description)
+					VALUES (?, ?, ?)`
+				);
+				const result = stmt.run(userId, name, description);
+				return Promise.resolve({
+					insertId: result.lastInsertRowid,
+					changes: result.changes
+				});
+			}
+		},
+		updateAiServerProject: {
+			run: async (projectId, updates) => {
+				const fields = [];
+				const values = [];
+
+				if (updates.name !== undefined) {
+					fields.push('name = ?');
+					values.push(updates.name);
+				}
+				if (updates.description !== undefined) {
+					fields.push('description = ?');
+					values.push(updates.description);
+				}
+				if (updates.status !== undefined) {
+					fields.push('status = ?');
+					values.push(updates.status);
+				}
+				if (updates.hosting_type !== undefined) {
+					fields.push('hosting_type = ?');
+					values.push(updates.hosting_type);
+				}
+				if (updates.live_version_id !== undefined) {
+					fields.push('live_version_id = ?');
+					values.push(updates.live_version_id);
+				}
+				if (updates.deployed_server_id !== undefined) {
+					fields.push('deployed_server_id = ?');
+					values.push(updates.deployed_server_id);
+				}
+				if (updates.banner_url !== undefined) {
+					fields.push('banner_url = ?');
+					values.push(updates.banner_url);
+				}
+				if (updates.icon_url !== undefined) {
+					fields.push('icon_url = ?');
+					values.push(updates.icon_url);
+				}
+
+				fields.push("updated_at = datetime('now')");
+				values.push(projectId);
+
+				const stmt = db.prepare(
+					`UPDATE ai_server_projects SET ${fields.join(', ')} WHERE id = ?`
+				);
+				const result = stmt.run(...values);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		deleteAiServerProject: {
+			run: async (projectId) => {
+				const stmt = db.prepare('DELETE FROM ai_server_projects WHERE id = ?');
+				const result = stmt.run(projectId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+
+		// AI Server Versions queries
+		selectAiServerVersions: {
+			all: async (projectId) => {
+				const stmt = db.prepare(
+					`SELECT
+						id, project_id, version_number, parent_version_id,
+						user_prompt, refinement_prompt, generated_code, generated_config,
+						generation_cost, status, test_result, created_at
+					FROM ai_server_versions
+					WHERE project_id = ?
+					ORDER BY version_number DESC`
+				);
+				const rows = stmt.all(projectId);
+				return Promise.resolve(rows.map(row => ({
+					...row,
+					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
+					test_result: row.test_result ? JSON.parse(row.test_result) : null
+				})));
+			}
+		},
+		selectAiServerVersionById: {
+			get: async (versionId) => {
+				const stmt = db.prepare(
+					`SELECT
+						id, project_id, version_number, parent_version_id,
+						user_prompt, refinement_prompt, generated_code, generated_config,
+						generation_cost, status, test_result, created_at
+					FROM ai_server_versions
+					WHERE id = ?`
+				);
+				const row = stmt.get(versionId);
+				if (!row) return null;
+				return Promise.resolve({
+					...row,
+					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
+					test_result: row.test_result ? JSON.parse(row.test_result) : null
+				});
+			}
+		},
+		selectLatestAiServerVersion: {
+			get: async (projectId) => {
+				const stmt = db.prepare(
+					`SELECT
+						id, project_id, version_number, parent_version_id,
+						user_prompt, refinement_prompt, generated_code, generated_config,
+						generation_cost, status, test_result, created_at
+					FROM ai_server_versions
+					WHERE project_id = ?
+					ORDER BY version_number DESC
+					LIMIT 1`
+				);
+				const row = stmt.get(projectId);
+				if (!row) return null;
+				return Promise.resolve({
+					...row,
+					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
+					test_result: row.test_result ? JSON.parse(row.test_result) : null
+				});
+			}
+		},
+		insertAiServerVersion: {
+			run: async (projectId, versionNumber, userPrompt, refinementPrompt, generatedCode, generatedConfig, generationCost, parentVersionId = null) => {
+				const stmt = db.prepare(
+					`INSERT INTO ai_server_versions
+					(project_id, version_number, parent_version_id, user_prompt, refinement_prompt, generated_code, generated_config, generation_cost)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+				);
+				const configJson = generatedConfig ? JSON.stringify(generatedConfig) : null;
+				const result = stmt.run(
+					projectId, versionNumber, parentVersionId, userPrompt, refinementPrompt,
+					generatedCode, configJson, generationCost
+				);
+				return Promise.resolve({
+					insertId: result.lastInsertRowid,
+					changes: result.changes
+				});
+			}
+		},
+		updateAiServerVersionStatus: {
+			run: async (versionId, status, testResult = null) => {
+				const testResultJson = testResult ? JSON.stringify(testResult) : null;
+				const stmt = db.prepare(
+					`UPDATE ai_server_versions
+					SET status = ?, test_result = ?
+					WHERE id = ?`
+				);
+				const result = stmt.run(status, testResultJson, versionId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		getNextVersionNumber: {
+			get: async (projectId) => {
+				const stmt = db.prepare(
+					`SELECT COALESCE(MAX(version_number), 0) + 1 as next_version
+					FROM ai_server_versions
+					WHERE project_id = ?`
+				);
+				const row = stmt.get(projectId);
+				return Promise.resolve(row?.next_version || 1);
+			}
+		},
+
+		// AI Server Royalties queries
+		insertAiServerRoyalty: {
+			run: async (projectId, createdImageId, creditsCharged, creatorShare, platformShare) => {
+				const stmt = db.prepare(
+					`INSERT INTO ai_server_royalties
+					(project_id, created_image_id, credits_charged, creator_share, platform_share)
+					VALUES (?, ?, ?, ?, ?)`
+				);
+				const result = stmt.run(projectId, createdImageId, creditsCharged, creatorShare, platformShare);
+				return Promise.resolve({
+					insertId: result.lastInsertRowid,
+					changes: result.changes
+				});
+			}
+		},
+		selectAiServerRoyalties: {
+			all: async (projectId, options = {}) => {
+				const limit = Math.min(options.limit || 50, 200);
+				const offset = options.offset || 0;
+				const stmt = db.prepare(
+					`SELECT id, project_id, created_image_id, credits_charged, creator_share, platform_share, created_at
+					FROM ai_server_royalties
+					WHERE project_id = ?
+					ORDER BY created_at DESC
+					LIMIT ? OFFSET ?`
+				);
+				return Promise.resolve(stmt.all(projectId, limit, offset));
+			}
+		},
+		selectAiServerRoyaltyStats: {
+			get: async (projectId) => {
+				const stmt = db.prepare(
+					`SELECT
+						COUNT(*) as total_generations,
+						COALESCE(SUM(credits_charged), 0) as total_credits,
+						COALESCE(SUM(creator_share), 0) as total_creator_earnings
+					FROM ai_server_royalties
+					WHERE project_id = ?`
+				);
+				return Promise.resolve(stmt.get(projectId));
 			}
 		}
 	};

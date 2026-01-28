@@ -207,7 +207,12 @@ class AppRouteServers extends HTMLElement {
 
 		aiCard.appendChild(aiTitle);
 		aiCard.appendChild(aiSubtitle);
-		aiCard.addEventListener('click', () => this.openAIGeneratorModal());
+		aiCard.addEventListener('click', () => {
+			const modal = document.querySelector('app-modal-ai-server-generator');
+			if (modal) {
+				modal.open();
+			}
+		});
 
 		container.appendChild(aiCard);
 	}

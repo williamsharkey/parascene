@@ -5,6 +5,7 @@ import './components/modals/profile.js';
 import './components/modals/credits.js';
 import './components/modals/notifications.js';
 import './components/modals/server.js';
+import './components/modals/ai-server-generator.js';
 import './components/routes/feed.js';
 import './components/routes/explore.js';
 import './components/routes/servers.js';
@@ -29,6 +30,7 @@ async function initPage() {
     'app-modal-credits',
     'app-modal-notifications',
     'app-modal-server',
+    'app-modal-ai-server-generator',
     'app-route-feed',
     'app-route-explore',
     'app-route-creations',

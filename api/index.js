@@ -14,6 +14,8 @@ import createPageRoutes from "../api_routes/pages.js";
 import createProviderRoutes from "../api_routes/provider.js";
 import createServersRoutes from "../api_routes/servers.js";
 import createTemplatesRoutes from "../api_routes/templates.js";
+import createAiServersRoutes from "../api_routes/ai-servers.js";
+import createHostedServersRoutes from "../api_routes/hosted-servers.js";
 import createLikesRoutes from "../api_routes/likes.js";
 import createCommentsRoutes from "../api_routes/comments.js";
 import createUserRoutes from "../api_routes/user.js";
@@ -108,6 +110,8 @@ app.use(createLikesRoutes({ queries }));
 app.use(createCommentsRoutes({ queries }));
 app.use(createProviderRoutes({ queries }));
 app.use(createServersRoutes({ queries }));
+app.use(createAiServersRoutes({ queries, storage }));
+app.use(createHostedServersRoutes({ queries }));
 app.use(createTemplatesRoutes({ queries }));
 app.use(createPageRoutes({ queries, pagesDir }));
 app.use(createTodoRoutes());
@@ -171,6 +175,8 @@ console.log("[Startup] Routes registered:", {
 	creationsRoutes: "✓",
 	providerRoutes: "✓",
 	serversRoutes: "✓",
+	aiServersRoutes: "✓",
+	hostedServersRoutes: "✓",
 	templatesRoutes: "✓",
 	pageRoutes: "✓"
 });
