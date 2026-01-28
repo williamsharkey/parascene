@@ -143,7 +143,15 @@ export default function createCreateRoutes({ queries, storage }) {
 			let seed = null;
 
 			try {
-				const providerResponse = await fetch(server.server_url, {
+				// Convert relative URLs to absolute for internal hosted servers
+				let providerUrl = server.server_url;
+				if (providerUrl.startsWith('/')) {
+					const protocol = req.protocol || 'http';
+					const host = req.get('host') || 'localhost:3000';
+					providerUrl = `${protocol}://${host}${providerUrl}`;
+				}
+
+				const providerResponse = await fetch(providerUrl, {
 					method: 'POST',
 					headers: buildProviderHeaders({
 						'Content-Type': 'application/json',
