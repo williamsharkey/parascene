@@ -88,6 +88,9 @@ const mockRes = {
   json(data) {
     this.setHeader('content-type', 'application/json');
     this.end(JSON.stringify(data));
+  },
+  send(data) {
+    this.end(data);
   }
 };
 
@@ -111,7 +114,9 @@ const mockRes = {
         timeout: SANDBOX_TIMEOUT_MS,
         env: {
           NODE_ENV: 'sandbox',
-          // Don't pass through any sensitive env vars
+          // Provide access to node_modules for sharp, etc.
+          NODE_PATH: path.join(process.cwd(), 'node_modules'),
+          PATH: process.env.PATH
         }
       });
 
@@ -127,6 +132,9 @@ const mockRes = {
       });
 
       child.on('close', (code) => {
+        // Cleanup after execution completes
+        cleanupSandbox(sandboxDir);
+
         // Parse the result from stdout
         const resultMatch = stdout.match(/__SANDBOX_RESULT__(.+)/);
         if (resultMatch) {
@@ -149,11 +157,13 @@ const mockRes = {
       });
 
       child.on('error', (error) => {
+        cleanupSandbox(sandboxDir);
         reject(error);
       });
     });
-  } finally {
+  } catch (error) {
     cleanupSandbox(sandboxDir);
+    throw error;
   }
 }
 
