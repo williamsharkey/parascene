@@ -89,6 +89,44 @@ You MUST respond with valid JSON containing these fields:
 5. Default image size is 1024x1024 unless user specifies otherwise
 6. Always include proper error handling
 7. Make sure the code actually generates the described images
+8. IMPORTANT: Use CommonJS syntax (require/module.exports), NOT ES modules (import/export)
+
+## Code Template
+
+Use this exact structure for api/index.js:
+
+\`\`\`javascript
+const sharp = require('sharp');
+
+module.exports = async function handler(req, res) {
+  // Auth check
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== process.env.API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (req.method === 'GET') {
+    // Return capabilities
+    return res.json({
+      status: 'operational',
+      name: 'Your Server Name',
+      methods: { /* ... */ }
+    });
+  }
+
+  if (req.method === 'POST') {
+    // Generate and return image
+    const { method, options } = req.body || {};
+    // ... generate image with sharp ...
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Image-Width', '1024');
+    res.setHeader('X-Image-Height', '1024');
+    return res.send(imageBuffer);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+};
+\`\`\`
 
 DO NOT include any explanation outside of the JSON. Only output valid JSON.`;
 
