@@ -1140,6 +1140,23 @@ export function openDb() {
 				return { changes: data?.length ?? 0 };
 			}
 		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						status: "creating",
+						meta,
+						filename: filename ?? null,
+						file_path: ""
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
 		updateCreatedImageStatus: {
 			run: async (id, userId, status, color = null) => {
 				// Use serviceClient to bypass RLS for backend operations

@@ -800,104 +800,60 @@ async function handleRetry() {
 	}
 
 	const creationToken = `crt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-	const pendingKey = "pendingCreations";
-	const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-	const pendingItem = {
-		id: pendingId,
-		status: "pending",
-		created_at: new Date().toISOString(),
-		creation_token: creationToken
-	};
 
-	const pendingList = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-	pendingList.unshift(pendingItem);
-	sessionStorage.setItem(pendingKey, JSON.stringify(pendingList));
-
-	// Hide the failed creation we are retrying from the creations list view (session-only).
 	try {
-		const hiddenKey = 'hiddenFailedCreations';
-		const rawHidden = sessionStorage.getItem(hiddenKey);
-		const hiddenList = rawHidden ? JSON.parse(rawHidden) : [];
-		const nextHidden = Array.isArray(hiddenList) ? hiddenList.slice() : [];
-		const idValue = Number.isFinite(creationId) ? creationId : Number(creationId);
-		const idString = String(idValue);
-		if (!nextHidden.some((id) => String(id) === idString)) {
-			nextHidden.push(idValue);
-		}
-		sessionStorage.setItem(hiddenKey, JSON.stringify(nextHidden));
-	} catch {
-		// Non-fatal: if sessionStorage fails, user will just see both tiles.
-	}
-
-	document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-	const creationsRoute = document.querySelector("app-route-creations");
-	if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
-		await creationsRoute.loadCreations({ force: true, background: false });
-	}
-
-	// Navigate back to creations list view
-	const header = document.querySelector('app-navigation');
-	if (header && typeof header.navigateToRoute === 'function') {
-		header.navigateToRoute('creations');
-	} else {
-		window.location.href = '/creations';
-	}
-
-	// Kick off new create job with same server/method/args but fresh creation_token
-	fetch("/api/create", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json"
-		},
-		credentials: "include",
-		body: JSON.stringify({
-			server_id: serverId,
-			method,
-			args: args || {},
-			creation_token: creationToken
-		})
-	})
-		.then(async (response) => {
-			if (!response.ok) {
-				const error = await response.json();
-				if (response.status === 402) {
-					// Refresh credits to get updated balance
-					document.dispatchEvent(new CustomEvent('credits-updated', {
-						detail: { count: error.current ?? 0 }
-					}));
-					alert(error.message || "Insufficient credits");
-					throw new Error(error.message || "Insufficient credits");
-				}
-				throw new Error(error.error || "Failed to retry creation");
-			}
-			const data = await response.json();
-			if (typeof data.credits_remaining === 'number') {
-				document.dispatchEvent(new CustomEvent('credits-updated', {
-					detail: { count: data.credits_remaining }
-				}));
-			}
-			return null;
-		})
-		.then(() => {
-			const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-			const next = current.filter(item => item.id !== pendingId);
-			sessionStorage.setItem(pendingKey, JSON.stringify(next));
-			document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-		})
-		.catch((error) => {
-			const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-			const next = current.filter(item => item.id !== pendingId);
-			sessionStorage.setItem(pendingKey, JSON.stringify(next));
-			document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-			// console.error('Error retrying creation:', error);
-			alert(error.message || 'Failed to retry creation. Please try again.');
-		})
-		.finally(() => {
-			const btn = document.querySelector('[data-retry-btn]');
-			if (btn) {
-				btn.disabled = false;
-			}
+		const response = await fetch("/api/create", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			credentials: "include",
+			body: JSON.stringify({
+				server_id: serverId,
+				method,
+				args: args || {},
+				creation_token: creationToken,
+				retry_of_id: Number(creationId)
+			})
 		});
+
+		if (!response.ok) {
+			const error = await response.json();
+			if (response.status === 402) {
+				document.dispatchEvent(new CustomEvent('credits-updated', {
+					detail: { count: error.current ?? 0 }
+				}));
+				alert(error.message || "Insufficient credits");
+				return;
+			}
+			throw new Error(error.error || "Failed to retry creation");
+		}
+
+		const data = await response.json();
+		if (typeof data.credits_remaining === 'number') {
+			document.dispatchEvent(new CustomEvent('credits-updated', {
+				detail: { count: data.credits_remaining }
+			}));
+		}
+
+		// Same creation row is now "creating"; navigate and refresh list
+		const creationsRoute = document.querySelector("app-route-creations");
+		if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
+			await creationsRoute.loadCreations({ force: true, background: false });
+		}
+		const header = document.querySelector('app-navigation');
+		if (header && typeof header.navigateToRoute === 'function') {
+			header.navigateToRoute('creations');
+		} else {
+			window.location.href = '/creations';
+		}
+	} catch (error) {
+		alert(error.message || 'Failed to retry creation. Please try again.');
+	} finally {
+		if (retryBtn) {
+			retryBtn.disabled = false;
+		}
+	}
 }
 
 

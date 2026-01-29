@@ -630,6 +630,21 @@ export function openDb() {
 				return { changes: 1 };
 			}
 		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const image = created_images.find(
+					(img) => img.id === Number(id) && img.user_id === Number(userId)
+				);
+				if (!image) {
+					return { changes: 0 };
+				}
+				image.status = "creating";
+				image.meta = meta;
+				if (filename != null) image.filename = filename;
+				image.file_path = "";
+				return { changes: 1 };
+			}
+		},
 		selectCreatedImagesForUser: {
 			all: async (userId) => {
 				return created_images.filter(

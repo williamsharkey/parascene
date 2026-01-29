@@ -90,18 +90,6 @@ function setRouteMediaBackgroundImage(mediaEl, url, { lowPriority = false } = {}
 	});
 }
 
-function getHiddenFailedCreationIds() {
-	try {
-		const raw = sessionStorage.getItem('hiddenFailedCreations');
-		if (!raw) return [];
-		const parsed = JSON.parse(raw);
-		if (!Array.isArray(parsed)) return [];
-		return parsed.filter((id) => typeof id === 'number' || typeof id === 'string');
-	} catch {
-		return [];
-	}
-}
-
 class AppRouteCreations extends HTMLElement {
 	isRouteActive() {
 		try {
@@ -422,9 +410,7 @@ class AppRouteCreations extends HTMLElement {
 				? (Array.isArray(creationsResult.data?.images) ? creationsResult.data.images : [])
 				: [];
 
-			const hiddenIds = getHiddenFailedCreationIds();
-			const hiddenSet = new Set(hiddenIds.map((id) => String(id)));
-			const creations = creationsRaw.filter((item) => !hiddenSet.has(String(item.id)));
+			const creations = creationsRaw;
 
 			container.innerHTML = "";
 			// New content means new media elements; clear previous observers/queue.

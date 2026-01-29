@@ -874,6 +874,26 @@ export async function openDb() {
 				return Promise.resolve({ changes: result.changes });
 			}
 		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const toJsonText = (value) => {
+					if (value == null) return null;
+					if (typeof value === "string") return value;
+					try {
+						return JSON.stringify(value);
+					} catch {
+						return null;
+					}
+				};
+				const stmt = db.prepare(
+					`UPDATE created_images
+             SET status = 'creating', meta = ?, filename = ?, file_path = ''
+             WHERE id = ? AND user_id = ?`
+				);
+				const result = stmt.run(toJsonText(meta), filename || "", id, userId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
 		updateCreatedImageStatus: {
 			run: async (id, userId, status, color = null) => {
 				if (color) {

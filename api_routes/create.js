@@ -101,7 +101,7 @@ export default function createCreateRoutes({ queries, storage }) {
 		const user = await requireUser(req, res);
 		if (!user) return;
 
-		const { server_id, method, args, creation_token } = req.body;
+		const { server_id, method, args, creation_token, retry_of_id } = req.body;
 
 		// Validate required fields
 		if (!server_id || !method) {
@@ -165,13 +165,8 @@ export default function createCreateRoutes({ queries, storage }) {
 				});
 			}
 
-			// Deduct credits before creating the image
-			await queries.updateUserCreditsBalance.run(user.id, -CREATION_CREDIT_COST);
-
 			const started_at = nowIso();
 			const timeout_at = new Date(Date.now() + PROVIDER_TIMEOUT_MS + 2000).toISOString();
-
-			// Insert a durable row BEFORE provider call.
 			const placeholderFilename = `creating_${user.id}_${Date.now()}.png`;
 			const meta = {
 				creation_token: creation_token.trim(),
@@ -188,6 +183,56 @@ export default function createCreateRoutes({ queries, storage }) {
 				credit_cost: CREATION_CREDIT_COST,
 			};
 
+			// Retry in place: reuse the same creation row instead of inserting a new one
+			if (retry_of_id != null && Number.isFinite(Number(retry_of_id))) {
+				const existingId = Number(retry_of_id);
+				const image = await queries.selectCreatedImageById.get(existingId, user.id);
+				if (!image) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				const status = image.status || "completed";
+				if (status !== "failed") {
+					return res.status(400).json({
+						error: "Cannot retry",
+						message: status === "creating"
+							? "Creation is still in progress"
+							: "Only failed creations can be retried"
+					});
+				}
+				const existingMeta = parseMeta(image.meta) || {};
+				// Refund previous attempt if it was never refunded (so we don't double-charge)
+				if (existingMeta.credits_refunded !== true && Number(existingMeta.credit_cost) > 0) {
+					await queries.updateUserCreditsBalance.run(user.id, Number(existingMeta.credit_cost));
+				}
+				await queries.updateUserCreditsBalance.run(user.id, -CREATION_CREDIT_COST);
+				await queries.resetCreatedImageForRetry.run(existingId, user.id, {
+					meta,
+					filename: placeholderFilename
+				});
+				await scheduleCreationJob({
+					payload: {
+						created_image_id: existingId,
+						user_id: user.id,
+						server_id: Number(server_id),
+						method,
+						args: args || {},
+						credit_cost: CREATION_CREDIT_COST,
+					},
+					runCreationJob: ({ payload }) => runCreationJob({ queries, storage, payload }),
+				});
+				const updatedCredits = await queries.selectUserCredits.get(user.id);
+				return res.json({
+					id: existingId,
+					status: "creating",
+					created_at: started_at,
+					meta,
+					credits_remaining: updatedCredits?.balance ?? 0
+				});
+			}
+
+			// New creation: insert a durable row BEFORE provider call
+			await queries.updateUserCreditsBalance.run(user.id, -CREATION_CREDIT_COST);
+
 			const result = await queries.insertCreatedImage.run(
 				user.id,
 				placeholderFilename,
@@ -200,22 +245,6 @@ export default function createCreateRoutes({ queries, storage }) {
 			);
 
 			const createdImageId = result.insertId;
-
-			const shouldLogCreation = () => process.env.ENABLE_CREATION_LOGS === "true";
-			const logCreation = (...args) => {
-				if (shouldLogCreation()) {
-					console.log("[Creation]", ...args);
-				}
-			};
-
-			logCreation("Job scheduled", {
-				created_image_id: createdImageId,
-				user_id: user.id,
-				server_id: Number(server_id),
-				method,
-				credit_cost: CREATION_CREDIT_COST,
-				creation_token: creation_token.trim()
-			});
 
 			await scheduleCreationJob({
 				payload: {
