@@ -1081,7 +1081,7 @@ export function openDb() {
 			}
 		},
 		insertCreatedImage: {
-			run: async (userId, filename, filePath, width, height, color, status = "creating") => {
+			run: async (userId, filename, filePath, width, height, color, status = "creating", meta = null) => {
 				// Use serviceClient to bypass RLS for backend operations
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
@@ -1092,7 +1092,8 @@ export function openDb() {
 						width,
 						height,
 						color,
-						status
+						status,
+						meta
 					})
 					.select("id")
 					.single();
@@ -1102,6 +1103,58 @@ export function openDb() {
 					lastInsertRowid: data.id,
 					changes: 1
 				};
+			}
+		},
+		updateCreatedImageJobCompleted: {
+			run: async (id, userId, { filename, file_path, width, height, color, meta }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						filename,
+						file_path,
+						width,
+						height,
+						color: color ?? null,
+						status: "completed",
+						meta
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		updateCreatedImageJobFailed: {
+			run: async (id, userId, { meta }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						status: "failed",
+						meta
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						status: "creating",
+						meta,
+						filename: filename ?? null,
+						file_path: ""
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
 			}
 		},
 		updateCreatedImageStatus: {
@@ -1127,7 +1180,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, meta"
 					)
 					.eq("user_id", userId)
 					.order("created_at", { ascending: false });
@@ -1140,7 +1193,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, meta"
 					)
 					.eq("user_id", userId)
 					.eq("published", true)
@@ -1196,7 +1249,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("id", id)
 					.eq("user_id", userId)
@@ -1211,7 +1264,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("id", id)
 					.maybeSingle();
@@ -1225,7 +1278,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("filename", filename)
 					.maybeSingle();
@@ -1456,11 +1509,11 @@ export function openDb() {
 						description
 					})
 					.eq("id", id);
-				
+
 				if (!isAdmin) {
 					query.eq("user_id", userId);
 				}
-				
+
 				const { data, error } = await query.select("id");
 				if (error) throw error;
 				return { changes: data?.length ?? 0 };
@@ -1477,11 +1530,11 @@ export function openDb() {
 						published_at: null
 					})
 					.eq("id", id);
-				
+
 				if (!isAdmin) {
 					query.eq("user_id", userId);
 				}
-				
+
 				const { data, error } = await query.select("id");
 				if (error) throw error;
 				return { changes: data?.length ?? 0 };
@@ -1810,12 +1863,12 @@ export function openDb() {
 				.download(filename);
 
 			if (error) {
-				console.error("Supabase image fetch failed, serving fallback image.", {
-					bucket,
-					filename,
-					variant: options?.variant ?? null,
-					error: error?.message ?? error
-				});
+				// console.error("Supabase image fetch failed, serving fallback image.", {
+				// 	bucket,
+				// 		filename,
+				// 		variant: options?.variant ?? null,
+				// 			error: error?.message ?? error
+				// });
 				return sharp({
 					create: {
 						width: 250,

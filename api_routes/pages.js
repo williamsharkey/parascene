@@ -126,7 +126,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
 				}
 				includeMobileBottomNav = /<app-navigation-mobile\b/i.test(roleHtml);
 			} catch (error) {
-				console.warn("Failed to extract role header for profile page:", error?.message || error);
+				// console.warn("Failed to extract role header for profile page:", error?.message || error);
 			}
 
 			if (headerHtml) {
@@ -142,7 +142,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
 			res.setHeader("Content-Type", "text/html");
 			return res.send(pageHtml);
 		} catch (error) {
-			console.error("Error loading user profile page:", error);
+			// console.error("Error loading user profile page:", error);
 			return res.status(500).send("Internal server error");
 		}
 	});
@@ -195,7 +195,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
 				}
 				includeMobileBottomNav = /<app-navigation-mobile\b/i.test(roleHtml);
 			} catch (error) {
-				console.warn("Failed to extract role header for creation detail page:", error?.message || error);
+				// console.warn("Failed to extract role header for creation detail page:", error?.message || error);
 			}
 
 			if (headerHtml) {
@@ -211,7 +211,7 @@ export default function createPageRoutes({ queries, pagesDir }) {
 			res.setHeader('Content-Type', 'text/html');
 			return res.send(pageHtml);
 		} catch (error) {
-			console.error("Error loading creation detail:", error);
+			// console.error("Error loading creation detail:", error);
 			return res.status(500).send("Internal server error");
 		}
 	});

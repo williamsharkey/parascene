@@ -43,7 +43,7 @@ class AppRouteServers extends HTMLElement {
 			const servers = Array.isArray(result.data?.servers) ? result.data.servers : [];
 			this.renderServers(servers, container);
 		} catch (error) {
-			console.error('Error loading servers:', error);
+			// console.error('Error loading servers:', error);
 			container.innerHTML = '<div class="route-empty">Error loading servers.</div>';
 		}
 	}
@@ -200,7 +200,7 @@ class AppRouteServers extends HTMLElement {
 			// Refresh the page to show updated state
 			window.location.reload();
 		} catch (error) {
-			console.error('Error joining server:', error);
+			// console.error('Error joining server:', error);
 			alert('Failed to join server');
 		}
 	}
@@ -225,7 +225,7 @@ class AppRouteServers extends HTMLElement {
 			// Refresh the page to show updated state
 			window.location.reload();
 		} catch (error) {
-			console.error('Error leaving server:', error);
+			// console.error('Error leaving server:', error);
 			alert('Failed to leave server');
 		}
 	}

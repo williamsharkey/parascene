@@ -195,7 +195,7 @@ class AppModalPublish extends HTMLElement {
 				setTimeout(() => titleInput.focus(), 100);
 			}
 		} catch (error) {
-			console.error('Error loading creation:', error);
+			// console.error('Error loading creation:', error);
 			this.showAlert('Failed to load creation data', true);
 		}
 	}
@@ -312,7 +312,7 @@ class AppModalPublish extends HTMLElement {
 				await this.handlePublishSubmit(title, description);
 			}
 		} catch (error) {
-			console.error(`Error ${this._mode === 'edit' ? 'updating' : 'publishing'} creation:`, error);
+			// console.error(`Error ${this._mode === 'edit' ? 'updating' : 'publishing'} creation:`, error);
 			this.showAlert(error.message || `Failed to ${this._mode === 'edit' ? 'update' : 'publish'} creation. Please try again.`, true);
 
 			// Hide loading state
