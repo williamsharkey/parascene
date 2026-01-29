@@ -212,7 +212,7 @@ class AppModalCredits extends HTMLElement {
 
 			if (!response.ok) {
 				const error = await response.json();
-				console.error('Failed to claim credits:', error);
+				// console.error('Failed to claim credits:', error);
 				return;
 			}
 
@@ -236,7 +236,7 @@ class AppModalCredits extends HTMLElement {
 				}));
 			}
 		} catch (error) {
-			console.error('Error claiming credits:', error);
+			// console.error('Error claiming credits:', error);
 		} finally {
 			this._claimInFlight = false;
 			this.updateClaimUI();

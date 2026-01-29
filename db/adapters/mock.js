@@ -40,8 +40,8 @@ function ensureImagesDir() {
 	} catch (error) {
 		// If directory creation fails (e.g., on Vercel without /tmp access),
 		// log a warning but don't throw - images will be stored in memory only
-		console.warn(`Warning: Could not create images directory: ${error.message}`);
-		console.warn("Images will not be persisted to disk. Consider using Supabase adapter on Vercel.");
+		// console.warn(`Warning: Could not create images directory: ${error.message}`);
+		// console.warn("Images will not be persisted to disk. Consider using Supabase adapter on Vercel.");
 	}
 }
 
@@ -51,7 +51,7 @@ function ensureGenericImagesDir() {
 			fs.mkdirSync(genericImagesDir, { recursive: true });
 		}
 	} catch (error) {
-		console.warn(`Warning: Could not create generic images directory: ${error.message}`);
+		// console.warn(`Warning: Could not create generic images directory: ${error.message}`);
 	}
 }
 
@@ -516,24 +516,24 @@ export function openDb() {
 			run: async (serverId, userId) => {
 				const serverIdNum = Number(serverId);
 				const userIdNum = Number(userId);
-				
+
 				// Check if already a member
 				if (server_members.some(m => m.server_id === serverIdNum && m.user_id === userIdNum)) {
 					return { changes: 0 };
 				}
-				
+
 				server_members.push({
 					server_id: serverIdNum,
 					user_id: userIdNum,
 					created_at: new Date().toISOString()
 				});
-				
+
 				// Update members_count
 				const server = servers.find(s => s.id === serverIdNum);
 				if (server) {
 					server.members_count = (server.members_count || 0) + 1;
 				}
-				
+
 				return { changes: 1 };
 			}
 		},
@@ -544,19 +544,19 @@ export function openDb() {
 				const index = server_members.findIndex(
 					m => m.server_id === serverIdNum && m.user_id === userIdNum
 				);
-				
+
 				if (index === -1) {
 					return { changes: 0 };
 				}
-				
+
 				server_members.splice(index, 1);
-				
+
 				// Update members_count
 				const server = servers.find(s => s.id === serverIdNum);
 				if (server) {
 					server.members_count = Math.max(0, (server.members_count || 0) - 1);
 				}
-				
+
 				return { changes: 1 };
 			}
 		},
@@ -984,7 +984,7 @@ export function openDb() {
 				targetArray = user_follows;
 				break;
 			default:
-				console.warn(`Unknown table: ${tableName}`);
+				// console.warn(`Unknown table: ${tableName}`);
 				return;
 		}
 
@@ -1064,9 +1064,9 @@ export function openDb() {
 				// On Vercel or other read-only filesystems, we can't write files
 				// Return a URL anyway - the image data is stored in the database record
 				// The image won't be accessible via filesystem, but the database entry will exist
-				console.warn(`Warning: Could not write image file ${filename}: ${error.message}`);
-				console.warn("Image metadata will be stored, but file will not be persisted.");
-				console.warn("For production on Vercel, use Supabase adapter with SUPABASE_URL and SUPABASE_ANON_KEY.");
+				// console.warn(`Warning: Could not write image file ${filename}: ${error.message}`);
+				// console.warn("Image metadata will be stored, but file will not be persisted.");
+				// console.warn("For production on Vercel, use Supabase adapter with SUPABASE_URL and SUPABASE_ANON_KEY.");
 				// Return a URL that indicates the file isn't available
 				return `/images/created/${filename}`;
 			}

@@ -37,7 +37,7 @@ function ensureServersAuthTokenColumn(db) {
 			db.exec("ALTER TABLE servers ADD COLUMN auth_token TEXT");
 		}
 	} catch (error) {
-		console.warn("Failed to ensure auth_token column on servers:", error);
+		// console.warn("Failed to ensure auth_token column on servers:", error);
 	}
 }
 
@@ -394,7 +394,7 @@ export async function openDb() {
 						try {
 							serverConfig = JSON.parse(row.server_config);
 						} catch (e) {
-							console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+							// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 							serverConfig = null;
 						}
 					}
@@ -624,7 +624,7 @@ export async function openDb() {
 						try {
 							serverConfig = JSON.parse(row.server_config);
 						} catch (e) {
-							console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+							// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 							serverConfig = null;
 						}
 					}
@@ -664,7 +664,7 @@ export async function openDb() {
 					try {
 						serverConfig = JSON.parse(row.server_config);
 					} catch (e) {
-						console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+						// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 						serverConfig = null;
 					}
 				}

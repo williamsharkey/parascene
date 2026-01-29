@@ -387,7 +387,7 @@ class AppRouteCreations extends HTMLElement {
 				this.loadCreations({ force: true, background: !this.isRouteActive() });
 			}
 		} catch (error) {
-			console.error("Error checking for updates:", error);
+			// console.error("Error checking for updates:", error);
 		}
 	}
 
@@ -629,7 +629,7 @@ class AppRouteCreations extends HTMLElement {
 			});
 			this.hasLoadedOnce = true;
 		} catch (error) {
-			console.error("Error loading creations:", error);
+			// console.error("Error loading creations:", error);
 			container.innerHTML = html`
         <div class="route-empty route-empty-image-grid">Unable to load creations.</div>
       `;
@@ -645,7 +645,7 @@ class AppRouteCreations extends HTMLElement {
 		const args = meta && typeof meta.args === 'object' && meta.args ? meta.args : {};
 
 		if (!serverId || !method) {
-			console.warn('retryCreation: missing server_id or method in meta', meta);
+			// console.warn('retryCreation: missing server_id or method in meta', meta);
 			alert('Cannot retry this creation because its details are missing.');
 			return;
 		}
@@ -686,7 +686,7 @@ class AppRouteCreations extends HTMLElement {
 			// Reload list to pick up new creating row + updated credits.
 			await this.loadCreations({ force: true, background: false });
 		} catch (error) {
-			console.error('Error retrying creation:', error);
+			// console.error('Error retrying creation:', error);
 			alert('Failed to retry creation. Please try again.');
 		}
 	}
@@ -723,7 +723,7 @@ class AppRouteCreations extends HTMLElement {
 
 			await this.loadCreations({ force: true, background: false });
 		} catch (error) {
-			console.error('Error deleting creation from list view:', error);
+			// console.error('Error deleting creation from list view:', error);
 			alert('Failed to delete creation. Please try again.');
 		}
 	}

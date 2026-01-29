@@ -34,7 +34,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			const userId = req.auth?.userId;
 			const isOwner = userId && image.user_id === userId;
 			const isPublished = image.published === 1 || image.published === true;
-			
+
 			// Get user to check admin role
 			let isAdmin = false;
 			if (userId && !isOwner && !isPublished) {
@@ -58,7 +58,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
 			res.send(imageBuffer);
 		} catch (error) {
-			console.error("Error serving image:", error);
+			// console.error("Error serving image:", error);
 			if (error.message && error.message.includes("not found")) {
 				return res.status(404).json({ error: "Image not found" });
 			}
@@ -239,22 +239,17 @@ export default function createCreateRoutes({ queries, storage }) {
 				credits_remaining: updatedCredits?.balance ?? 0
 			});
 		} catch (error) {
-			console.error("Error initiating image creation:", error);
+			// console.error("Error initiating image creation:", error);
 			return res.status(500).json({ error: "Failed to initiate image creation", message: error.message });
 		}
 	});
 
 	router.post("/api/create/worker", async (req, res) => {
-		const shouldLogCreation = () => process.env.ENABLE_CREATION_LOGS === "true";
 		const logCreation = (...args) => {
-			if (shouldLogCreation()) {
-				console.log("[Creation]", ...args);
-			}
+			console.log("[Creation]", ...args);
 		};
 		const logCreationError = (...args) => {
-			if (shouldLogCreation()) {
-				console.error("[Creation]", ...args);
-			}
+			console.error("[Creation]", ...args);
 		};
 
 		try {
@@ -324,7 +319,7 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			return res.json({ images: imagesWithUrls });
 		} catch (error) {
-			console.error("Error fetching images:", error);
+			// console.error("Error fetching images:", error);
 			return res.status(500).json({ error: "Failed to fetch images" });
 		}
 	});
@@ -409,7 +404,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				} : null
 			});
 		} catch (error) {
-			console.error("Error fetching image:", error);
+			// console.error("Error fetching image:", error);
 			return res.status(500).json({ error: "Failed to fetch image" });
 		}
 	});
@@ -458,7 +453,7 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			return res.json({ ok: true });
 		} catch (error) {
-			console.error("Error retrying image:", error);
+			// console.error("Error retrying image:", error);
 			return res.status(500).json({ error: "Failed to retry image" });
 		}
 	});
@@ -535,7 +530,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				description: updatedImage.description
 			});
 		} catch (error) {
-			console.error("Error publishing image:", error);
+			// console.error("Error publishing image:", error);
 			return res.status(500).json({ error: "Failed to publish image" });
 		}
 	});
@@ -624,7 +619,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				description: updatedImage.description
 			});
 		} catch (error) {
-			console.error("Error updating image:", error);
+			// console.error("Error updating image:", error);
 			return res.status(500).json({ error: "Failed to update image" });
 		}
 	});
@@ -710,7 +705,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				description: updatedImage.description
 			});
 		} catch (error) {
-			console.error("Error unpublishing image:", error);
+			// console.error("Error unpublishing image:", error);
 			return res.status(500).json({ error: "Failed to unpublish image" });
 		}
 	});
@@ -754,7 +749,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				}
 			} catch (storageError) {
 				// Log but don't fail if file doesn't exist
-				console.warn(`Warning: Could not delete image file ${image.filename}:`, storageError.message);
+				// console.warn(`Warning: Could not delete image file ${image.filename}:`, storageError.message);
 			}
 
 			// Delete the database record
@@ -769,7 +764,7 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			return res.json({ success: true, message: "Image deleted successfully" });
 		} catch (error) {
-			console.error("Error deleting image:", error);
+			// console.error("Error deleting image:", error);
 			return res.status(500).json({ error: "Failed to delete image" });
 		}
 	});

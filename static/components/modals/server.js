@@ -137,7 +137,7 @@ class AppModalServer extends HTMLElement {
 
 	async open({ mode, serverId = null } = {}) {
 		if (!['add', 'edit', 'view'].includes(mode)) {
-			console.error('Invalid mode:', mode);
+			// console.error('Invalid mode:', mode);
 			return;
 		}
 
@@ -209,7 +209,7 @@ class AppModalServer extends HTMLElement {
 			const data = await response.json();
 			this.serverData = data.server;
 		} catch (error) {
-			console.error('Error loading server:', error);
+			// console.error('Error loading server:', error);
 			alert('Failed to load server details');
 			this.close();
 		}

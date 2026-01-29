@@ -648,7 +648,7 @@ async function loadCreation() {
 			actionsEl.classList.add('is-ready');
 		}
 	} catch (error) {
-		console.error("Error loading creation detail:", error);
+		// console.error("Error loading creation detail:", error);
 		detailContent.innerHTML = `
 			<div class="route-empty">
 				<div class="route-empty-title">Unable to load creation</div>
@@ -664,18 +664,18 @@ let lastCreationMeta = null;
 
 function checkAndLoadCreation() {
 	const creationId = getCreationId();
-	console.log('checkAndLoadCreation called, creationId:', creationId, 'currentCreationId:', currentCreationId);
+	// console.log('checkAndLoadCreation called, creationId:', creationId, 'currentCreationId:', currentCreationId);
 	// Only reload if the creation ID has changed
 	if (creationId && creationId !== currentCreationId) {
 		setActionsLoadingState();
-		console.log('Creation ID changed, loading new creation');
+		// console.log('Creation ID changed, loading new creation');
 		currentCreationId = creationId;
 		loadCreation();
 		// Reset scroll to top
 		window.scrollTo(0, 0);
 	} else if (!creationId && currentCreationId !== null) {
 		// If we're no longer on a creation detail page, reset
-		console.log('No longer on creation detail page');
+		// console.log('No longer on creation detail page');
 		currentCreationId = null;
 	}
 }
@@ -768,7 +768,7 @@ async function handleDelete() {
 		// Success - navigate to creations page
 		window.location.href = '/creations';
 	} catch (error) {
-		console.error('Error deleting creation:', error);
+		// console.error('Error deleting creation:', error);
 		alert(error.message || 'Failed to delete creation. Please try again.');
 
 		if (deleteBtn) {
@@ -889,7 +889,7 @@ async function handleRetry() {
 			const next = current.filter(item => item.id !== pendingId);
 			sessionStorage.setItem(pendingKey, JSON.stringify(next));
 			document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-			console.error('Error retrying creation:', error);
+			// console.error('Error retrying creation:', error);
 			alert(error.message || 'Failed to retry creation. Please try again.');
 		})
 		.finally(() => {
@@ -932,7 +932,7 @@ async function handleUnpublish() {
 		// Success - reload the page to show updated state
 		window.location.reload();
 	} catch (error) {
-		console.error('Error unpublishing creation:', error);
+		// console.error('Error unpublishing creation:', error);
 		alert(error.message || 'Failed to unpublish creation. Please try again.');
 
 		if (unpublishBtn) {
@@ -944,7 +944,7 @@ async function handleUnpublish() {
 // Listen for URL changes (browser back/forward navigation)
 // Use capture phase to ensure we get the event before header handles it
 window.addEventListener('popstate', (e) => {
-	console.log('popstate event fired', window.location.pathname);
+	// console.log('popstate event fired', window.location.pathname);
 	// Check if we're still on a creation detail page
 	const creationId = getCreationId();
 	if (creationId) {
@@ -954,12 +954,12 @@ window.addEventListener('popstate', (e) => {
 
 // Override pushState and replaceState to detect programmatic navigation
 history.pushState = function (...args) {
-	console.log('pushState called', args);
+	// console.log('pushState called', args);
 	originalPushState(...args);
 	// Check if URL changed to a different creation
 	setTimeout(() => {
 		const creationId = getCreationId();
-		console.log('After pushState, creationId:', creationId);
+		// console.log('After pushState, creationId:', creationId);
 		if (creationId) {
 			checkAndLoadCreation();
 		}
@@ -967,11 +967,11 @@ history.pushState = function (...args) {
 };
 
 history.replaceState = function (...args) {
-	console.log('replaceState called', args);
+	// console.log('replaceState called', args);
 	originalReplaceState(...args);
 	setTimeout(() => {
 		const creationId = getCreationId();
-		console.log('After replaceState, creationId:', creationId);
+		// console.log('After replaceState, creationId:', creationId);
 		if (creationId) {
 			checkAndLoadCreation();
 		}
@@ -980,7 +980,7 @@ history.replaceState = function (...args) {
 
 // Listen for the route-change event from the header component
 document.addEventListener('route-change', (e) => {
-	console.log('route-change event fired', e.detail?.route);
+	// console.log('route-change event fired', e.detail?.route);
 	const route = e.detail?.route;
 	if (route && route.startsWith('creations/')) {
 		setActionsLoadingState();

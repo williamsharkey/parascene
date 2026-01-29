@@ -4,26 +4,16 @@ const PROVIDER_TIMEOUT_MS = 50_000;
 const DEFAULT_WIDTH = 1024;
 const DEFAULT_HEIGHT = 1024;
 
-function shouldLogCreation() {
-	return process.env.ENABLE_CREATION_LOGS === "true";
-}
-
 function logCreation(...args) {
-	if (shouldLogCreation()) {
-		console.log("[Creation]", ...args);
-	}
+	console.log("[Creation]", ...args);
 }
 
 function logCreationError(...args) {
-	if (shouldLogCreation()) {
-		console.error("[Creation]", ...args);
-	}
+	console.error("[Creation]", ...args);
 }
 
 function logCreationWarn(...args) {
-	if (shouldLogCreation()) {
-		console.warn("[Creation]", ...args);
-	}
+	console.warn("[Creation]", ...args);
 }
 
 function parseMeta(raw) {
@@ -225,7 +215,7 @@ export async function runCreationJob({ queries, storage, payload }) {
 	const timestamp = Date.now();
 	const random = Math.random().toString(36).substring(2, 9);
 	const filename = `${userId}_${imageId}_${timestamp}_${random}.png`;
-	
+
 	const uploadStartTime = Date.now();
 	const imageUrl = await storage.uploadImage(imageBuffer, filename);
 	const uploadDuration = Date.now() - uploadStartTime;

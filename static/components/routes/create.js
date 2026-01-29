@@ -183,7 +183,7 @@ class AppRouteCreate extends HTMLElement {
 						try {
 							server.server_config = JSON.parse(server.server_config);
 						} catch (e) {
-							console.warn('Failed to parse server_config for server', server.id, e);
+							// console.warn('Failed to parse server_config for server', server.id, e);
 							server.server_config = null;
 						}
 					}
@@ -202,7 +202,7 @@ class AppRouteCreate extends HTMLElement {
 				}
 			}
 		} catch (error) {
-			console.error('Error loading servers:', error);
+			// console.error('Error loading servers:', error);
 		}
 	}
 
@@ -268,7 +268,7 @@ class AppRouteCreate extends HTMLElement {
 				serverConfig = JSON.parse(serverConfig);
 				this.selectedServer.server_config = serverConfig;
 			} catch (e) {
-				console.warn('Failed to parse server_config:', e);
+				// console.warn('Failed to parse server_config:', e);
 				methodGroup.style.display = 'none';
 				return;
 			}
@@ -325,7 +325,7 @@ class AppRouteCreate extends HTMLElement {
 				serverConfig = JSON.parse(serverConfig);
 				this.selectedServer.server_config = serverConfig;
 			} catch (e) {
-				console.warn('Failed to parse server_config:', e);
+				// console.warn('Failed to parse server_config:', e);
 				return;
 			}
 		}
@@ -524,13 +524,13 @@ class AppRouteCreate extends HTMLElement {
 				if (!isNaN(parsedCost)) {
 					cost = parsedCost;
 				} else {
-					console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
+					// console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
 				}
 			} else {
-				console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
+				// console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
 			}
 		} else {
-			console.warn('updateButtonState - No selectedMethod');
+			// console.warn('updateButtonState - No selectedMethod');
 		}
 
 		const hasEnoughCredits = this.creditsCount >= cost;
@@ -578,7 +578,7 @@ class AppRouteCreate extends HTMLElement {
 
 		// Validate required data
 		if (!this.selectedServer.id || !methodKey) {
-			console.error('Missing required data: server_id and method are required');
+			// console.error('Missing required data: server_id and method are required');
 			return;
 		}
 
@@ -664,7 +664,7 @@ class AppRouteCreate extends HTMLElement {
 				const next = current.filter(item => item.id !== pendingId);
 				sessionStorage.setItem(pendingKey, JSON.stringify(next));
 				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-				console.error("Error creating image:", error);
+				// console.error("Error creating image:", error);
 				// Refresh credits display in case of error
 				await this.loadCredits();
 			})

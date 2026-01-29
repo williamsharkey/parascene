@@ -35,15 +35,15 @@ function shouldLogStartup() {
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
-	console.error("Unhandled Promise Rejection:", reason);
+	// console.error("Unhandled Promise Rejection:", reason);
 	if (reason instanceof Error) {
-		console.error("Error stack:", reason.stack);
+		// console.error("Error stack:", reason.stack);
 	}
 	// Don't exit in production, but log the error
 	if (process.env.NODE_ENV === "production") {
-		console.error("Continuing in production mode...");
+		// console.error("Continuing in production mode...");
 	} else {
-		console.error("Exiting due to unhandled rejection in development");
+		// console.error("Exiting due to unhandled rejection in development");
 		process.exit(1);
 	}
 });
@@ -60,26 +60,26 @@ const staticDir = path.join(__dirname, "..", "static");
 let queries, storage;
 try {
 	if (shouldLogStartup()) {
-		console.log("[Startup] Initializing database...");
-		console.log("[Startup] Environment:", {
-			VERCEL: !!process.env.VERCEL,
-			NODE_ENV: process.env.NODE_ENV,
-			DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
-		});
+		// console.log("[Startup] Initializing database...");
+		// console.log("[Startup] Environment:", {
+		// 	VERCEL: !!process.env.VERCEL,
+		// 	NODE_ENV: process.env.NODE_ENV,
+		// 	DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
+		// });
 	}
 	const dbResult = await openDb();
 	queries = dbResult.queries;
 	storage = dbResult.storage;
 	if (shouldLogStartup()) {
-		console.log("[Startup] Database initialized successfully");
+		// console.log("[Startup] Database initialized successfully");
 	}
 } catch (error) {
 	if (shouldLogStartup()) {
-		console.error("[Startup] Failed to initialize database:", error);
-		console.error("[Startup] Error details:", error.message);
+		// console.error("[Startup] Failed to initialize database:", error);
+		// console.error("[Startup] Error details:", error.message);
 		if (error.message?.includes("Missing required env var")) {
-			console.error("\n[Startup] Please ensure all required environment variables are set.");
-			console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+			// console.error("\n[Startup] Please ensure all required environment variables are set.");
+			// console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
 		}
 	}
 	process.exit(1);
@@ -96,12 +96,12 @@ app.locals.storage = storage;
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
 	if (shouldLogSession()) {
-		console.log(`[Request] ${req.method} ${req.path}`, {
-			hasCookie: !!req.cookies?.[COOKIE_NAME],
-			cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
-			userAgent: req.get("user-agent")?.substring(0, 50),
-			referer: req.get("referer")
-		});
+		// console.log(`[Request] ${req.method} ${req.path}`, {
+		// 	hasCookie: !!req.cookies?.[COOKIE_NAME],
+		// 	cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
+		// 	userAgent: req.get("user-agent")?.substring(0, 50),
+		// 	referer: req.get("referer")
+		// });
 	}
 	next();
 });
@@ -132,23 +132,23 @@ app.use(async (err, req, res, next) => {
 	}
 
 	if (shouldLogSession()) {
-		console.log(
-			`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
-			`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
-			`error: ${err.message || "Unknown"}`
-		);
+		// console.log(
+		// 	`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
+		// 	`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
+		// 	`error: ${err.message || "Unknown"}`
+		// );
 	}
 
 	// Only clear cookie if one was actually sent in the request
 	// This prevents clearing cookies that weren't sent (e.g., due to SameSite issues)
 	if (req.cookies?.[COOKIE_NAME]) {
 		if (shouldLogSession()) {
-			console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
+			// console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
 		}
 		clearAuthCookie(res, req);
 	} else {
 		if (shouldLogSession()) {
-			console.log(`[ErrorHandler] No cookie present, skipping clear`);
+			// console.log(`[ErrorHandler] No cookie present, skipping clear`);
 		}
 	}
 
@@ -184,25 +184,25 @@ app.use(async (err, req, res, next) => {
 
 if (process.env.NODE_ENV !== "production") {
 	app.listen(port, () => {
-		console.log(`Parascene dev server running on http://localhost:${port}`);
+		// console.log(`Parascene dev server running on http://localhost:${port}`);
 	});
 }
 
 // Log startup completion
 if (shouldLogStartup()) {
-	console.log("[Startup] Express app configured and ready");
-	console.log("[Startup] Routes registered:", {
-		userRoutes: "✓",
-		adminRoutes: "✓",
-		feedRoutes: "✓",
-		exploreRoutes: "✓",
-		createRoutes: "✓",
-		creationsRoutes: "✓",
-		providerRoutes: "✓",
-		serversRoutes: "✓",
-		templatesRoutes: "✓",
-		pageRoutes: "✓"
-	});
+	// console.log("[Startup] Express app configured and ready");
+	// console.log("[Startup] Routes registered:", {
+	// 	userRoutes: "✓",
+	// 	adminRoutes: "✓",
+	// 	feedRoutes: "✓",
+	// 	exploreRoutes: "✓",
+	// 	createRoutes: "✓",
+	// 	creationsRoutes: "✓",
+	// 	providerRoutes: "✓",
+	// 	serversRoutes: "✓",
+	// 	templatesRoutes: "✓",
+	// 	pageRoutes: "✓"
+	// });
 }
 
 export default app;

@@ -213,11 +213,11 @@ export default function createProfileRoutes({ queries }) {
 		try {
 			await queries.insertUserCredits.run(userId, 100, null);
 		} catch (error) {
-			console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
-				error: error.message,
-				stack: error.stack,
-				name: error.name
-			});
+			// console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
+			// 	error: error.message,
+			// 	stack: error.stack,
+			// 	name: error.name
+			// });
 			// Don't fail signup if credits initialization fails
 		}
 
@@ -227,20 +227,20 @@ export default function createProfileRoutes({ queries }) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
 			if (shouldLogSession()) {
-				console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+				// console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
 			}
 			try {
 				await queries.insertSession.run(userId, tokenHash, expiresAt);
 				if (shouldLogSession()) {
-					console.log(`[Signup] Session created successfully for user ${userId}`);
+					// console.log(`[Signup] Session created successfully for user ${userId}`);
 				}
 			} catch (error) {
 				if (shouldLogSession()) {
-					console.error(`[Signup] Failed to create session for user ${userId}:`, {
-						error: error.message,
-						stack: error.stack,
-						name: error.name
-					});
+					// console.error(`[Signup] Failed to create session for user ${userId}:`, {
+					// 	error: error.message,
+					// 	stack: error.stack,
+					// 	name: error.name
+					// });
 				}
 				// Don't fail signup if session creation fails - cookie is still set
 			}
@@ -279,20 +279,20 @@ export default function createProfileRoutes({ queries }) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
 			if (shouldLogSession()) {
-				console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+				// console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
 			}
 			try {
 				await queries.insertSession.run(user.id, tokenHash, expiresAt);
 				if (shouldLogSession()) {
-					console.log(`[Login] Session created successfully for user ${user.id}`);
+					// console.log(`[Login] Session created successfully for user ${user.id}`);
 				}
 			} catch (error) {
 				if (shouldLogSession()) {
-					console.error(`[Login] Failed to create session for user ${user.id}:`, {
-						error: error.message,
-						stack: error.stack,
-						name: error.name
-					});
+					// console.error(`[Login] Failed to create session for user ${user.id}:`, {
+					// 	error: error.message,
+					// 	stack: error.stack,
+					// 	name: error.name
+					// });
 				}
 				// Don't fail login if session creation fails - cookie is still set
 			}
@@ -340,7 +340,7 @@ export default function createProfileRoutes({ queries }) {
 				await queries.insertUserCredits.run(req.auth.userId, 100, null);
 				credits = { balance: 100 };
 			} catch (error) {
-				console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
+				// console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
 				credits = { balance: 0 };
 			}
 		}
@@ -397,7 +397,7 @@ export default function createProfileRoutes({ queries }) {
 			const profile = normalizeProfileRow(updatedRow);
 			return res.json({ ok: true, profile });
 		} catch (error) {
-			console.error("Error updating profile:", error);
+			// console.error("Error updating profile:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -534,7 +534,7 @@ export default function createProfileRoutes({ queries }) {
 					try {
 						await storage.deleteGenericImage(key);
 					} catch (error) {
-						console.warn("Failed to delete previous profile image:", error?.message || error);
+						// console.warn("Failed to delete previous profile image:", error?.message || error);
 					}
 				}
 			}
@@ -547,7 +547,7 @@ export default function createProfileRoutes({ queries }) {
 			if (error?.code === "INVALID_JSON") {
 				return res.status(400).json({ error: error.message || "Invalid JSON" });
 			}
-			console.error("Error updating profile (multipart):", error);
+			// console.error("Error updating profile (multipart):", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -616,7 +616,7 @@ export default function createProfileRoutes({ queries }) {
 				viewer_follows: viewerFollows
 			});
 		} catch (error) {
-			console.error("Error loading user profile summary:", error);
+			// console.error("Error loading user profile summary:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -680,7 +680,7 @@ export default function createProfileRoutes({ queries }) {
 
 			return res.json({ images: mapped, is_self: isSelf, scope: isSelf && wantAll ? "all" : "published" });
 		} catch (error) {
-			console.error("Error loading user created images:", error);
+			// console.error("Error loading user created images:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -702,7 +702,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ notifications });
 		} catch (error) {
-			console.error("Error loading notifications:", error);
+			// console.error("Error loading notifications:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -724,7 +724,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ count: result?.count ?? 0 });
 		} catch (error) {
-			console.error("Error loading unread notification count:", error);
+			// console.error("Error loading unread notification count:", error);
 			return res.json({ count: 0 });
 		}
 	});
@@ -752,7 +752,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ ok: true, updated: result.changes });
 		} catch (error) {
-			console.error("Error acknowledging notification:", error);
+			// console.error("Error acknowledging notification:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -776,7 +776,7 @@ export default function createProfileRoutes({ queries }) {
 						lastClaimDate: null
 					});
 				} catch (error) {
-					console.error("Error initializing credits:", error);
+					// console.error("Error initializing credits:", error);
 					return res.status(500).json({ error: "Internal server error" });
 				}
 			}
@@ -797,7 +797,7 @@ export default function createProfileRoutes({ queries }) {
 				lastClaimDate: credits.last_daily_claim_at
 			});
 		} catch (error) {
-			console.error("Error loading credits:", error);
+			// console.error("Error loading credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -824,7 +824,7 @@ export default function createProfileRoutes({ queries }) {
 				message: "Daily credits claimed successfully"
 			});
 		} catch (error) {
-			console.error("Error claiming daily credits:", error);
+			// console.error("Error claiming daily credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -880,7 +880,7 @@ export default function createProfileRoutes({ queries }) {
 				if (isSelfTip) {
 					return res.status(400).json({ error: "Cannot tip yourself" });
 				}
-				console.error("Error transferring credits:", error);
+				// console.error("Error transferring credits:", error);
 				return res.status(500).json({ error: "Internal server error" });
 			}
 
@@ -893,7 +893,7 @@ export default function createProfileRoutes({ queries }) {
 					await queries.insertNotification.run(toUserId, null, title, message, null);
 				}
 			} catch (error) {
-				console.error("Failed to insert tip notification:", error);
+				// console.error("Failed to insert tip notification:", error);
 				// do not fail the transfer
 			}
 
@@ -916,7 +916,7 @@ export default function createProfileRoutes({ queries }) {
 				toBalance
 			});
 		} catch (error) {
-			console.error("Error tipping credits:", error);
+			// console.error("Error tipping credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});

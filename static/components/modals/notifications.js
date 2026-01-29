@@ -163,7 +163,7 @@ class AppModalNotifications extends HTMLElement {
 				acknowledge: this.isOpen() && this.viewMode === 'detail'
 			});
 		} catch (error) {
-			console.error('Error loading notifications:', error);
+			// console.error('Error loading notifications:', error);
 			if (content) {
 				content.innerHTML = html`<p style="color: var(--text-muted);">Failed to load notifications.</p>`;
 			}
@@ -196,7 +196,7 @@ class AppModalNotifications extends HTMLElement {
 				document.dispatchEvent(new CustomEvent('notifications-acknowledged'));
 			}
 		} catch (error) {
-			console.error('Error acknowledging notification:', error);
+			// console.error('Error acknowledging notification:', error);
 		}
 	}
 

@@ -4,20 +4,12 @@ function hasNonEmpty(value) {
 	return typeof value === "string" && value.trim().length > 0;
 }
 
-function shouldLogCreation() {
-	return process.env.ENABLE_CREATION_LOGS === "true";
-}
-
 function logCreation(...args) {
-	if (shouldLogCreation()) {
-		console.log("[Creation]", ...args);
-	}
+	console.log("[Creation]", ...args);
 }
 
 function logCreationError(...args) {
-	if (shouldLogCreation()) {
-		console.error("[Creation]", ...args);
-	}
+	console.error("[Creation]", ...args);
 }
 
 export async function scheduleCreationJob({ payload, runCreationJob, log = console }) {

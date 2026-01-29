@@ -2,20 +2,12 @@ import { Receiver } from "@upstash/qstash";
 
 let receiverInstance = null;
 
-function shouldLogCreation() {
-	return process.env.ENABLE_CREATION_LOGS === "true";
-}
-
 function logCreation(...args) {
-	if (shouldLogCreation()) {
-		console.log("[Creation]", ...args);
-	}
+	console.log("[Creation]", ...args);
 }
 
 function logCreationError(...args) {
-	if (shouldLogCreation()) {
-		console.error("[Creation]", ...args);
-	}
+	console.error("[Creation]", ...args);
 }
 
 function getReceiver() {
@@ -38,7 +30,6 @@ function getReceiver() {
 			nextSigningKey: nextSigningKey || undefined,
 		});
 	}
-
 	return receiverInstance;
 }
 
@@ -56,13 +47,8 @@ export async function verifyQStashRequest(req) {
 	}
 
 	const body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-	const protocol = req.protocol || "https";
-	const host = req.get("host");
-	const originalUrl = req.originalUrl || req.url;
-	const url = `${protocol}://${host}${originalUrl}`;
 
 	logCreation("Verifying QStash signature", {
-		url,
 		has_body: !!body,
 		body_length: body?.length || 0,
 		signature_length: signature?.length || 0
@@ -72,7 +58,6 @@ export async function verifyQStashRequest(req) {
 		await receiver.verify({
 			body,
 			signature,
-			url,
 		});
 		logCreation("QStash signature verified successfully");
 		return true;
