@@ -93,6 +93,23 @@ app.use(cookieParser());
 // Make storage accessible to routes that need it.
 app.locals.storage = storage;
 
+// CRITICAL: Log ALL requests to worker endpoint at the very top to diagnose if requests reach Express
+app.use((req, res, next) => {
+	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
+		console.log("[Worker] Request received at Express level", {
+			method: req.method,
+			path: req.path,
+			originalUrl: req.originalUrl,
+			userAgent: req.get("user-agent"),
+			hasBody: !!req.body,
+			headers: {
+				upstash_signature: req.get("Upstash-Signature") || req.get("upstash-signature") || "missing",
+			}
+		});
+	}
+	next();
+});
+
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
 	if (shouldLogSession()) {
@@ -108,7 +125,8 @@ app.use((req, res, next) => {
 
 // Skip auth middleware for QStash worker endpoint - it uses signature verification instead
 app.use((req, res, next) => {
-	if (req.path === "/api/create/worker") {
+	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
+		console.log("[Worker] Skipping auth middleware");
 		return next();
 	}
 	return authMiddleware()(req, res, next);
@@ -137,30 +155,27 @@ app.use(async (err, req, res, next) => {
 		return next(err);
 	}
 
-	if (shouldLogSession()) {
-		// console.log(
-		// 	`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
-		// 	`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
-		// 	`error: ${err.message || "Unknown"}`
-		// );
+	// Skip 401 for QStash worker endpoint - it handles its own authentication
+	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
+		console.log("[Worker] UnauthorizedError caught but skipping 401 for worker endpoint", {
+			path: req.path,
+			originalUrl: req.originalUrl,
+			error: err.message
+		});
+		return next(err);
 	}
+
+	console.log("[ErrorHandler] UnauthorizedError", {
+		path: req.path,
+		originalUrl: req.originalUrl,
+		hasCookie: !!req.cookies?.[COOKIE_NAME],
+		error: err.message
+	});
 
 	// Only clear cookie if one was actually sent in the request
 	// This prevents clearing cookies that weren't sent (e.g., due to SameSite issues)
 	if (req.cookies?.[COOKIE_NAME]) {
-		if (shouldLogSession()) {
-			// console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
-		}
 		clearAuthCookie(res, req);
-	} else {
-		if (shouldLogSession()) {
-			// console.log(`[ErrorHandler] No cookie present, skipping clear`);
-		}
-	}
-
-	// Skip 401 for QStash worker endpoint - it handles its own authentication
-	if (req.path === "/api/create/worker") {
-		return next(err);
 	}
 
 	if (req.path.startsWith("/api/") || req.path === "/me") {

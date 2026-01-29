@@ -245,6 +245,11 @@ export default function createCreateRoutes({ queries, storage }) {
 	});
 
 	router.post("/api/create/worker", async (req, res) => {
+		// Disable caching for this endpoint - QStash webhooks should never be cached
+		res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+		res.setHeader("Pragma", "no-cache");
+		res.setHeader("Expires", "0");
+
 		const logCreation = (...args) => {
 			console.log("[Creation]", ...args);
 		};
@@ -256,7 +261,10 @@ export default function createCreateRoutes({ queries, storage }) {
 			logCreation("Worker endpoint called", {
 				has_body: !!req.body,
 				created_image_id: req.body?.created_image_id,
-				user_id: req.body?.user_id
+				user_id: req.body?.user_id,
+				path: req.path,
+				originalUrl: req.originalUrl,
+				method: req.method
 			});
 
 			if (!process.env.UPSTASH_QSTASH_TOKEN) {
