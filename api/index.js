@@ -106,7 +106,13 @@ app.use((req, res, next) => {
 	next();
 });
 
-app.use(authMiddleware());
+// Skip auth middleware for QStash worker endpoint - it uses signature verification instead
+app.use((req, res, next) => {
+	if (req.path === "/api/create/worker") {
+		return next();
+	}
+	return authMiddleware()(req, res, next);
+});
 app.use(sessionMiddleware(queries));
 app.use(probabilisticSessionCleanup(queries));
 app.use(createUserRoutes({ queries }));
@@ -150,6 +156,11 @@ app.use(async (err, req, res, next) => {
 		if (shouldLogSession()) {
 			// console.log(`[ErrorHandler] No cookie present, skipping clear`);
 		}
+	}
+
+	// Skip 401 for QStash worker endpoint - it handles its own authentication
+	if (req.path === "/api/create/worker") {
+		return next(err);
 	}
 
 	if (req.path.startsWith("/api/") || req.path === "/me") {
