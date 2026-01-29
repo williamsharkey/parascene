@@ -5,15 +5,17 @@ function hasNonEmpty(value) {
 }
 
 export async function scheduleCreationJob({ payload, runCreationJob, log = console }) {
-	// Cloud: enqueue via QStash only when running on Vercel AND token is set.
 	const qstashToken = process.env.UPSTASH_QSTASH_TOKEN;
 	const isVercel = !!process.env.VERCEL;
 
+	// cloud: enqueue via QStash
+	if (isVercel && !hasNonEmpty(qstashToken)) {
+		throw new Error("QStash token is required on Vercel. Set UPSTASH_QSTASH_TOKEN environment variable.");
+	}
 	if (isVercel && hasNonEmpty(qstashToken)) {
 		const callbackUrl = new URL("/api/create/worker", getBaseAppUrl()).toString();
-		const publishUrl = `https://qstash.upstash.io/v2/publish/${callbackUrl}`;
-
-		console.log(`scheduleCreationJob: ${publishUrl}`);
+		const qstashBaseUrl = process.env.UPSTASH_QSTASH_URL;
+		const publishUrl = `${qstashBaseUrl}/v2/publish/${callbackUrl}`;
 
 		const res = await fetch(publishUrl, {
 			method: "POST",
@@ -33,7 +35,6 @@ export async function scheduleCreationJob({ payload, runCreationJob, log = conso
 	}
 
 	// Local: fire-and-forget in-process.
-	console.log("scheduleCreationJob: local, running job inline", payload);
 	queueMicrotask(() => {
 		Promise.resolve(runCreationJob({ payload })).catch((err) => {
 			log.error("runCreationJob failed:", err);

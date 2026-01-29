@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { getThumbnailUrl } from "./utils/url.js";
 import { runCreationJob, PROVIDER_TIMEOUT_MS } from "./utils/creationJob.js";
 import { scheduleCreationJob } from "./utils/scheduleCreationJob.js";
+import { verifyQStashRequest } from "./utils/qstashVerification.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -227,16 +228,15 @@ export default function createCreateRoutes({ queries, storage }) {
 		}
 	});
 
-	// POST /api/create/worker - Worker callback (QStash or internal)
 	router.post("/api/create/worker", async (req, res) => {
 		try {
-			// If QStash is configured, require an explicit worker secret to avoid exposing this endpoint.
-			if (process.env.UPSTASH_QSTASH_TOKEN) {
-				const requiredSecret = process.env.CREATE_WORKER_SECRET;
-				const provided = req.get("x-worker-secret");
-				if (!requiredSecret || provided !== requiredSecret) {
-					return res.status(401).json({ error: "Unauthorized" });
-				}
+			if (!process.env.UPSTASH_QSTASH_TOKEN) {
+				return res.status(503).json({ error: "QStash not configured" });
+			}
+
+			const isValid = await verifyQStashRequest(req);
+			if (!isValid) {
+				return res.status(401).json({ error: "Invalid QStash signature" });
 			}
 
 			await runCreationJob({ queries, storage, payload: req.body });
