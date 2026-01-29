@@ -106,23 +106,6 @@ app.use(cookieParser());
 // Make storage accessible to routes that need it.
 app.locals.storage = storage;
 
-// CRITICAL: Log ALL requests to worker endpoint at the very top to diagnose if requests reach Express
-app.use((req, res, next) => {
-	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
-		console.log("[Worker] Request received at Express level", {
-			method: req.method,
-			path: req.path,
-			originalUrl: req.originalUrl,
-			userAgent: req.get("user-agent"),
-			hasBody: !!req.body,
-			headers: {
-				upstash_signature: req.get("Upstash-Signature") || req.get("upstash-signature") || "missing",
-			}
-		});
-	}
-	next();
-});
-
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
 	if (shouldLogSession()) {
@@ -136,14 +119,7 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Skip auth middleware for QStash worker endpoint - it uses signature verification instead
-app.use((req, res, next) => {
-	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
-		console.log("[Worker] Skipping auth middleware");
-		return next();
-	}
-	return authMiddleware()(req, res, next);
-});
+app.use(authMiddleware());
 app.use(sessionMiddleware(queries));
 app.use(probabilisticSessionCleanup(queries));
 app.use(createUserRoutes({ queries }));
@@ -165,16 +141,6 @@ app.use(createTodoRoutes());
 
 app.use(async (err, req, res, next) => {
 	if (err?.name !== "UnauthorizedError") {
-		return next(err);
-	}
-
-	// Skip 401 for QStash worker endpoint - it handles its own authentication
-	if (req.path === "/api/create/worker" || req.originalUrl === "/api/create/worker") {
-		console.log("[Worker] UnauthorizedError caught but skipping 401 for worker endpoint", {
-			path: req.path,
-			originalUrl: req.originalUrl,
-			error: err.message
-		});
 		return next(err);
 	}
 

@@ -2,13 +2,17 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/api/worker/create",
+      "destination": "/api/worker/create"
+    },
+    {
       "source": "/(.*)",
       "destination": "/api/index"
     }
   ],
   "headers": [
     {
-      "source": "/api/create/worker",
+      "source": "/api/worker/create",
       "headers": [
         {
           "key": "Cache-Control",
@@ -29,6 +33,9 @@
     "api/index.js": {
       "maxDuration": 60,
       "includeFiles": "_docs/**"
+    },
+    "api/worker/create.js": {
+      "maxDuration": 60
     }
   }
 }

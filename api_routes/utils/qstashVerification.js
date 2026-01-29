@@ -48,8 +48,10 @@ export async function verifyQStashRequest(req) {
 		return false;
 	}
 
-	const upstashHeader = req.get("Upstash-Signature");
-	const lowercaseHeader = req.get("upstash-signature");
+	// Support both Express req objects (with .get()) and Vercel native req objects (with headers object)
+	const headers = req.headers || {};
+	const upstashHeader = req.get ? req.get("Upstash-Signature") : headers["Upstash-Signature"];
+	const lowercaseHeader = req.get ? req.get("upstash-signature") : headers["upstash-signature"];
 	const signature = upstashHeader || lowercaseHeader;
 	if (!signature) {
 		logCreationError("QStash verification failed: No signature header", {
@@ -60,9 +62,10 @@ export async function verifyQStashRequest(req) {
 	}
 
 	const body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+	const path = req.originalUrl || req.url || "/api/worker/create";
 
 	logCreation("Verifying QStash signature", {
-		path: req.originalUrl,
+		path,
 		has_body: !!body,
 		body_length: body?.length || 0,
 		signature_length: signature?.length || 0,
@@ -79,7 +82,7 @@ export async function verifyQStashRequest(req) {
 		logCreationError("QStash signature verification failed", {
 			error: err.message,
 			error_type: err.constructor.name,
-			path: req.originalUrl,
+			path,
 		});
 		return false;
 	}
