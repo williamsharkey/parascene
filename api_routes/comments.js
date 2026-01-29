@@ -138,123 +138,123 @@ export default function createCommentsRoutes({ queries }) {
 			if (!Number.isFinite(ownerUserId) || ownerUserId <= 0) {
 				// If this happens, the created_images row is missing/invalid.
 				// console.warn("[Comments] Skipping comment email: invalid owner user_id on image", {
-				imageId,
-					ownerUserId: image?.user_id ?? null
-			});
-} else if (ownerUserId === Number(user.id)) {
-	// We don't email you about your own comments.
-	// console.log("[Comments] Skipping comment email: self-comment", { imageId, ownerUserId });
-} else {
-	const owner = await queries.selectUserById?.get(ownerUserId);
-	if (!owner) {
-		// Owner record missing (data integrity issue).
-		// console.warn("[Comments] Skipping comment email: owner user not found", { imageId, ownerUserId });
-	} else {
-		const ownerEmail = String(owner?.email || "").trim();
-		if (!ownerEmail) {
-			// No email on file → cannot deliver.
-			// console.warn("[Comments] Skipping comment email: owner has no email address", {
-			// 	imageId,
-			// 	ownerUserId
-			// });
-		} else {
-			const ownerEmailLower = ownerEmail.toLowerCase();
-			const shouldSuppress = ownerEmailLower.includes("example.com");
-			if (!process.env.RESEND_API_KEY || !process.env.RESEND_SYSTEM_EMAIL) {
-				// Most common local/dev issue: missing env vars.
-				// console.warn("[Comments] Skipping comment email: Resend env missing", {
 				// 	imageId,
-				// 	ownerUserId,
-				// 	hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
-				// 	hasResendSystemEmail: Boolean(process.env.RESEND_SYSTEM_EMAIL)
+				// 		ownerUserId: image?.user_id ?? null
 				// });
-			} else if (shouldSuppress) {
-				// console.log("[Comments] Sending delegated comment email: suppressed domain match (example.com)", {
-				// 	imageId,
-				// 	ownerUserId,
-				// 	ownerEmailDomain: ownerEmailLower.split("@")[1] || null
-				// });
-
-				const baseUrl = getBaseAppUrl();
-				const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
-				const creationUrl = new URL(creationPath, baseUrl).toString();
-				const commenterName = getUserDisplayName(user);
-				const recipientName = getUserDisplayName(owner);
-				const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
-
-				await sendDelegatedEmail({
-					template: "commentReceived",
-					reason: "Suppressed domain match (example.com)",
-					originalRecipient: {
-						name: recipientName,
-						email: ownerEmail,
-						userId: ownerUserId
-					},
-					data: {
-						recipientName,
-						commenterName,
-						commentText: text,
-						creationTitle,
-						creationUrl
-					}
-				});
+			} else if (ownerUserId === Number(user.id)) {
+				// We don't email you about your own comments.
+				// console.log("[Comments] Skipping comment email: self-comment", { imageId, ownerUserId });
 			} else {
-				const baseUrl = getBaseAppUrl();
-				const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
-				const creationUrl = new URL(creationPath, baseUrl).toString();
-				const commenterName = getUserDisplayName(user);
-				const recipientName = getUserDisplayName(owner);
-				const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
+				const owner = await queries.selectUserById?.get(ownerUserId);
+				if (!owner) {
+					// Owner record missing (data integrity issue).
+					// console.warn("[Comments] Skipping comment email: owner user not found", { imageId, ownerUserId });
+				} else {
+					const ownerEmail = String(owner?.email || "").trim();
+					if (!ownerEmail) {
+						// No email on file → cannot deliver.
+						// console.warn("[Comments] Skipping comment email: owner has no email address", {
+						// 	imageId,
+						// 	ownerUserId
+						// });
+					} else {
+						const ownerEmailLower = ownerEmail.toLowerCase();
+						const shouldSuppress = ownerEmailLower.includes("example.com");
+						if (!process.env.RESEND_API_KEY || !process.env.RESEND_SYSTEM_EMAIL) {
+							// Most common local/dev issue: missing env vars.
+							// console.warn("[Comments] Skipping comment email: Resend env missing", {
+							// 	imageId,
+							// 	ownerUserId,
+							// 	hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+							// 	hasResendSystemEmail: Boolean(process.env.RESEND_SYSTEM_EMAIL)
+							// });
+						} else if (shouldSuppress) {
+							// console.log("[Comments] Sending delegated comment email: suppressed domain match (example.com)", {
+							// 	imageId,
+							// 	ownerUserId,
+							// 	ownerEmailDomain: ownerEmailLower.split("@")[1] || null
+							// });
 
-				// console.log("[Comments] Sending comment notification email", {
-				// 	// ownerEmail,
-				// 	recipientName,
-				// 	commenterName,
-				// 	commentText: text,
-				// 	creationTitle,
-				// });
-				await sendTemplatedEmail({
-					to: ownerEmail,
-					template: "commentReceived",
-					data: {
-						recipientName,
-						commenterName,
-						commentText: text,
-						creationTitle,
-						creationUrl
+							const baseUrl = getBaseAppUrl();
+							const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
+							const creationUrl = new URL(creationPath, baseUrl).toString();
+							const commenterName = getUserDisplayName(user);
+							const recipientName = getUserDisplayName(owner);
+							const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
+
+							await sendDelegatedEmail({
+								template: "commentReceived",
+								reason: "Suppressed domain match (example.com)",
+								originalRecipient: {
+									name: recipientName,
+									email: ownerEmail,
+									userId: ownerUserId
+								},
+								data: {
+									recipientName,
+									commenterName,
+									commentText: text,
+									creationTitle,
+									creationUrl
+								}
+							});
+						} else {
+							const baseUrl = getBaseAppUrl();
+							const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
+							const creationUrl = new URL(creationPath, baseUrl).toString();
+							const commenterName = getUserDisplayName(user);
+							const recipientName = getUserDisplayName(owner);
+							const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
+
+							// console.log("[Comments] Sending comment notification email", {
+							// 	// ownerEmail,
+							// 	recipientName,
+							// 	commenterName,
+							// 	commentText: text,
+							// 	creationTitle,
+							// });
+							await sendTemplatedEmail({
+								to: ownerEmail,
+								template: "commentReceived",
+								data: {
+									recipientName,
+									commenterName,
+									commentText: text,
+									creationTitle,
+									creationUrl
+								}
+							});
+						}
 					}
-				});
+				}
 			}
-		}
-	}
-}
 		} catch (error) {
-	// This catch exists so comment posting still succeeds even if email fails.
-	// Common causes:
-	// - Missing/invalid Resend env (RESEND_API_KEY / RESEND_SYSTEM_EMAIL)
-	// - Resend API error / rate limit
-	// - Invalid recipient address
-	// console.warn("[Comments] Failed to send comment notification email:", {
-	// 	imageId,
-	// 	commenterUserId: user?.id ?? null,
-	// 	error: error?.message || String(error)
-	// });
-}
+			// This catch exists so comment posting still succeeds even if email fails.
+			// Common causes:
+			// - Missing/invalid Resend env (RESEND_API_KEY / RESEND_SYSTEM_EMAIL)
+			// - Resend API error / rate limit
+			// - Invalid recipient address
+			// console.warn("[Comments] Failed to send comment notification email:", {
+			// 	imageId,
+			// 	commenterUserId: user?.id ?? null,
+			// 	error: error?.message || String(error)
+			// });
+		}
 
-let commentCount = null;
-try {
-	const countRow = await queries.selectCreatedImageCommentCount?.get(imageId);
-	commentCount = Number(countRow?.comment_count ?? 0);
-} catch {
-	// ignore count failures
-}
+		let commentCount = null;
+		try {
+			const countRow = await queries.selectCreatedImageCommentCount?.get(imageId);
+			commentCount = Number(countRow?.comment_count ?? 0);
+		} catch {
+			// ignore count failures
+		}
 
-return res.json({
-	comment,
-	comment_count: commentCount
-});
+		return res.json({
+			comment,
+			comment_count: commentCount
+		});
 	});
 
-return router;
+	return router;
 }
 

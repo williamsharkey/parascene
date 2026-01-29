@@ -1847,27 +1847,27 @@ export function openDb() {
 
 			if (error) {
 				// console.error("Supabase image fetch failed, serving fallback image.", {
-				bucket,
-					filename,
-					variant: options?.variant ?? null,
-						error: error?.message ?? error
-			});
-			return sharp({
-				create: {
-					width: 250,
-					height: 250,
-					channels: 3,
-					background: "#b0b0b0"
-				}
-			})
-				.png()
-				.toBuffer();
-		}
+				// 	bucket,
+				// 		filename,
+				// 		variant: options?.variant ?? null,
+				// 			error: error?.message ?? error
+				// });
+				return sharp({
+					create: {
+						width: 250,
+						height: 250,
+						channels: 3,
+						background: "#b0b0b0"
+					}
+				})
+					.png()
+					.toBuffer();
+			}
 
 			// Convert blob to buffer
 			const arrayBuffer = await data.arrayBuffer();
-		return Buffer.from(arrayBuffer);
-	},
+			return Buffer.from(arrayBuffer);
+		},
 
 		getGenericImageBuffer: async (key) => {
 			const objectKey = String(key || "");
@@ -1884,73 +1884,73 @@ export function openDb() {
 			return Buffer.from(arrayBuffer);
 		},
 
-			uploadGenericImage: async (buffer, key, options = {}) => {
-				const objectKey = String(key || "");
-				if (!objectKey) {
-					throw new Error("Invalid key");
+		uploadGenericImage: async (buffer, key, options = {}) => {
+			const objectKey = String(key || "");
+			if (!objectKey) {
+				throw new Error("Invalid key");
+			}
+			const contentType = String(options?.contentType || "application/octet-stream");
+			const { error } = await storageClient.storage
+				.from(GENERIC_BUCKET)
+				.upload(objectKey, buffer, { contentType, upsert: true });
+			if (error) {
+				throw new Error(`Failed to upload generic image: ${error.message}`);
+			}
+			return objectKey;
+		},
+
+		deleteGenericImage: async (key) => {
+			const objectKey = String(key || "");
+			if (!objectKey) return;
+			const { error } = await storageClient.storage
+				.from(GENERIC_BUCKET)
+				.remove([objectKey]);
+			if (error && error.message && !error.message.toLowerCase().includes("not found")) {
+				throw new Error(`Failed to delete generic image: ${error.message}`);
+			}
+		},
+
+		deleteImage: async (filename) => {
+			// Use storage client (service role if available) for deletes
+			const { error } = await storageClient.storage
+				.from(STORAGE_BUCKET)
+				.remove([filename]);
+
+			if (error) {
+				// Don't throw if file doesn't exist
+				if (error.message && !error.message.includes("not found")) {
+					throw new Error(`Failed to delete image from Supabase Storage: ${error.message}`);
 				}
-				const contentType = String(options?.contentType || "application/octet-stream");
-				const { error } = await storageClient.storage
-					.from(GENERIC_BUCKET)
-					.upload(objectKey, buffer, { contentType, upsert: true });
-				if (error) {
-					throw new Error(`Failed to upload generic image: ${error.message}`);
+			}
+		},
+
+		clearAll: async () => {
+			// Use storage client (service role if available) for admin operations
+			// List all files in the bucket
+			const { data: files, error: listError } = await storageClient.storage
+				.from(STORAGE_BUCKET)
+				.list();
+
+			if (listError) {
+				// If bucket doesn't exist, that's okay - nothing to clear
+				if (listError.message && listError.message.includes("not found")) {
+					return;
 				}
-				return objectKey;
-			},
+				throw new Error(`Failed to list images in Supabase Storage: ${listError.message}`);
+			}
 
-				deleteGenericImage: async (key) => {
-					const objectKey = String(key || "");
-					if (!objectKey) return;
-					const { error } = await storageClient.storage
-						.from(GENERIC_BUCKET)
-						.remove([objectKey]);
-					if (error && error.message && !error.message.toLowerCase().includes("not found")) {
-						throw new Error(`Failed to delete generic image: ${error.message}`);
-					}
-				},
+			if (files && files.length > 0) {
+				const fileNames = files.map(file => file.name);
+				const { error: deleteError } = await storageClient.storage
+					.from(STORAGE_BUCKET)
+					.remove(fileNames);
 
-					deleteImage: async (filename) => {
-						// Use storage client (service role if available) for deletes
-						const { error } = await storageClient.storage
-							.from(STORAGE_BUCKET)
-							.remove([filename]);
+				if (deleteError) {
+					throw new Error(`Failed to clear images from Supabase Storage: ${deleteError.message}`);
+				}
+			}
+		}
+	};
 
-						if (error) {
-							// Don't throw if file doesn't exist
-							if (error.message && !error.message.includes("not found")) {
-								throw new Error(`Failed to delete image from Supabase Storage: ${error.message}`);
-							}
-						}
-					},
-
-						clearAll: async () => {
-							// Use storage client (service role if available) for admin operations
-							// List all files in the bucket
-							const { data: files, error: listError } = await storageClient.storage
-								.from(STORAGE_BUCKET)
-								.list();
-
-							if (listError) {
-								// If bucket doesn't exist, that's okay - nothing to clear
-								if (listError.message && listError.message.includes("not found")) {
-									return;
-								}
-								throw new Error(`Failed to list images in Supabase Storage: ${listError.message}`);
-							}
-
-							if (files && files.length > 0) {
-								const fileNames = files.map(file => file.name);
-								const { error: deleteError } = await storageClient.storage
-									.from(STORAGE_BUCKET)
-									.remove(fileNames);
-
-								if (deleteError) {
-									throw new Error(`Failed to clear images from Supabase Storage: ${deleteError.message}`);
-								}
-							}
-						}
-};
-
-return { db, queries, seed, reset, storage };
+	return { db, queries, seed, reset, storage };
 }
