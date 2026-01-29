@@ -208,6 +208,7 @@ CREATE OR REPLACE FUNCTION prsn_transfer_credits(
 )
 RETURNS TABLE(from_balance double precision, to_balance double precision)
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
   sender_balance double precision;
@@ -225,17 +226,17 @@ BEGIN
   END IF;
 
   -- Ensure both users have a credits row
-  INSERT INTO prsn_user_credits (user_id, balance)
+  INSERT INTO public.prsn_user_credits (user_id, balance)
     VALUES (from_user_id, 0)
     ON CONFLICT (user_id) DO NOTHING;
-  INSERT INTO prsn_user_credits (user_id, balance)
+  INSERT INTO public.prsn_user_credits (user_id, balance)
     VALUES (to_user_id, 0)
     ON CONFLICT (user_id) DO NOTHING;
 
   -- Lock sender row to prevent concurrent overdrafts
   SELECT balance
     INTO sender_balance
-    FROM prsn_user_credits
+    FROM public.prsn_user_credits
     WHERE user_id = from_user_id
     FOR UPDATE;
 
@@ -243,21 +244,36 @@ BEGIN
     RAISE EXCEPTION 'insufficient credits';
   END IF;
 
-  UPDATE prsn_user_credits
+  UPDATE public.prsn_user_credits
     SET balance = balance - amount,
         updated_at = now()
     WHERE user_id = from_user_id;
 
-  UPDATE prsn_user_credits
+  UPDATE public.prsn_user_credits
     SET balance = balance + amount,
         updated_at = now()
     WHERE user_id = to_user_id;
 
   RETURN QUERY
     SELECT
-      (SELECT balance FROM prsn_user_credits WHERE user_id = from_user_id),
-      (SELECT balance FROM prsn_user_credits WHERE user_id = to_user_id);
+      (SELECT balance FROM public.prsn_user_credits WHERE user_id = from_user_id),
+      (SELECT balance FROM public.prsn_user_credits WHERE user_id = to_user_id);
 END;
+$$;
+
+-- Hardening: if Supabase's helper trigger exists, pin its search_path too (addresses Security Advisor warning).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'update_updated_at_column'
+  ) THEN
+    EXECUTE 'ALTER FUNCTION public.update_updated_at_column() SET search_path TO ''pg_catalog, public''';
+  END IF;
+END
 $$;
 
 
@@ -290,18 +306,18 @@ ALTER TABLE prsn_likes_created_image ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE prsn_likes_created_image IS 'Parascene: user likes on created images. RLS enabled without policies - only service role can access. All access controlled via API layer.';
 
 -- View: aggregated like counts per created image
-CREATE OR REPLACE VIEW prsn_created_image_like_counts
-  WITH (security_invoker = true) AS
-  SELECT
-    created_image_id,
-    COUNT(*)::bigint AS like_count
-  FROM prsn_likes_created_image
-  GROUP BY created_image_id;
-COMMENT ON VIEW prsn_created_image_like_counts IS 'Parascene: aggregated like counts per created image. RLS enabled with restrictive policy - only service role can access. All access controlled via API layer.';
-CREATE POLICY "Service role only - like counts" ON prsn_created_image_like_counts
-  FOR ALL
-  USING (false)
-  WITH CHECK (false);
+DROP VIEW IF EXISTS public.prsn_created_image_like_counts;
+CREATE VIEW public.prsn_created_image_like_counts
+SECURITY INVOKER
+AS
+SELECT
+  created_image_id,
+  COUNT(*)::bigint AS like_count
+FROM public.prsn_likes_created_image
+GROUP BY created_image_id;
+COMMENT ON VIEW public.prsn_created_image_like_counts IS 'Parascene: aggregated like counts per created image. SECURITY INVOKER view; access restricted via grants. All access controlled via API layer.';
+REVOKE ALL ON TABLE public.prsn_created_image_like_counts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.prsn_created_image_like_counts TO service_role;
 
 
 -- Comments on created images
@@ -321,15 +337,15 @@ ALTER TABLE prsn_comments_created_image ENABLE ROW LEVEL SECURITY;
 COMMENT ON TABLE prsn_comments_created_image IS 'Parascene: user comments on created images. RLS enabled without policies - only service role can access. All access controlled via API layer.';
 
 -- View: aggregated comment counts per created image
-CREATE OR REPLACE VIEW prsn_created_image_comment_counts
-  WITH (security_invoker = true) AS
-  SELECT
-    created_image_id,
-    COUNT(*)::bigint AS comment_count
-  FROM prsn_comments_created_image
-  GROUP BY created_image_id;
-COMMENT ON VIEW prsn_created_image_comment_counts IS 'Parascene: aggregated comment counts per created image. RLS enabled with restrictive policy - only service role can access. All access controlled via API layer.';
-CREATE POLICY "Service role only - comment counts" ON prsn_created_image_comment_counts
-  FOR ALL
-  USING (false)
-  WITH CHECK (false);
+DROP VIEW IF EXISTS public.prsn_created_image_comment_counts;
+CREATE VIEW public.prsn_created_image_comment_counts
+SECURITY INVOKER
+AS
+SELECT
+  created_image_id,
+  COUNT(*)::bigint AS comment_count
+FROM public.prsn_comments_created_image
+GROUP BY created_image_id;
+COMMENT ON VIEW public.prsn_created_image_comment_counts IS 'Parascene: aggregated comment counts per created image. SECURITY INVOKER view; access restricted via grants. All access controlled via API layer.';
+REVOKE ALL ON TABLE public.prsn_created_image_comment_counts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.prsn_created_image_comment_counts TO service_role;
