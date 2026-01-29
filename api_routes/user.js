@@ -10,7 +10,8 @@ import {
 	clearAuthCookie,
 	getJwtSecret,
 	hashToken,
-	setAuthCookie
+	setAuthCookie,
+	shouldLogSession
 } from "./auth.js";
 import { getThumbnailUrl } from "./utils/url.js";
 
@@ -225,16 +226,22 @@ export default function createProfileRoutes({ queries }) {
 		if (queries.insertSession) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-			console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+			if (shouldLogSession()) {
+				console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+			}
 			try {
 				await queries.insertSession.run(userId, tokenHash, expiresAt);
-				console.log(`[Signup] Session created successfully for user ${userId}`);
+				if (shouldLogSession()) {
+					console.log(`[Signup] Session created successfully for user ${userId}`);
+				}
 			} catch (error) {
-				console.error(`[Signup] Failed to create session for user ${userId}:`, {
-					error: error.message,
-					stack: error.stack,
-					name: error.name
-				});
+				if (shouldLogSession()) {
+					console.error(`[Signup] Failed to create session for user ${userId}:`, {
+						error: error.message,
+						stack: error.stack,
+						name: error.name
+					});
+				}
 				// Don't fail signup if session creation fails - cookie is still set
 			}
 		}
@@ -271,16 +278,22 @@ export default function createProfileRoutes({ queries }) {
 		if (queries.insertSession) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-			console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+			if (shouldLogSession()) {
+				console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+			}
 			try {
 				await queries.insertSession.run(user.id, tokenHash, expiresAt);
-				console.log(`[Login] Session created successfully for user ${user.id}`);
+				if (shouldLogSession()) {
+					console.log(`[Login] Session created successfully for user ${user.id}`);
+				}
 			} catch (error) {
-				console.error(`[Login] Failed to create session for user ${user.id}:`, {
-					error: error.message,
-					stack: error.stack,
-					name: error.name
-				});
+				if (shouldLogSession()) {
+					console.error(`[Login] Failed to create session for user ${user.id}:`, {
+						error: error.message,
+						stack: error.stack,
+						name: error.name
+					});
+				}
 				// Don't fail login if session creation fails - cookie is still set
 			}
 		}

@@ -24,9 +24,14 @@ import {
 	clearAuthCookie,
 	COOKIE_NAME,
 	probabilisticSessionCleanup,
-	sessionMiddleware
+	sessionMiddleware,
+	shouldLogSession
 } from "../api_routes/auth.js";
 import { injectCommonHead } from "../api_routes/utils/head.js";
+
+function shouldLogStartup() {
+	return process.env.ENABLE_STARTUP_LOGS === "true";
+}
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
@@ -54,22 +59,28 @@ const staticDir = path.join(__dirname, "..", "static");
 // Initialize database asynchronously using top-level await
 let queries, storage;
 try {
-	console.log("[Startup] Initializing database...");
-	console.log("[Startup] Environment:", {
-		VERCEL: !!process.env.VERCEL,
-		NODE_ENV: process.env.NODE_ENV,
-		DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
-	});
+	if (shouldLogStartup()) {
+		console.log("[Startup] Initializing database...");
+		console.log("[Startup] Environment:", {
+			VERCEL: !!process.env.VERCEL,
+			NODE_ENV: process.env.NODE_ENV,
+			DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
+		});
+	}
 	const dbResult = await openDb();
 	queries = dbResult.queries;
 	storage = dbResult.storage;
-	console.log("[Startup] Database initialized successfully");
+	if (shouldLogStartup()) {
+		console.log("[Startup] Database initialized successfully");
+	}
 } catch (error) {
-	console.error("[Startup] Failed to initialize database:", error);
-	console.error("[Startup] Error details:", error.message);
-	if (error.message?.includes("Missing required env var")) {
-		console.error("\n[Startup] Please ensure all required environment variables are set.");
-		console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+	if (shouldLogStartup()) {
+		console.error("[Startup] Failed to initialize database:", error);
+		console.error("[Startup] Error details:", error.message);
+		if (error.message?.includes("Missing required env var")) {
+			console.error("\n[Startup] Please ensure all required environment variables are set.");
+			console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+		}
 	}
 	process.exit(1);
 }
@@ -84,12 +95,14 @@ app.locals.storage = storage;
 
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
-	console.log(`[Request] ${req.method} ${req.path}`, {
-		hasCookie: !!req.cookies?.[COOKIE_NAME],
-		cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
-		userAgent: req.get("user-agent")?.substring(0, 50),
-		referer: req.get("referer")
-	});
+	if (shouldLogSession()) {
+		console.log(`[Request] ${req.method} ${req.path}`, {
+			hasCookie: !!req.cookies?.[COOKIE_NAME],
+			cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
+			userAgent: req.get("user-agent")?.substring(0, 50),
+			referer: req.get("referer")
+		});
+	}
 	next();
 });
 
@@ -118,19 +131,25 @@ app.use(async (err, req, res, next) => {
 		return next(err);
 	}
 
-	console.log(
-		`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
-		`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
-		`error: ${err.message || "Unknown"}`
-	);
+	if (shouldLogSession()) {
+		console.log(
+			`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
+			`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
+			`error: ${err.message || "Unknown"}`
+		);
+	}
 
 	// Only clear cookie if one was actually sent in the request
 	// This prevents clearing cookies that weren't sent (e.g., due to SameSite issues)
 	if (req.cookies?.[COOKIE_NAME]) {
-		console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
+		if (shouldLogSession()) {
+			console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
+		}
 		clearAuthCookie(res, req);
 	} else {
-		console.log(`[ErrorHandler] No cookie present, skipping clear`);
+		if (shouldLogSession()) {
+			console.log(`[ErrorHandler] No cookie present, skipping clear`);
+		}
 	}
 
 	if (req.path.startsWith("/api/") || req.path === "/me") {
@@ -170,18 +189,20 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // Log startup completion
-console.log("[Startup] Express app configured and ready");
-console.log("[Startup] Routes registered:", {
-	userRoutes: "✓",
-	adminRoutes: "✓",
-	feedRoutes: "✓",
-	exploreRoutes: "✓",
-	createRoutes: "✓",
-	creationsRoutes: "✓",
-	providerRoutes: "✓",
-	serversRoutes: "✓",
-	templatesRoutes: "✓",
-	pageRoutes: "✓"
-});
+if (shouldLogStartup()) {
+	console.log("[Startup] Express app configured and ready");
+	console.log("[Startup] Routes registered:", {
+		userRoutes: "✓",
+		adminRoutes: "✓",
+		feedRoutes: "✓",
+		exploreRoutes: "✓",
+		createRoutes: "✓",
+		creationsRoutes: "✓",
+		providerRoutes: "✓",
+		serversRoutes: "✓",
+		templatesRoutes: "✓",
+		pageRoutes: "✓"
+	});
+}
 
 export default app;

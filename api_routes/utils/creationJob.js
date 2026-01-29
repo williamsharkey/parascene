@@ -4,6 +4,28 @@ const PROVIDER_TIMEOUT_MS = 50_000;
 const DEFAULT_WIDTH = 1024;
 const DEFAULT_HEIGHT = 1024;
 
+function shouldLogCreation() {
+	return process.env.ENABLE_CREATION_LOGS === "true";
+}
+
+function logCreation(...args) {
+	if (shouldLogCreation()) {
+		console.log("[Creation]", ...args);
+	}
+}
+
+function logCreationError(...args) {
+	if (shouldLogCreation()) {
+		console.error("[Creation]", ...args);
+	}
+}
+
+function logCreationWarn(...args) {
+	if (shouldLogCreation()) {
+		console.warn("[Creation]", ...args);
+	}
+}
+
 function parseMeta(raw) {
 	if (raw == null) return null;
 	if (typeof raw === "object") return raw;
@@ -39,9 +61,6 @@ function safeErrorMessage(err) {
 }
 
 export async function runCreationJob({ queries, storage, payload }) {
-
-	console.log("runCreationJob", payload);
-
 	const {
 		created_image_id,
 		user_id,
@@ -51,37 +70,62 @@ export async function runCreationJob({ queries, storage, payload }) {
 		credit_cost,
 	} = payload || {};
 
+	logCreation("runCreationJob started", {
+		created_image_id,
+		user_id,
+		server_id,
+		method,
+		credit_cost,
+		args_keys: args ? Object.keys(args) : []
+	});
+
 	if (!created_image_id || !user_id || !server_id || !method) {
-		throw new Error("runCreationJob: missing required payload fields");
+		const error = new Error("runCreationJob: missing required payload fields");
+		logCreationError("Missing required fields", { created_image_id, user_id, server_id, method });
+		throw error;
 	}
 
 	const userId = Number(user_id);
 	const imageId = Number(created_image_id);
 
+	logCreation(`Fetching image ${imageId} for user ${userId}`);
 	const image = await queries.selectCreatedImageById.get(imageId, userId);
 	if (!image) {
+		logCreationWarn(`Image ${imageId} not found for user ${userId} - may have been deleted`);
 		// Nothing to do (deleted / wrong user).
 		return { ok: false, reason: "not_found" };
 	}
 
+	logCreation(`Image ${imageId} found, status: ${image.status || "null"}`);
+
 	// Idempotency: only transition when still creating.
 	if (image.status && image.status !== "creating") {
+		logCreation(`Skipping job - image ${imageId} already ${image.status}`);
 		return { ok: true, skipped: true, status: image.status };
 	}
 
 	const existingMeta = parseMeta(image.meta);
 
+	logCreation(`Fetching server ${server_id}`);
 	const server = await queries.selectServerById.get(server_id);
 	if (!server || server.status !== "active") {
+		const errorMsg = !server ? "Server not found" : "Server is not active";
+		logCreationError(`Server validation failed: ${errorMsg}`, {
+			server_id,
+			server_found: !!server,
+			server_status: server?.status
+		});
+
 		const nextMeta = mergeMeta(existingMeta, {
 			failed_at: new Date().toISOString(),
 			error_code: "provider_error",
-			error: !server ? "Server not found" : "Server is not active",
+			error: errorMsg,
 		});
 		await queries.updateCreatedImageJobFailed.run(imageId, userId, { meta: nextMeta });
 
 		// Refund if needed.
 		if (credit_cost && !(nextMeta && nextMeta.credits_refunded)) {
+			logCreation(`Refunding ${credit_cost} credits to user ${userId}`);
 			await queries.updateUserCreditsBalance.run(userId, Number(credit_cost));
 			await queries.updateCreatedImageJobFailed.run(imageId, userId, {
 				meta: mergeMeta(nextMeta, { credits_refunded: true }),
@@ -90,6 +134,12 @@ export async function runCreationJob({ queries, storage, payload }) {
 
 		return { ok: false, reason: "invalid_server" };
 	}
+
+	logCreation(`Server ${server_id} validated`, {
+		server_url: server.server_url,
+		server_status: server.status,
+		has_auth_token: !!server.auth_token
+	});
 
 	let imageBuffer;
 	let color = null;
@@ -139,10 +189,20 @@ export async function runCreationJob({ queries, storage, payload }) {
 				? failedAtMs - startedAtMs
 				: null;
 
+		const errorCode = inferErrorCode(providerError);
+		const errorMsg = safeErrorMessage(providerError);
+
+		logCreationError(`Marking job as failed`, {
+			imageId,
+			error_code: errorCode,
+			error: errorMsg,
+			duration_ms: durationMs
+		});
+
 		const nextMetaBase = mergeMeta(existingMeta, {
 			failed_at: failedAtIso,
-			error_code: inferErrorCode(providerError),
-			error: safeErrorMessage(providerError),
+			error_code: errorCode,
+			error: errorMsg,
 			...(Number.isFinite(durationMs) && durationMs >= 0 ? { duration_ms: durationMs } : {}),
 		});
 
@@ -150,6 +210,7 @@ export async function runCreationJob({ queries, storage, payload }) {
 
 		// Refund once.
 		if (credit_cost && !(nextMetaBase && nextMetaBase.credits_refunded)) {
+			logCreation(`Refunding ${credit_cost} credits to user ${userId}`);
 			await queries.updateUserCreditsBalance.run(userId, Number(credit_cost));
 			await queries.updateCreatedImageJobFailed.run(imageId, userId, {
 				meta: mergeMeta(nextMetaBase, { credits_refunded: true }),
@@ -160,10 +221,15 @@ export async function runCreationJob({ queries, storage, payload }) {
 	}
 
 	// Upload and finalize.
+	logCreation("Uploading image to storage");
 	const timestamp = Date.now();
 	const random = Math.random().toString(36).substring(2, 9);
 	const filename = `${userId}_${imageId}_${timestamp}_${random}.png`;
+	
+	const uploadStartTime = Date.now();
 	const imageUrl = await storage.uploadImage(imageBuffer, filename);
+	const uploadDuration = Date.now() - uploadStartTime;
+	logCreation(`Image uploaded in ${uploadDuration}ms`, { filename, url: imageUrl });
 
 	const completedAtIso = new Date().toISOString();
 	const startedAtMs = existingMeta && existingMeta.started_at ? Date.parse(existingMeta.started_at) : NaN;
@@ -176,6 +242,12 @@ export async function runCreationJob({ queries, storage, payload }) {
 	const completedMeta = mergeMeta(existingMeta, {
 		completed_at: completedAtIso,
 		...(Number.isFinite(durationMs) && durationMs >= 0 ? { duration_ms: durationMs } : {}),
+	});
+
+	logCreation(`Updating database - marking job as completed`, {
+		imageId,
+		filename,
+		duration_ms: durationMs
 	});
 
 	await queries.updateCreatedImageJobCompleted.run(imageId, userId, {
@@ -191,6 +263,7 @@ export async function runCreationJob({ queries, storage, payload }) {
 	const ownerCredits = Number(credit_cost || 0) * 0.3;
 	if (server.user_id && ownerCredits > 0) {
 		try {
+			logCreation(`Crediting server owner ${server.user_id} with ${ownerCredits} credits`);
 			let ownerCreditsRecord = await queries.selectUserCredits.get(server.user_id);
 			if (!ownerCreditsRecord) {
 				await queries.insertUserCredits.run(server.user_id, 0, null);
@@ -200,9 +273,18 @@ export async function runCreationJob({ queries, storage, payload }) {
 				await queries.updateUserCreditsBalance.run(server.user_id, ownerCredits);
 			}
 		} catch (e) {
-			console.warn("Failed to credit server owner:", e?.message || e);
+			logCreationWarn("Failed to credit server owner:", e?.message || e);
 		}
 	}
+
+	logCreation(`Job completed successfully`, {
+		imageId,
+		filename,
+		width,
+		height,
+		color,
+		total_duration_ms: durationMs
+	});
 
 	return { ok: true, id: imageId, filename, url: imageUrl, width, height, color };
 }

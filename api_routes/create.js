@@ -201,6 +201,22 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			const createdImageId = result.insertId;
 
+			const shouldLogCreation = () => process.env.ENABLE_CREATION_LOGS === "true";
+			const logCreation = (...args) => {
+				if (shouldLogCreation()) {
+					console.log("[Creation]", ...args);
+				}
+			};
+
+			logCreation("Job scheduled", {
+				created_image_id: createdImageId,
+				user_id: user.id,
+				server_id: Number(server_id),
+				method,
+				credit_cost: CREATION_CREDIT_COST,
+				creation_token: creation_token.trim()
+			});
+
 			await scheduleCreationJob({
 				payload: {
 					created_image_id: createdImageId,
@@ -229,19 +245,47 @@ export default function createCreateRoutes({ queries, storage }) {
 	});
 
 	router.post("/api/create/worker", async (req, res) => {
+		const shouldLogCreation = () => process.env.ENABLE_CREATION_LOGS === "true";
+		const logCreation = (...args) => {
+			if (shouldLogCreation()) {
+				console.log("[Creation]", ...args);
+			}
+		};
+		const logCreationError = (...args) => {
+			if (shouldLogCreation()) {
+				console.error("[Creation]", ...args);
+			}
+		};
+
 		try {
+			logCreation("Worker endpoint called", {
+				has_body: !!req.body,
+				created_image_id: req.body?.created_image_id,
+				user_id: req.body?.user_id
+			});
+
 			if (!process.env.UPSTASH_QSTASH_TOKEN) {
+				logCreationError("QStash not configured");
 				return res.status(503).json({ error: "QStash not configured" });
 			}
 
+			logCreation("Verifying QStash signature");
 			const isValid = await verifyQStashRequest(req);
 			if (!isValid) {
+				logCreationError("Invalid QStash signature");
 				return res.status(401).json({ error: "Invalid QStash signature" });
 			}
 
+			logCreation("QStash signature verified, running job");
 			await runCreationJob({ queries, storage, payload: req.body });
+			logCreation("Worker job completed successfully");
 			return res.json({ ok: true });
 		} catch (error) {
+			logCreationError("Worker failed with error:", {
+				error: error.message,
+				stack: error.stack,
+				name: error.name
+			});
 			console.error("Error running create worker:", error);
 			return res.status(500).json({ ok: false, error: "Worker failed" });
 		}
