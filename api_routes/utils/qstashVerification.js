@@ -25,10 +25,15 @@ function getReceiver() {
 			has_next_key: !!nextSigningKey
 		});
 
-		receiverInstance = new Receiver({
-			currentSigningKey: currentSigningKey || undefined,
-			nextSigningKey: nextSigningKey || undefined,
-		});
+		const receiverConfig = {};
+		if (currentSigningKey) {
+			receiverConfig.currentSigningKey = currentSigningKey;
+		}
+		if (nextSigningKey) {
+			receiverConfig.nextSigningKey = nextSigningKey;
+		}
+
+		receiverInstance = new Receiver(receiverConfig);
 	}
 	return receiverInstance;
 }
