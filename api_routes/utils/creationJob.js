@@ -50,6 +50,45 @@ function safeErrorMessage(err) {
 	}
 }
 
+async function readProviderErrorPayload(response) {
+	if (!response) return { ok: false, body: null, contentType: "" };
+	const contentType = response.headers?.get?.("content-type") || "";
+	let text = "";
+	try {
+		text = await response.text();
+	} catch {
+		text = "";
+	}
+	if (typeof text === "string" && text.length > 20_000) {
+		text = `${text.slice(0, 20_000)}…`;
+	}
+	if (contentType.includes("application/json")) {
+		try {
+			return { ok: true, body: JSON.parse(text || "null"), contentType };
+		} catch {
+			return { ok: true, body: text, contentType };
+		}
+	}
+	return { ok: true, body: text, contentType };
+}
+
+function providerBodyToMessage(body) {
+	if (body == null) return "";
+	if (typeof body === "string") return body.trim();
+	if (typeof body === "object") {
+		const err = typeof body.error === "string" ? body.error.trim() : "";
+		if (err) return err;
+		const msg = typeof body.message === "string" ? body.message.trim() : "";
+		if (msg) return msg;
+		try {
+			return JSON.stringify(body);
+		} catch {
+			return "[provider_error]";
+		}
+	}
+	return String(body);
+}
+
 export async function runCreationJob({ queries, storage, payload }) {
 	const {
 		created_image_id,
@@ -152,8 +191,16 @@ export async function runCreationJob({ queries, storage, payload }) {
 		});
 
 		if (!providerResponse.ok) {
-			const err = new Error(`Provider error: ${providerResponse.status} ${providerResponse.statusText}`);
+			const payload = await readProviderErrorPayload(providerResponse);
+			const providerMessage = providerBodyToMessage(payload.body);
+			const err = new Error(providerMessage || `Provider error: ${providerResponse.status} ${providerResponse.statusText}`);
 			err.code = "PROVIDER_NON_2XX";
+			err.provider = {
+				status: providerResponse.status,
+				statusText: providerResponse.statusText,
+				contentType: payload.contentType,
+				body: payload.body
+			};
 			throw err;
 		}
 
@@ -180,7 +227,12 @@ export async function runCreationJob({ queries, storage, payload }) {
 				: null;
 
 		const errorCode = inferErrorCode(providerError);
+		const providerDetails =
+			providerError && typeof providerError === "object" && providerError.provider && typeof providerError.provider === "object"
+				? providerError.provider
+				: null;
 		const errorMsg = safeErrorMessage(providerError);
+		const providerMsg = providerDetails ? providerBodyToMessage(providerDetails.body) : "";
 
 		logCreationError(`Marking job as failed`, {
 			imageId,
@@ -192,7 +244,8 @@ export async function runCreationJob({ queries, storage, payload }) {
 		const nextMetaBase = mergeMeta(existingMeta, {
 			failed_at: failedAtIso,
 			error_code: errorCode,
-			error: errorMsg,
+			error: providerMsg || errorMsg,
+			...(providerDetails ? { provider_error: providerDetails } : {}),
 			...(Number.isFinite(durationMs) && durationMs >= 0 ? { duration_ms: durationMs } : {}),
 		});
 

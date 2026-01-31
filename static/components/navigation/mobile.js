@@ -35,7 +35,7 @@ class AppNavigationMobile extends HTMLElement {
 		const route = button?.getAttribute('data-route');
 		if (!route) return;
 
-		const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+		const isServerSentPage = /^\/creations\/\d+(\/(edit|mutat|mutate))?$/.test(window.location.pathname) ||
 			window.location.pathname.startsWith('/help/') ||
 			window.location.pathname === '/user' ||
 			/^\/user\/\d+$/.test(window.location.pathname);

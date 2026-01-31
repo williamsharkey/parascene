@@ -55,6 +55,14 @@ class AppModalCreationDetails extends HTMLElement {
 							<div class="label">Arguments</div>
 							<pre class="creation-details-args" data-args></pre>
 						</div>
+						<div class="field" data-history-field style="display: none;">
+							<div class="label">History</div>
+							<div class="value" data-history></div>
+						</div>
+						<div class="field" data-provider-error-field style="display: none;">
+							<div class="label">Provider error</div>
+							<pre class="creation-details-args" data-provider-error></pre>
+						</div>
 					</div>
 					<div class="modal-footer">
 						<button type="button" class="btn-secondary" data-close-secondary>Close</button>
@@ -62,6 +70,21 @@ class AppModalCreationDetails extends HTMLElement {
 				</div>
 			</div>
 		`;
+
+		// Styles for history links (shared with modal styling)
+		const style = document.createElement('style');
+		style.textContent = `
+			.creation-details-history-link {
+				color: var(--accent);
+				text-decoration: none;
+				font-weight: 600;
+			}
+
+			.creation-details-history-link:hover {
+				text-decoration: underline;
+			}
+		`;
+		this.appendChild(style);
 	}
 
 	setupEventListeners() {
@@ -145,6 +168,10 @@ class AppModalCreationDetails extends HTMLElement {
 		const promptField = this.querySelector("[data-prompt-field]");
 		const promptEl = this.querySelector("[data-prompt]");
 		const argsField = this.querySelector("[data-args-field]");
+		const historyField = this.querySelector("[data-history-field]");
+		const historyEl = this.querySelector("[data-history]");
+		const providerErrorField = this.querySelector("[data-provider-error-field]");
+		const providerErrorEl = this.querySelector("[data-provider-error]");
 
 		const serverId = meta.server_id != null ? String(meta.server_id) : "Unknown";
 		const serverUrl = typeof meta.server_url === "string" ? meta.server_url : "";
@@ -200,6 +227,50 @@ class AppModalCreationDetails extends HTMLElement {
 					argsEl.textContent = pretty;
 				} catch {
 					argsEl.textContent = String(args ?? "");
+				}
+			}
+		}
+
+		// History (mutations lineage)
+		const historyRaw = meta.history;
+		const historyIds = Array.isArray(historyRaw)
+			? historyRaw.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+			: [];
+		if (historyField instanceof HTMLElement && historyEl) {
+			if (historyIds.length === 0) {
+				historyField.style.display = "none";
+				historyEl.textContent = "";
+			} else {
+				historyField.style.display = "";
+				// Render as links to creation pages (most recent last)
+				historyEl.innerHTML = historyIds
+					.map((id) => `<a class="creation-details-history-link" href="/creations/${id}">#${id}</a>`)
+					.join(" → ");
+			}
+		}
+
+		// Provider error details (non-2xx payloads captured from provider)
+		const providerError = meta.provider_error ?? null;
+		if (providerErrorField instanceof HTMLElement && providerErrorEl) {
+			if (!providerError || typeof providerError !== "object") {
+				providerErrorField.style.display = "none";
+				providerErrorEl.textContent = "";
+			} else {
+				providerErrorField.style.display = "";
+				try {
+					// Prefer showing provider's own error/message if present.
+					const body = providerError.body;
+					const msg =
+						body && typeof body === "object"
+							? (typeof body.error === "string" ? body.error : (typeof body.message === "string" ? body.message : ""))
+							: (typeof body === "string" ? body : "");
+					if (msg) {
+						providerErrorEl.textContent = msg;
+					} else {
+						providerErrorEl.textContent = JSON.stringify(providerError, null, 2);
+					}
+				} catch {
+					providerErrorEl.textContent = String(providerError);
 				}
 			}
 		}

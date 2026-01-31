@@ -1,12 +1,7 @@
 import { fetchJsonWithStatusDeduped } from '../../shared/api.js';
+import { submitCreationWithPending } from '../../shared/createSubmit.js';
 
 const html = String.raw;
-
-function generateCreationToken() {
-	const ts = Date.now().toString(36);
-	const rand = Math.random().toString(36).slice(2, 10);
-	return `crt_${ts}_${rand}`;
-}
 
 class AppRouteCreate extends HTMLElement {
 	constructor() {
@@ -17,6 +12,23 @@ class AppRouteCreate extends HTMLElement {
 		this.fieldValues = {};
 		this.servers = [];
 		this.handleCreditsUpdated = this.handleCreditsUpdated.bind(this);
+	}
+
+	isPromptLikeField(fieldKey, field) {
+		const key = String(fieldKey || '');
+		const label = String(field?.label || '');
+		return /prompt/i.test(key) || /prompt/i.test(label);
+	}
+
+	isMultilineField(fieldKey, field) {
+		const type = typeof field?.type === 'string' ? field.type.toLowerCase() : '';
+		if (type === 'textarea' || type === 'multiline') return true;
+		if (field?.multiline === true) return true;
+		// Back-compat: many server configs encode prompt as a text input.
+		if (type === '' || type === 'text' || type === 'string') {
+			return this.isPromptLikeField(fieldKey, field);
+		}
+		return false;
 	}
 
 	connectedCallback() {
@@ -399,26 +411,62 @@ class AppRouteCreate extends HTMLElement {
 					this.updateButtonState();
 				});
 			} else {
-				input = document.createElement('input');
-				input.type = field.type || 'text';
-				input.id = `field-${fieldKey}`;
-				input.name = fieldKey;
-				input.className = 'form-input';
-				input.placeholder = field.label || fieldKey;
-				if (field.required) {
-					input.required = true;
+				const isMultiline = this.isMultilineField(fieldKey, field);
+				if (isMultiline) {
+					input = document.createElement('textarea');
+					input.id = `field-${fieldKey}`;
+					input.name = fieldKey;
+					input.className = 'form-input';
+					input.placeholder = field.label || fieldKey;
+					input.rows = typeof field.rows === 'number' && field.rows > 0 ? field.rows : 3;
+					input.style.resize = 'none';
+					input.style.overflowY = 'hidden';
+					if (field.required) {
+						input.required = true;
+					}
+
+					// Initialize field value
+					this.fieldValues[fieldKey] = '';
+
+					// Auto-grow like mutate/comments, with a minimum height.
+					let baseHeight = 0;
+					const autoGrow = () => {
+						if (!(input instanceof HTMLTextAreaElement)) return;
+						input.style.height = 'auto';
+						if (!baseHeight) baseHeight = input.scrollHeight;
+						input.style.height = `${Math.max(baseHeight, input.scrollHeight)}px`;
+					};
+
+					input.addEventListener('input', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						autoGrow();
+						this.updateButtonState();
+					});
+
+					// After insertion, compute correct base height.
+					requestAnimationFrame(() => autoGrow());
+				} else {
+					input = document.createElement('input');
+					input.type = field.type || 'text';
+					input.id = `field-${fieldKey}`;
+					input.name = fieldKey;
+					input.className = 'form-input';
+					input.placeholder = field.label || fieldKey;
+					if (field.required) {
+						input.required = true;
+					}
+					// Initialize field value
+					this.fieldValues[fieldKey] = '';
+					input.addEventListener('input', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						this.updateButtonState();
+					});
+					// Also listen to change event for text inputs
+					input.addEventListener('change', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						this.updateButtonState();
+					});
 				}
-				// Initialize field value
-				this.fieldValues[fieldKey] = '';
-				input.addEventListener('input', (e) => {
-					this.fieldValues[fieldKey] = e.target.value;
-					this.updateButtonState();
-				});
-				// Also listen to change event for text inputs
-				input.addEventListener('change', (e) => {
-					this.fieldValues[fieldKey] = e.target.value;
-					this.updateButtonState();
-				});
 			}
 
 			fieldGroup.appendChild(label);
@@ -584,93 +632,23 @@ class AppRouteCreate extends HTMLElement {
 
 		button.disabled = true;
 
-		const creationToken = generateCreationToken();
-
-		// Create pending creation item
-		const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		const pendingItem = {
-			id: pendingId,
-			status: "pending",
-			created_at: new Date().toISOString(),
-			creation_token: creationToken
-		};
-		const pendingKey = "pendingCreations";
-		const pendingList = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-		pendingList.unshift(pendingItem);
-		sessionStorage.setItem(pendingKey, JSON.stringify(pendingList));
-
-		document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-		const creationsRoute = document.querySelector("app-route-creations");
-		if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
-			await creationsRoute.loadCreations();
-		}
-
-		// Navigate to Creations page immediately (optimistic UI)
-		const header = document.querySelector('app-navigation');
-		if (header && typeof header.handleRouteChange === 'function') {
-			window.history.pushState({ route: 'creations' }, '', '/creations');
-			header.handleRouteChange();
-		} else {
-			// Fallback: use hash-based routing
-			window.location.hash = 'creations';
-		}
-
-		// Make API call to create image
-		fetch("/api/create", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json"
-			},
-			credentials: "include",
-			body: JSON.stringify({
-				server_id: this.selectedServer.id,
-				method: methodKey,
-				args: collectedArgs || {},
-				creation_token: creationToken
-			})
-		})
-			.then(async (response) => {
-				if (!response.ok) {
-					const error = await response.json();
-					// Handle insufficient credits error specifically
-					if (response.status === 402) {
-						// Refresh credits to get updated balance
-						document.dispatchEvent(new CustomEvent('credits-updated', {
-							detail: { count: error.current ?? 0 }
-						}));
-						// Trigger credits refresh in create component
-						await this.loadCredits();
-						throw new Error(error.message || "Insufficient credits");
-					}
-					throw new Error(error.error || "Failed to create image");
-				}
-				const data = await response.json();
-				// Update credits if returned in response
-				if (typeof data.credits_remaining === 'number') {
-					document.dispatchEvent(new CustomEvent('credits-updated', {
-						detail: { count: data.credits_remaining }
-					}));
-				}
-				return null;
-			})
-			.then(() => {
-				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-				const next = current.filter(item => item.id !== pendingId);
-				sessionStorage.setItem(pendingKey, JSON.stringify(next));
-				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-			})
-			.catch(async (error) => {
-				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-				const next = current.filter(item => item.id !== pendingId);
-				sessionStorage.setItem(pendingKey, JSON.stringify(next));
-				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-				// console.error("Error creating image:", error);
-				// Refresh credits display in case of error
+		submitCreationWithPending({
+			serverId: this.selectedServer.id,
+			methodKey,
+			args: collectedArgs || {},
+			navigate: 'spa',
+			onInsufficientCredits: async () => {
 				await this.loadCredits();
-			})
-			.finally(() => {
-				button.disabled = false;
-			});
+			},
+			onError: async () => {
+				await this.loadCredits();
+			}
+		});
+
+		// In most cases we navigate away immediately; still re-enable just in case.
+		setTimeout(() => {
+			button.disabled = false;
+		}, 0);
 	}
 }
 

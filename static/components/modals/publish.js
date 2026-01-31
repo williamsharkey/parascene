@@ -9,6 +9,7 @@ class AppModalPublish extends HTMLElement {
 		this._mode = 'publish'; // 'publish' or 'edit'
 		this._creationId = null;
 		this._loading = false;
+		this._openRequestId = 0;
 		this.handleEscape = this.handleEscape.bind(this);
 		this.handleOpenPublish = this.handleOpenPublish.bind(this);
 		this.handleOpenEdit = this.handleOpenEdit.bind(this);
@@ -154,11 +155,71 @@ class AppModalPublish extends HTMLElement {
 		return this._isOpen;
 	}
 
-	openPublish(creationId) {
+	getPromptFromMeta(meta) {
+		if (!meta || typeof meta !== 'object') return '';
+
+		if (typeof meta.prompt === 'string' && meta.prompt.trim()) {
+			return meta.prompt.trim();
+		}
+
+		const args = meta.args;
+		if (args && typeof args === 'object' && !Array.isArray(args)) {
+			if (typeof args.prompt === 'string' && args.prompt.trim()) {
+				return args.prompt.trim();
+			}
+		}
+
+		return '';
+	}
+
+	async openPublish(creationId) {
 		this._mode = 'publish';
 		this._creationId = creationId;
 		this.updateModalContent();
 		this.open();
+
+		if (!creationId) {
+			this.showAlert('Invalid creation ID', true);
+			return;
+		}
+
+		const requestId = ++this._openRequestId;
+
+		try {
+			const response = await fetch(`/api/create/images/${creationId}`, {
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to load creation');
+			}
+
+			// Ignore stale async results if another open happened.
+			if (requestId !== this._openRequestId) return;
+
+			const creation = await response.json();
+			const titleInput = this.querySelector('#publish-title');
+			const descriptionTextarea = this.querySelector('#publish-description');
+
+			// Only prefill if still empty (never clobber user typing).
+			if (titleInput && !titleInput.value.trim()) {
+				titleInput.value = creation.title || '';
+			}
+
+			if (descriptionTextarea && !descriptionTextarea.value.trim()) {
+				const savedDescription = typeof creation.description === 'string' ? creation.description.trim() : '';
+				const prompt = this.getPromptFromMeta(creation.meta);
+				descriptionTextarea.value = savedDescription || prompt || '';
+			}
+
+			// Focus title input
+			if (titleInput) {
+				setTimeout(() => titleInput.focus(), 100);
+			}
+		} catch (error) {
+			// console.error('Error loading creation:', error);
+			this.showAlert('Failed to load creation data', true);
+		}
 	}
 
 	async openEdit(creationId) {

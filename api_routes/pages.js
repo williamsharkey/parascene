@@ -147,15 +147,14 @@ export default function createPageRoutes({ queries, pagesDir }) {
 		}
 	});
 
-	// Route for creation detail page - /creations/:id
-	router.get("/creations/:id", async (req, res) => {
+	async function serveCreationMutatePage(req, res) {
 		const user = await requireLoggedInUser(req, res);
 		if (!user) return;
 
 		// Verify the creation exists and is either published or belongs to the user
 		const creationId = parseInt(req.params.id, 10);
 		if (!creationId) {
-			return res.status(404).send("Not found");
+			return serveNotFoundPage(req, res, user);
 		}
 
 		try {
@@ -171,10 +170,132 @@ export default function createPageRoutes({ queries, pagesDir }) {
 					if (isPublished || isAdmin) {
 						image = anyImage;
 					} else {
-						return res.status(404).send("Creation not found");
+						return serveNotFoundPage(req, res, user);
 					}
 				} else {
-					return res.status(404).send("Creation not found");
+					return serveNotFoundPage(req, res, user);
+				}
+			}
+
+			// Read the HTML file and inject the correct role-based header and mobile nav
+			const fs = await import('fs/promises');
+			const rolePageName = getPageForUser(user);
+			const rolePagePath = path.join(pagesDir, rolePageName);
+			const htmlPath = path.join(pagesDir, "creation-edit.html");
+			let pageHtml = await fs.readFile(htmlPath, 'utf-8');
+
+			let headerHtml = "";
+			let includeMobileBottomNav = false;
+			try {
+				const roleHtml = await fs.readFile(rolePagePath, "utf-8");
+				const headerMatch = roleHtml.match(/<app-navigation[\s\S]*?<\/app-navigation>/i);
+				if (headerMatch) {
+					headerHtml = headerMatch[0];
+				}
+				includeMobileBottomNav = /<app-navigation-mobile\b/i.test(roleHtml);
+			} catch (error) {
+				// console.warn("Failed to extract role header for creation mutate page:", error?.message || error);
+			}
+
+			if (headerHtml) {
+				pageHtml = pageHtml.replace("<!--APP_HEADER-->", headerHtml);
+			}
+			pageHtml = pageHtml.replace(
+				"<!--APP_MOBILE_BOTTOM_NAV-->",
+				includeMobileBottomNav ? "<app-navigation-mobile></app-navigation-mobile>" : ""
+			);
+
+			pageHtml = injectCommonHead(pageHtml);
+
+			res.setHeader('Content-Type', 'text/html');
+			return res.send(pageHtml);
+		} catch (error) {
+			// console.error("Error loading creation mutate:", error);
+			return res.status(500).send("Internal server error");
+		}
+	}
+
+	async function serveNotFoundPage(req, res, user) {
+		try {
+			const fs = await import("fs/promises");
+			const rolePageName = getPageForUser(user);
+			const rolePagePath = path.join(pagesDir, rolePageName);
+			const htmlPath = path.join(pagesDir, "not-found.html");
+			let pageHtml = await fs.readFile(htmlPath, "utf-8");
+
+			let headerHtml = "";
+			let includeMobileBottomNav = false;
+			try {
+				const roleHtml = await fs.readFile(rolePagePath, "utf-8");
+				const headerMatch = roleHtml.match(/<app-navigation[\s\S]*?<\/app-navigation>/i);
+				if (headerMatch) {
+					headerHtml = headerMatch[0];
+				}
+				includeMobileBottomNav = /<app-navigation-mobile\b/i.test(roleHtml);
+			} catch (error) {
+				// console.warn("Failed to extract role header for not found page:", error?.message || error);
+			}
+
+			if (headerHtml) {
+				pageHtml = pageHtml.replace("<!--APP_HEADER-->", headerHtml);
+			}
+			pageHtml = pageHtml.replace(
+				"<!--APP_MOBILE_BOTTOM_NAV-->",
+				includeMobileBottomNav ? "<app-navigation-mobile></app-navigation-mobile>" : ""
+			);
+
+			pageHtml = injectCommonHead(pageHtml);
+
+			res.setHeader("Content-Type", "text/html");
+			return res.status(404).send(pageHtml);
+		} catch (error) {
+			return res.status(404).send("Not found");
+		}
+	}
+
+	// Route for creation mutate page - /creations/:id/mutate
+	router.get("/creations/:id/mutate", serveCreationMutatePage);
+
+	// Back-compat: redirect /creations/:id/mutat -> /creations/:id/mutate
+	router.get("/creations/:id/mutat", async (req, res) => {
+		const rawId = typeof req.params?.id === 'string' ? req.params.id : '';
+		return res.redirect(`/creations/${rawId}/mutate`);
+	});
+
+	// Back-compat: redirect /creations/:id/edit -> /creations/:id/mutate
+	router.get("/creations/:id/edit", async (req, res) => {
+		const rawId = typeof req.params?.id === 'string' ? req.params.id : '';
+		return res.redirect(`/creations/${rawId}/mutate`);
+	});
+
+	// Route for creation detail page - /creations/:id
+	router.get("/creations/:id", async (req, res) => {
+		const user = await requireLoggedInUser(req, res);
+		if (!user) return;
+
+		// Verify the creation exists and is either published or belongs to the user
+		const creationId = parseInt(req.params.id, 10);
+		if (!creationId) {
+			return serveNotFoundPage(req, res, user);
+		}
+
+		try {
+			// First try to get as owner
+			let image = await queries.selectCreatedImageById.get(creationId, user.id);
+
+			// If not found as owner, check if it exists and is either published or user is admin
+			if (!image) {
+				const anyImage = await queries.selectCreatedImageByIdAnyUser.get(creationId);
+				if (anyImage) {
+					const isPublished = anyImage.published === 1 || anyImage.published === true;
+					const isAdmin = user.role === 'admin';
+					if (isPublished || isAdmin) {
+						image = anyImage;
+					} else {
+						return serveNotFoundPage(req, res, user);
+					}
+				} else {
+					return serveNotFoundPage(req, res, user);
 				}
 			}
 

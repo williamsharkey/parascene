@@ -344,10 +344,13 @@ class AppRouteCreations extends HTMLElement {
 		const container = this.querySelector("[data-creations-container]");
 		if (!container) return;
 
-		// Check if there are any loading creations
+		// Check if there are any loading creations (DB rows) or pending placeholders (sessionStorage)
 		const loadingCreations = container.querySelectorAll('.route-media[data-image-id][data-status="creating"]');
-		if (loadingCreations.length === 0) {
-			// No loading creations, stop polling
+		const pendingCreations = container.querySelectorAll('.route-media[data-image-id][data-status="pending"]');
+		const hasPending = pendingCreations.length > 0 || this.getPendingCreations().length > 0;
+
+		if (loadingCreations.length === 0 && !hasPending) {
+			// Nothing to wait for, stop polling
 			this.stopPolling();
 			return;
 		}
@@ -370,7 +373,9 @@ class AppRouteCreations extends HTMLElement {
 				}
 			});
 
-			if (hasUpdates) {
+			// If we have pending placeholders, keep refreshing so they can reconcile into DB rows
+			// (or expire via TTL) even before we have a visible "creating" row.
+			if (hasUpdates || hasPending) {
 				// Reload the entire list to get the updated creations (including failed/timed-out)
 				this.loadCreations({ force: true, background: !this.isRouteActive() });
 			}
@@ -420,6 +425,19 @@ class AppRouteCreations extends HTMLElement {
 			this.setupImageLazyLoading();
 
 			const pendingCreations = this.getPendingCreations();
+			const nowMs = Date.now();
+			const PENDING_TTL_MS = 3000;
+
+			// Short TTL for optimistic placeholders: once we have a successful poll response,
+			// we assume the backend should already be reporting them.
+			const pendingWithinTtl = creationsResult.ok
+				? pendingCreations.filter((p) => {
+					const createdAtRaw = typeof p?.created_at === 'string' ? p.created_at : '';
+					const createdAtMs = createdAtRaw ? Date.parse(createdAtRaw) : NaN;
+					if (!Number.isFinite(createdAtMs)) return true;
+					return nowMs - createdAtMs <= PENDING_TTL_MS;
+				})
+				: pendingCreations;
 
 			// Dedupe pending vs DB rows by creation_token when available.
 			const creationsByToken = new Map();
@@ -431,11 +449,28 @@ class AppRouteCreations extends HTMLElement {
 				}
 			});
 
-			const filteredPending = pendingCreations.filter((p) => {
+			const filteredPending = pendingWithinTtl.filter((p) => {
 				const token = typeof p.creation_token === 'string' ? p.creation_token : null;
 				if (!token) return true;
 				return !creationsByToken.has(token);
 			});
+
+			// If we see a DB row with the same creation_token, purge the local pending item so it can't stick forever.
+			// This covers cases where the original submit request was interrupted (navigation/unload) and the cleanup
+			// in the submitter never ran.
+			const shouldPurge = pendingCreations.some((p) => {
+				const token = typeof p?.creation_token === 'string' ? p.creation_token : null;
+				return Boolean(token) && creationsByToken.has(token);
+			});
+			const ttlPurged = filteredPending.length !== pendingCreations.length;
+			if (shouldPurge || ttlPurged) {
+				try {
+					sessionStorage.setItem("pendingCreations", JSON.stringify(filteredPending));
+				} catch {
+					// ignore storage write errors
+				}
+				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
+			}
 
 			const combinedCreations = [...filteredPending, ...creations];
 
@@ -499,6 +534,10 @@ class AppRouteCreations extends HTMLElement {
               </div>
             </div>
           `;
+					// Pending-only should still poll so the tile can resolve quickly.
+					if (this.isActiveRoute && !this.pollInterval) {
+						this.startPolling();
+					}
 				} else if (isCreating) {
 					// DB row still creating
 					card.innerHTML = html`

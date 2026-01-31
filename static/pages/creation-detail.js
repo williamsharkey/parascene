@@ -7,6 +7,8 @@ import { textWithCreationLinks } from '/shared/urls.js';
 import '../components/modals/publish.js';
 import '../components/modals/creation-details.js';
 
+const html = String.raw;
+
 // Set up URL change detection BEFORE header component loads
 // This ensures we capture navigation events
 
@@ -74,7 +76,7 @@ async function loadCreation() {
 
 	const creationId = getCreationId();
 	if (!creationId) {
-		detailContent.innerHTML = `
+		detailContent.innerHTML = html`
 			<div class="route-empty">
 				<div class="route-empty-title">Invalid creation ID</div>
 			</div>
@@ -91,7 +93,7 @@ async function loadCreation() {
 		});
 		if (!response.ok) {
 			if (response.status === 404) {
-				detailContent.innerHTML = `
+				detailContent.innerHTML = html`
 					<div class="route-empty">
 						<div class="route-empty-title">Creation not found</div>
 						<div class="route-empty-message">The creation you're looking for doesn't exist or you don't have access to it.</div>
@@ -247,6 +249,20 @@ async function loadCreation() {
 			}
 		}
 
+		// Update mutate button - show for completed images with a URL
+		const mutateBtn = document.querySelector('[data-mutate-btn]');
+		if (mutateBtn) {
+			// Only allow mutate when the source image is publicly readable by provider servers.
+			// Unpublished images require auth and will 403 for providers fetching by URL.
+			const canMutate = isPublished && status === 'completed' && !isFailed && Boolean(creation.url);
+			if (!canMutate) {
+				mutateBtn.style.display = 'none';
+			} else {
+				mutateBtn.style.display = '';
+				mutateBtn.disabled = false;
+			}
+		}
+
 		// Update delete / retry buttons
 		const deleteBtn = document.querySelector('[data-delete-btn]');
 		const retryBtn = document.querySelector('[data-retry-btn]');
@@ -290,7 +306,7 @@ async function loadCreation() {
 			const publishedTimeAgo = hasPublishedDate ? formatRelativeTime(publishedDate) : '';
 			const publishedAtTitle = hasPublishedDate ? formatDateTime(publishedDate) : '';
 
-			publishedLabel = `
+			publishedLabel = html`
 				<div class="creation-detail-author-published" ${publishedAtTitle ? `title="${publishedAtTitle}"` : ''}>
 					Published${publishedTimeAgo ? ` ${publishedTimeAgo}` : ''}
 				</div>
@@ -301,7 +317,7 @@ async function loadCreation() {
 		let descriptionHtml = '';
 		const descriptionText = typeof creation.description === 'string' ? creation.description.trim() : '';
 		if (descriptionText) {
-			descriptionHtml = `
+			descriptionHtml = html`
 				<div class="creation-detail-published">
 					<div class="creation-detail-description">${textWithCreationLinks(descriptionText)}</div>
 				</div>
@@ -334,31 +350,31 @@ async function loadCreation() {
 		const viewerAvatarUrl = typeof currentUserProfile?.avatar_url === 'string' ? currentUserProfile.avatar_url.trim() : '';
 		const viewerColor = getAvatarColor(viewerUserName || viewerEmailPrefix || String(currentUserId || '') || viewerName);
 
-		const authorAvatar = `
+		const authorAvatar = html`
 			<span class="creation-detail-author-icon" style="background: ${creatorColor};">
-				${creatorAvatarUrl ? `<img class="creation-detail-author-avatar" src="${creatorAvatarUrl}" alt="">` : creatorInitial}
+				${creatorAvatarUrl ? html`<img class="creation-detail-author-avatar" src="${creatorAvatarUrl}" alt="">` : creatorInitial}
 			</span>
 		`;
 
-		const authorIdentification = `
+		const authorIdentification = html`
 			<span class="creation-detail-author-name">${creatorName}</span>
 			<span class="creation-detail-author-handle">${creatorHandle}</span>
 		`;
 
-		detailContent.innerHTML = `
+		detailContent.innerHTML = html`
 			<div class="creation-detail-author">
-				${creatorProfileHref ? `
+				${creatorProfileHref ? html`
 					<a class="user-link creation-detail-author-avatar-slot" href="${creatorProfileHref}" aria-label="View ${creatorName} profile">
 						${authorAvatar}
 					</a>
-				` : `
+				` : html`
 					<div class="creation-detail-author-avatar-slot" aria-hidden="true">
 						${authorAvatar}
 					</div>
 				`}
 
 				<div class="creation-detail-author-id">
-					${creatorProfileHref ? `
+					${creatorProfileHref ? html`
 						<a class="user-link creation-detail-author-id-link" href="${creatorProfileHref}">
 							${authorIdentification}
 						</a>
@@ -482,7 +498,7 @@ async function loadCreation() {
 				if (commentsToolbarEl instanceof HTMLElement) {
 					commentsToolbarEl.style.display = 'none';
 				}
-				commentListEl.innerHTML = `
+				commentListEl.innerHTML = html`
 					<div class="route-empty comments-empty">
 						<div class="route-empty-title">No comments yet</div>
 						<div class="route-empty-message">Be the first to say something.</div>
@@ -554,7 +570,7 @@ async function loadCreation() {
 
 			if (!res.ok) {
 				if (commentsToolbarEl instanceof HTMLElement) commentsToolbarEl.style.display = 'none';
-				commentListEl.innerHTML = `
+				commentListEl.innerHTML = html`
 					<div class="route-empty comments-empty">
 						<div class="route-empty-title">Unable to load comments</div>
 					</div>
@@ -650,7 +666,7 @@ async function loadCreation() {
 		}
 	} catch (error) {
 		// console.error("Error loading creation detail:", error);
-		detailContent.innerHTML = `
+		detailContent.innerHTML = html`
 			<div class="route-empty">
 				<div class="route-empty-title">Unable to load creation</div>
 				<div class="route-empty-message">An error occurred while loading the creation.</div>
@@ -734,6 +750,17 @@ document.addEventListener('click', (e) => {
 	if (retryBtn && !retryBtn.disabled) {
 		e.preventDefault();
 		handleRetry();
+	}
+});
+
+// Mutate button handler
+document.addEventListener('click', (e) => {
+	const mutateBtn = e.target.closest('[data-mutate-btn]');
+	if (mutateBtn && !mutateBtn.disabled) {
+		e.preventDefault();
+		const creationId = getCreationId();
+		if (!creationId) return;
+		window.location.href = `/creations/${creationId}/mutate`;
 	}
 });
 

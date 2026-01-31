@@ -26,10 +26,30 @@ function renderProviderCapabilities(container, capabilities) {
 			const methodCard = document.createElement("div");
 			methodCard.className = "method-card";
 
+			const methodHeader = document.createElement("div");
+			methodHeader.className = "method-header";
+
 			const methodName = document.createElement("div");
 			methodName.className = "method-name";
 			methodName.textContent = method.name || methodKey;
-			methodCard.appendChild(methodName);
+			methodHeader.appendChild(methodName);
+
+			const intentList = Array.isArray(method?.intents)
+				? method.intents.filter(v => typeof v === 'string' && v.trim().length > 0).map(v => v.trim())
+				: (typeof method?.intent === 'string' && method.intent.trim().length > 0 ? [method.intent.trim()] : []);
+			if (intentList.length > 0) {
+				const intents = document.createElement('div');
+				intents.className = 'method-intents';
+				intentList.forEach(intent => {
+					const badge = document.createElement('span');
+					badge.className = 'method-intent-badge';
+					badge.textContent = intent;
+					intents.appendChild(badge);
+				});
+				methodHeader.appendChild(intents);
+			}
+
+			methodCard.appendChild(methodHeader);
 
 			const methodDesc = document.createElement("div");
 			methodDesc.className = "method-desc";
@@ -468,8 +488,34 @@ class AppModalServer extends HTMLElement {
 				.method-name {
 					font-weight: 600;
 					font-size: 1.05rem;
-					margin-bottom: 0.5rem;
 					color: var(--text);
+				}
+
+				.method-header {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 12px;
+					margin-bottom: 0.5rem;
+				}
+
+				.method-intents {
+					display: flex;
+					flex-wrap: wrap;
+					gap: 6px;
+					justify-content: flex-end;
+				}
+
+				.method-intent-badge {
+					font-size: 0.75rem;
+					padding: 0.25rem 0.6rem;
+					border-radius: 999px;
+					font-weight: 600;
+					background: var(--surface);
+					border: 1px solid var(--border);
+					color: var(--text-muted);
+					font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+					white-space: nowrap;
 				}
 
 				.method-desc {

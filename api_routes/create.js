@@ -96,12 +96,27 @@ export default function createCreateRoutes({ queries, storage }) {
 		return new Date().toISOString();
 	}
 
+	function toParasceneImageUrl(raw) {
+		const base = "https://parascene.crosshj.com";
+		if (typeof raw !== "string") return null;
+		const value = raw.trim();
+		if (!value) return null;
+		try {
+			const parsed = new URL(value, base);
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+			return `${base}${parsed.pathname}${parsed.search}${parsed.hash}`;
+		} catch {
+			return null;
+		}
+	}
+
 	// POST /api/create - Create a new image
 	router.post("/api/create", async (req, res) => {
 		const user = await requireUser(req, res);
 		if (!user) return;
 
-		const { server_id, method, args, creation_token, retry_of_id } = req.body;
+		const { server_id, method, args, creation_token, retry_of_id, mutate_of_id } = req.body;
+		const safeArgs = args && typeof args === "object" ? { ...args } : {};
 
 		// Validate required fields
 		if (!server_id || !method) {
@@ -177,11 +192,49 @@ export default function createCreateRoutes({ queries, storage }) {
 				method_name: typeof methodConfig.name === "string" && methodConfig.name.trim()
 					? methodConfig.name.trim()
 					: null,
-				args: args || {},
+				args: safeArgs,
 				started_at,
 				timeout_at,
 				credit_cost: CREATION_CREDIT_COST,
 			};
+
+			// Mutate lineage: create/extend meta.history
+			if (mutate_of_id != null && Number.isFinite(Number(mutate_of_id))) {
+				const sourceId = Number(mutate_of_id);
+
+				let source = await queries.selectCreatedImageById.get(sourceId, user.id);
+				if (!source) {
+					const any = await queries.selectCreatedImageByIdAnyUser?.get(sourceId);
+					if (any) {
+						const isPublished = any.published === 1 || any.published === true;
+						const isAdmin = user.role === 'admin';
+						if (isPublished || isAdmin) {
+							source = any;
+						}
+					}
+				}
+
+				if (!source) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+
+				const sourceMeta = parseMeta(source.meta) || {};
+				const prior = Array.isArray(sourceMeta.history) ? sourceMeta.history : null;
+				const priorIds = Array.isArray(prior)
+					? prior.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+					: [];
+				meta.history = [...priorIds, sourceId];
+				meta.mutate_of_id = sourceId;
+
+				// Normalize image_url for mutate flows only.
+				if (typeof safeArgs.image_url === "string") {
+					const normalized = toParasceneImageUrl(safeArgs.image_url);
+					if (normalized) {
+						safeArgs.image_url = normalized;
+						meta.args.image_url = normalized;
+					}
+				}
+			}
 
 			// Retry in place: reuse the same creation row instead of inserting a new one
 			if (retry_of_id != null && Number.isFinite(Number(retry_of_id))) {
@@ -208,6 +261,10 @@ export default function createCreateRoutes({ queries, storage }) {
 					}
 				}
 				const existingMeta = parseMeta(image.meta) || {};
+				// Preserve existing history on retries (including mutated creations).
+				if (Array.isArray(existingMeta.history)) {
+					meta.history = existingMeta.history;
+				}
 				// Refund previous attempt if it was never refunded (so we don't double-charge)
 				if (existingMeta.credits_refunded !== true && Number(existingMeta.credit_cost) > 0) {
 					await queries.updateUserCreditsBalance.run(user.id, Number(existingMeta.credit_cost));
@@ -223,7 +280,7 @@ export default function createCreateRoutes({ queries, storage }) {
 						user_id: user.id,
 						server_id: Number(server_id),
 						method,
-						args: args || {},
+						args: safeArgs,
 						credit_cost: CREATION_CREDIT_COST,
 					},
 					runCreationJob: ({ payload }) => runCreationJob({ queries, storage, payload }),
@@ -260,7 +317,7 @@ export default function createCreateRoutes({ queries, storage }) {
 					user_id: user.id,
 					server_id: Number(server_id),
 					method,
-					args: args || {},
+					args: safeArgs,
 					credit_cost: CREATION_CREDIT_COST,
 				},
 				runCreationJob: ({ payload }) => runCreationJob({ queries, storage, payload }),
