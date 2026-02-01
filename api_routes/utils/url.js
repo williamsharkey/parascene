@@ -7,7 +7,8 @@ export function getBaseAppUrl() {
 		return `https://${process.env.VERCEL_URL}`;
 	}
 
-	return "http://localhost:3000";
+	const port = Number(process.env.PORT) || 2367;
+	return `http://localhost:${port}`;
 }
 
 export function getThumbnailUrl(url) {

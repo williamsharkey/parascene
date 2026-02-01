@@ -36,6 +36,7 @@ class AppNavigationMobile extends HTMLElement {
 		if (!route) return;
 
 		const isServerSentPage = /^\/creations\/\d+(\/(edit|mutat|mutate))?$/.test(window.location.pathname) ||
+			window.location.pathname.startsWith('/s/') ||
 			window.location.pathname.startsWith('/help/') ||
 			window.location.pathname === '/user' ||
 			/^\/user\/\d+$/.test(window.location.pathname);
@@ -81,6 +82,9 @@ class AppNavigationMobile extends HTMLElement {
 		const defaultRoute = header?.getAttribute('default-route') || 'feed';
 		let currentRoute = pathname === '/' || pathname === '' ? defaultRoute : pathname.slice(1);
 		if (pathname.startsWith('/creations/')) {
+			currentRoute = null;
+		}
+		if (pathname.startsWith('/s/')) {
 			currentRoute = null;
 		}
 		if (pathname === '/user' || /^\/user\/\d+$/.test(pathname)) {

@@ -2,9 +2,11 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getThumbnailUrl } from "./utils/url.js";
+import { getBaseAppUrl } from "./utils/url.js";
 import { runCreationJob, PROVIDER_TIMEOUT_MS } from "./utils/creationJob.js";
 import { scheduleCreationJob } from "./utils/scheduleCreationJob.js";
 import { verifyQStashRequest } from "./utils/qstashVerification.js";
+import { ACTIVE_SHARE_VERSION, mintShareToken, verifyShareToken } from "./utils/shareLink.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -438,16 +440,36 @@ export default function createCreateRoutes({ queries, storage }) {
 				user.id
 			);
 
+			let shareAccess = null;
+
 			// If not found as owner, check if it exists and is either published or user is admin
 			if (!image) {
 				const anyImage = await queries.selectCreatedImageByIdAnyUser.get(req.params.id);
 				if (anyImage) {
 					const isPublished = anyImage.published === 1 || anyImage.published === true;
 					const isAdmin = user.role === 'admin';
-					if (isPublished || isAdmin) {
+					// Optional: allow view-only access via external share token (for signed-in non-owners).
+					if (!isPublished && !isAdmin) {
+						let shareVersion = String(req.headers["x-share-version"] || "");
+						let shareToken = String(req.headers["x-share-token"] || "");
+						if (shareVersion && shareToken) {
+							const verified = verifyShareToken({ version: shareVersion, token: shareToken });
+							if (verified.ok && Number(verified.imageId) === Number(anyImage.id)) {
+								const status = anyImage.status || "completed";
+								if (status === "completed") {
+									shareAccess = { version: shareVersion, token: shareToken };
+									image = anyImage;
+								}
+							}
+						}
+					}
+
+					if (!image && (isPublished || isAdmin)) {
 						image = anyImage;
 					} else {
-						return res.status(404).json({ error: "Image not found" });
+						if (!image) {
+							return res.status(404).json({ error: "Image not found" });
+						}
 					}
 				} else {
 					return res.status(404).json({ error: "Image not found" });
@@ -476,7 +498,9 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			const status = image.status || 'completed';
 			const url = status === "completed"
-				? (image.file_path || storage.getImageUrl(image.filename))
+				? (shareAccess
+					? `/api/share/${encodeURIComponent(shareAccess.version)}/${encodeURIComponent(shareAccess.token)}/image`
+					: (image.file_path || storage.getImageUrl(image.filename)))
 				: null;
 
 			return res.json({
@@ -508,6 +532,53 @@ export default function createCreateRoutes({ queries, storage }) {
 		} catch (error) {
 			// console.error("Error fetching image:", error);
 			return res.status(500).json({ error: "Failed to fetch image" });
+		}
+	});
+
+	// POST /api/create/images/:id/share - Mint an external share URL (no DB write)
+	router.post("/api/create/images/:id/share", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		try {
+			const id = Number(req.params.id);
+			if (!Number.isFinite(id) || id <= 0) {
+				return res.status(400).json({ error: "Invalid creation id" });
+			}
+
+			// First try as owner.
+			let image = await queries.selectCreatedImageById?.get(id, user.id);
+
+			// If not owner, allow if published or admin.
+			if (!image) {
+				const any = await queries.selectCreatedImageByIdAnyUser?.get(id);
+				if (!any) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				const isPublished = any.published === 1 || any.published === true;
+				const isAdmin = user.role === "admin";
+				if (!isPublished && !isAdmin) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				image = any;
+			}
+
+			const status = image.status || "completed";
+			if (status !== "completed") {
+				return res.status(400).json({ error: "Only completed images can be shared" });
+			}
+
+			const token = mintShareToken({
+				version: ACTIVE_SHARE_VERSION,
+				imageId: id,
+				sharedByUserId: Number(user.id)
+			});
+			const bust = Math.floor(Date.now() / 1000).toString(36);
+			const base = getBaseAppUrl();
+			const url = `${base}/s/${ACTIVE_SHARE_VERSION}/${token}/${bust}`;
+			return res.json({ url });
+		} catch (error) {
+			return res.status(500).json({ error: "Failed to mint share link" });
 		}
 	});
 

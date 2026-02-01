@@ -7,6 +7,7 @@ import { hydrateYoutubeLinkTitles, textWithCreationLinks } from '/shared/urls.js
 import { attachAutoGrowTextarea } from '/shared/autogrow.js';
 import '../components/modals/publish.js';
 import '../components/modals/creation-details.js';
+import '../components/modals/share.js';
 
 const html = String.raw;
 
@@ -40,9 +41,35 @@ async function copyTextToClipboard(text) {
 
 // Get creation ID from URL
 function getCreationId() {
+	// Only use injected share context while we're actually on a share-mounted URL.
+	// Otherwise it "sticks" across navigation and breaks header/mobile nav routing.
+	if (isShareMountedView()) {
+		if (window.__ps_share_context && Number.isFinite(Number(window.__ps_share_context.creationId))) {
+			const id = Number(window.__ps_share_context.creationId);
+			return id > 0 ? id : null;
+		}
+	}
 	const pathname = window.location.pathname;
 	const match = pathname.match(/^\/creations\/(\d+)$/);
 	return match ? parseInt(match[1], 10) : null;
+}
+
+function isShareMountedView() {
+	return Boolean(
+		window.__ps_share_context &&
+		typeof window.__ps_share_context === 'object' &&
+		typeof window.location?.pathname === 'string' &&
+		window.location.pathname.startsWith('/s/')
+	);
+}
+
+function getPrimaryLinkUrl(creationId) {
+	// When this page is served at a share URL (/s/...), keep the share URL as the primary link.
+	// Otherwise, use the canonical in-app creation URL.
+	if (isShareMountedView()) {
+		return window.location.href;
+	}
+	return new URL(`/creations/${creationId}`, window.location.origin).toString();
 }
 
 // Store original history methods before anything else modifies them
@@ -114,8 +141,19 @@ async function loadCreation() {
 	detailContent.innerHTML = '<div class="route-empty route-loading"><div class="route-loading-spinner" aria-label="Loading" role="status"></div></div>';
 
 	try {
+		const headers = {};
+		if (window.__ps_share_context && typeof window.__ps_share_context === 'object') {
+			const shareVersion = typeof window.__ps_share_context.version === 'string' ? window.__ps_share_context.version : '';
+			const shareToken = typeof window.__ps_share_context.token === 'string' ? window.__ps_share_context.token : '';
+			if (shareVersion && shareToken) {
+				headers['x-share-version'] = shareVersion;
+				headers['x-share-token'] = shareToken;
+			}
+		}
+
 		const response = await fetch(`/api/create/images/${creationId}`, {
-			credentials: 'include'
+			credentials: 'include',
+			headers
 		});
 		if (!response.ok) {
 			if (response.status === 404) {
@@ -138,20 +176,25 @@ async function loadCreation() {
 		const timeoutAt = meta && typeof meta.timeout_at === 'string' ? new Date(meta.timeout_at).getTime() : NaN;
 		const isTimedOut = status === 'creating' && Number.isFinite(timeoutAt) && Date.now() > timeoutAt;
 		const isFailed = status === 'failed' || isTimedOut;
+		const shareMounted = isShareMountedView();
 
 		// Load like metadata from backend (no localStorage fallback).
 		let likeMeta = { like_count: 0, viewer_liked: false };
-		try {
-			const likeRes = await fetch(`/api/created-images/${creationId}/like`, { credentials: 'include' });
-			if (likeRes.ok) {
-				const meta = await likeRes.json();
-				likeMeta = {
-					like_count: Number(meta?.like_count ?? 0),
-					viewer_liked: Boolean(meta?.viewer_liked)
-				};
+		// When the detail page is served at a share URL (/s/...), don't touch likes for private/unpublished creations.
+		// Likes are a "public surface area" and we don't want extra API calls here.
+		if (!shareMounted) {
+			try {
+				const likeRes = await fetch(`/api/created-images/${creationId}/like`, { credentials: 'include' });
+				if (likeRes.ok) {
+					const meta = await likeRes.json();
+					likeMeta = {
+						like_count: Number(meta?.like_count ?? 0),
+						viewer_liked: Boolean(meta?.viewer_liked)
+					};
+				}
+			} catch {
+				// ignore like meta load failures
 			}
-		} catch {
-			// ignore like meta load failures
 		}
 
 		const creationWithLikes = { ...creation, ...likeMeta, created_image_id: creationId };
@@ -184,6 +227,7 @@ async function loadCreation() {
 
 		// Generate title from published title or use default
 		const isPublished = creation.published === true || creation.published === 1;
+		const shareMountedPrivate = shareMounted && !isPublished;
 		const displayTitle = creation.title || 'Untitled';
 		const isUntitled = !creation.title;
 
@@ -298,6 +342,18 @@ async function loadCreation() {
 			} else {
 				mutateBtn.style.display = '';
 				mutateBtn.disabled = false;
+			}
+		}
+
+		// Update share button - show for completed images (works for private via tokenized share page)
+		const shareBtn = document.querySelector('[data-share-btn]');
+		if (shareBtn) {
+			const canShare = !shareMountedPrivate && status === 'completed' && !isFailed;
+			if (!canShare) {
+				shareBtn.style.display = 'none';
+			} else {
+				shareBtn.style.display = '';
+				shareBtn.disabled = false;
 			}
 		}
 
@@ -608,16 +664,21 @@ async function loadCreation() {
 		}
 
 		const likeButton = detailContent.querySelector('button[data-like-button]');
-		if (likeButton) {
+		if (likeButton && !shareMountedPrivate) {
 			initLikeButton(likeButton, creationWithLikes);
+		} else if (likeButton && shareMountedPrivate) {
+			likeButton.style.display = 'none';
 		}
 
 		const copyLinkBtn = detailContent.querySelector('button[data-copy-link-button]');
 		const copyLinkLabel = detailContent.querySelector('[data-copy-link-label]');
 		if (copyLinkBtn instanceof HTMLButtonElement) {
+			if (shareMountedPrivate) {
+				copyLinkBtn.style.display = 'none';
+			}
 			copyLinkBtn.addEventListener('click', async () => {
-				const canonical = new URL(`/creations/${creationId}`, window.location.origin).toString();
-				const ok = await copyTextToClipboard(canonical);
+				const url = getPrimaryLinkUrl(creationId);
+				const ok = await copyTextToClipboard(url);
 				if (!copyLinkLabel) return;
 
 				if (ok) {
@@ -702,14 +763,16 @@ async function loadCreation() {
 					e.stopPropagation();
 					menu.style.display = 'none';
 					document.removeEventListener('click', closeMenu);
-					const canonical = new URL(`/creations/${creationId}`, window.location.origin).toString();
-					await copyTextToClipboard(canonical);
+					const url = getPrimaryLinkUrl(creationId);
+					await copyTextToClipboard(url);
 				});
 			}
 		}
 		*/
 
-		enableLikeButtons(detailContent);
+		if (!shareMountedPrivate) {
+			enableLikeButtons(detailContent);
+		}
 
 		function scrollToComments() {
 			const el = detailContent.querySelector('#comments');
@@ -857,7 +920,7 @@ async function loadCreation() {
 		}
 		const refreshCommentTextarea = commentTextarea instanceof HTMLTextAreaElement
 			? attachAutoGrowTextarea(commentTextarea)
-			: () => {};
+			: () => { };
 
 		if (commentTextarea instanceof HTMLTextAreaElement) {
 			commentTextarea.addEventListener('input', () => {
@@ -1009,6 +1072,19 @@ document.addEventListener('click', (e) => {
 		const creationId = getCreationId();
 		if (!creationId) return;
 		window.location.href = `/creations/${creationId}/mutate`;
+	}
+});
+
+// Share button handler
+document.addEventListener('click', (e) => {
+	const shareBtn = e.target.closest('[data-share-btn]');
+	if (shareBtn && !shareBtn.disabled) {
+		e.preventDefault();
+		const creationId = getCreationId();
+		if (!creationId) return;
+		document.dispatchEvent(new CustomEvent('open-share-modal', {
+			detail: { creationId }
+		}));
 	}
 });
 

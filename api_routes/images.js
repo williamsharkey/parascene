@@ -55,12 +55,16 @@ export default function createImagesRoutes({ storage }) {
 			return next();
 		}
 
-		if (!req.auth?.userId) {
-			return res.status(401).json({ error: "Unauthorized" });
-		}
-
 		if (!key) {
 			return res.status(400).json({ error: "Invalid key" });
+		}
+
+		// Public-read subset: profile images (avatars/covers) must be viewable on share pages.
+		// Keep the rest of the generic bucket auth-gated to avoid accidentally exposing private uploads.
+		const isPublicProfileKey =
+			key.startsWith("profile/") && !key.includes("..") && !key.startsWith("profile//");
+		if (!isPublicProfileKey && !req.auth?.userId) {
+			return res.status(401).json({ error: "Unauthorized" });
 		}
 
 		try {

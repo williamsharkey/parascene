@@ -20,6 +20,14 @@
 	--error-bg: #fef2f2;
 	--error-border: #fecaca;
 	--error-text: #b91c1c;
+
+	/* Share vendor colors */
+	--share-brand-text: #ffffff;
+	--share-x-bg: #161616;
+	--share-x-fg: #ffffff;
+	--share-facebook: #1877f2;
+	--share-reddit: #ff4500;
+	--share-linkedin: #0a66c2;
 }
 
 /* Original dark theme (commented out)
@@ -62,6 +70,10 @@
 		--error-bg: #2a1520;
 		--error-border: #5b1f35;
 		--error-text: #fda4af;
+
+		/* Share vendor colors (dark mode tweaks) */
+		--share-x-bg: #ffffff;
+		--share-x-fg: #0b0b0b;
 	}
 }
 
@@ -934,11 +946,11 @@ app-tabs {
 	display: block;
 }
 
-app-tabs > tab {
+app-tabs>tab {
 	display: block;
 }
 
-app-tabs > tab[hidden] {
+app-tabs>tab[hidden] {
 	display: none;
 }
 
@@ -2330,6 +2342,7 @@ app-route-feed {
 }
 
 .comment-author-name {
+	color: var(--text-muted);
 	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -3232,6 +3245,262 @@ body.modal-open {
 .modal.modal-full-height {
 	height: 90vh;
 	max-height: 90vh;
+}
+
+/* Share Modal (creation detail) */
+.share-modal-body {
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	min-height: 0;
+}
+
+.share-modal-note {
+	margin: 0 0 16px;
+	color: var(--text-muted);
+	line-height: 1.6;
+}
+
+.share-modal-note-strong {
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+.share-action-list {
+	display: flex;
+	flex-direction: column;
+	border: none;
+	border-radius: 0;
+	overflow: visible;
+	background: transparent;
+}
+
+.share-action-row {
+	appearance: none;
+	width: 100%;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 14px;
+	cursor: pointer;
+	font: inherit;
+}
+
+.share-action-row+.share-action-row {
+	border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+}
+
+.share-action-row:hover {
+	background: var(--surface-strong);
+	filter: none;
+}
+
+.share-action-row:active {
+	transform: none;
+}
+
+.share-action-row:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
+}
+
+.share-action-left {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.share-action-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.share-action-title {
+	font-weight: 600;
+	color: var(--text);
+}
+
+.share-action-subtitle {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.share-option-icon {
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--surface-strong);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	color: var(--text);
+}
+
+.share-option-icon svg {
+	width: 20px;
+	height: 20px;
+	display: block;
+}
+
+.share-option-icon-x svg {
+	fill: currentcolor;
+}
+
+.share-option-icon.is-brand {
+	border-color: transparent;
+	color: var(--share-brand-text);
+}
+
+.share-option-icon-x {
+	background: var(--share-x-bg);
+	color: var(--share-x-fg);
+}
+
+.share-option-icon-x.is-brand {
+	color: var(--share-x-fg);
+}
+
+.share-option-icon-facebook {
+	background: var(--share-facebook);
+}
+
+.share-option-icon-reddit {
+	background: var(--share-reddit);
+}
+
+.share-option-icon-linkedin {
+	background: var(--share-linkedin);
+}
+
+.share-action-cta {
+	flex: 0 0 auto;
+	padding: 8px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--surface-strong);
+	color: var(--text);
+	font-weight: 700;
+	font-size: 0.9rem;
+	line-height: 1;
+	min-width: 84px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+}
+
+.share-action-cta-label {
+	transition: opacity 0.15s ease;
+}
+
+.share-action-cta[data-state='loading'] .share-action-cta-label {
+	opacity: 0;
+}
+
+.share-action-cta[data-state='loading']::before {
+	content: '';
+	position: absolute;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	border: 2px solid currentcolor;
+	border-top-color: transparent;
+	animation: spin 0.8s linear infinite;
+}
+
+.share-action-cta-facebook {
+	background: var(--share-facebook);
+	border-color: var(--share-facebook);
+	color: var(--share-brand-text);
+}
+
+.share-action-cta-x {
+	background: var(--share-x-bg);
+	border-color: var(--share-x-bg);
+	color: var(--share-x-fg);
+}
+
+.share-action-cta-reddit {
+	background: var(--share-reddit);
+	border-color: var(--share-reddit);
+	color: var(--share-brand-text);
+}
+
+.share-action-cta-linkedin {
+	background: var(--share-linkedin);
+	border-color: var(--share-linkedin);
+	color: var(--share-brand-text);
+}
+
+.share-modal-cancel {
+	width: 100%;
+	margin-top: 14px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	font-weight: 600;
+	text-align: center;
+	cursor: pointer;
+}
+
+.share-modal-cancel:hover {
+	color: var(--text);
+	filter: none;
+}
+
+.share-modal-cancel:active {
+	transform: none;
+}
+
+.share-modal-cancel:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+	app-modal-share .modal {
+		width: calc(100% - 16px);
+		max-width: none;
+		max-height: calc(100vh - 16px);
+	}
+
+	app-modal-share .modal-header {
+		padding: 16px;
+	}
+
+	app-modal-share .share-modal-body {
+		padding: 14px 12px calc(38px + env(safe-area-inset-bottom));
+	}
+
+	.share-action-row {
+		padding: 10px 12px;
+	}
+
+	.share-action-cta {
+		min-width: 76px;
+	}
+}
+
+.share-modal-status {
+	min-height: 18px;
+	margin-top: 12px;
+	color: var(--text-muted);
+	font-weight: 600;
 }
 
 /* ============================================

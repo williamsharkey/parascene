@@ -21,6 +21,7 @@ import createFollowsRoutes from "../api_routes/follows.js";
 import createTodoRoutes from "../api_routes/todo.js";
 import createYoutubeRoutes from "../api_routes/youtube.js";
 import createFeatureRequestRoutes from "../api_routes/feature_requests.js";
+import createShareRoutes from "../api_routes/share.js";
 import { computeWelcome } from "../api_routes/utils/welcome.js";
 import {
 	authMiddleware,
@@ -176,6 +177,7 @@ app.use(createImagesRoutes({ storage }));
 app.use(createCreationsRoutes({ queries }));
 app.use(createLikesRoutes({ queries }));
 app.use(createCommentsRoutes({ queries }));
+app.use(createShareRoutes({ queries, storage }));
 app.use(createProviderRoutes({ queries }));
 app.use(createServersRoutes({ queries }));
 app.use(createTemplatesRoutes({ queries }));
