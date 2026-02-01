@@ -22,7 +22,7 @@ class AppRouteServers extends HTMLElement {
       <div class="servers-route">
         <div class="route-header">
           <h3>Connect</h3>
-          <p>See what’s happening across parascene, manage your image generation servers, and send feature requests directly to the team.</p>
+          <p>See what the community is talking about, manage your image generation servers, and send feature requests directly to the team.</p>
         </div>
 		<app-tabs>
 			<tab data-id="latest-comments" label="Comments" default>
@@ -264,7 +264,7 @@ class AppRouteServers extends HTMLElement {
 		const messageEl = this.querySelector('[data-feature-request-message]');
 		const refreshMessage = messageEl instanceof HTMLTextAreaElement
 			? attachAutoGrowTextarea(messageEl)
-			: () => {};
+			: () => { };
 
 		let statusTimer = null;
 
