@@ -14,13 +14,6 @@
     "dependsOn": []
   },
   {
-    "name": "Feature requests",
-    "description": "Let users submit feature requests via a lightweight form, store them for review, and acknowledge submission (basic feedback loop).",
-    "cost": 10,
-    "impact": 16,
-    "dependsOn": []
-  },
-  {
     "name": "External image sharing",
     "description": "Allow sharing a created image with someone who is not a user, likely via a secure share link/token flow similar to invites (view-only by default, with clear revocation/expiration behavior).",
     "cost": 84,
