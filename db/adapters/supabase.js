@@ -1421,6 +1421,118 @@ export function openDb() {
 				});
 			}
 		},
+		selectLatestCreatedImageComments: {
+			all: async (options = {}) => {
+				const limitRaw = Number.parseInt(String(options?.limit ?? "10"), 10);
+				const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 10;
+
+				// Over-fetch a bit so filtering unpublished creations still returns enough rows.
+				const fetchLimit = Math.min(200, Math.max(10, limit * 5));
+
+				const { data: rawComments, error: commentsError } = await serviceClient
+					.from(prefixedTable("comments_created_image"))
+					.select("id, user_id, created_image_id, text, created_at, updated_at")
+					.order("created_at", { ascending: false })
+					.limit(fetchLimit);
+				if (commentsError) throw commentsError;
+
+				const comments = rawComments ?? [];
+
+				const createdImageIds = Array.from(new Set(
+					comments
+						.map((row) => row?.created_image_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let imageById = new Map();
+				if (createdImageIds.length > 0) {
+					const { data: imageRows, error: imageError } = await serviceClient
+						.from(prefixedTable("created_images"))
+						.select("id, title, published, user_id, file_path, created_at")
+						.in("id", createdImageIds);
+					if (imageError) throw imageError;
+					imageById = new Map((imageRows ?? []).map((row) => [String(row.id), row]));
+				}
+
+				const creatorUserIds = Array.from(new Set(
+					Array.from(imageById.values())
+						.map((row) => row?.user_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let creatorProfileByUserId = new Map();
+				if (creatorUserIds.length > 0) {
+					const { data: creatorProfiles, error: creatorProfileError } = await serviceClient
+						.from(prefixedTable("user_profiles"))
+						.select("user_id, user_name, display_name, avatar_url")
+						.in("user_id", creatorUserIds);
+					if (creatorProfileError) throw creatorProfileError;
+					creatorProfileByUserId = new Map(
+						(creatorProfiles ?? []).map((row) => [String(row.user_id), row])
+					);
+				}
+
+				const visibleComments = comments
+					.map((row) => {
+						const image = row?.created_image_id !== null && row?.created_image_id !== undefined
+							? imageById.get(String(row.created_image_id)) ?? null
+							: null;
+						const creatorProfile = image?.user_id !== null && image?.user_id !== undefined
+							? creatorProfileByUserId.get(String(image.user_id)) ?? null
+							: null;
+						return {
+							...row,
+							created_image_title: image?.title ?? null,
+							created_image_url: image?.file_path ?? null,
+							created_image_created_at: image?.created_at ?? null,
+							created_image_published: image?.published ?? null,
+							created_image_user_id: image?.user_id ?? null,
+							created_image_user_name: creatorProfile?.user_name ?? null,
+							created_image_display_name: creatorProfile?.display_name ?? null,
+							created_image_avatar_url: creatorProfile?.avatar_url ?? null
+						};
+					})
+					.filter((row) => row?.created_image_published === true);
+
+				const trimmed = visibleComments.slice(0, limit);
+
+				const userIds = Array.from(new Set(
+					trimmed
+						.map((row) => row?.user_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let profileByUserId = new Map();
+				if (userIds.length > 0) {
+					const { data: profileRows, error: profileError } = await serviceClient
+						.from(prefixedTable("user_profiles"))
+						.select("user_id, user_name, display_name, avatar_url")
+						.in("user_id", userIds);
+					if (profileError) throw profileError;
+					profileByUserId = new Map(
+						(profileRows ?? []).map((row) => [String(row.user_id), row])
+					);
+				}
+
+				return trimmed.map((row) => {
+					const profile = row?.user_id !== null && row?.user_id !== undefined
+						? profileByUserId.get(String(row.user_id)) ?? null
+						: null;
+					return {
+						...row,
+						user_name: profile?.user_name ?? null,
+						display_name: profile?.display_name ?? null,
+						avatar_url: profile?.avatar_url ?? null
+					};
+				});
+			}
+		},
 		selectCreatedImageCommentCount: {
 			get: async (createdImageId) => {
 				const { data, error } = await serviceClient

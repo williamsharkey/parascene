@@ -19,6 +19,15 @@ export async function fetchCreatedImageComments(createdImageId, { order = 'asc',
 	return fetchJsonWithStatusDeduped(url, { credentials: 'include' }, { windowMs: 500 });
 }
 
+export function buildLatestCommentsUrl({ limit } = {}) {
+	return `/api/comments/latest${toQuery({ limit })}`;
+}
+
+export async function fetchLatestComments({ limit = 10 } = {}) {
+	const url = buildLatestCommentsUrl({ limit });
+	return fetchJsonWithStatusDeduped(url, { credentials: 'include' }, { windowMs: 2000 });
+}
+
 async function readResponsePayload(response) {
 	const contentType = response.headers?.get?.('content-type') || '';
 	if (contentType.includes('application/json')) {

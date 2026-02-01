@@ -817,6 +817,13 @@ export function openDb() {
 				return { changes: initialLength - comments_created_image.length };
 			}
 		},
+		selectLatestCreatedImageComments: {
+			all: async () => {
+				// Keep mock adapter minimal for now.
+				// (Mock comment creation/listing isn't fully implemented yet.)
+				return [];
+			}
+		},
 		selectUserCredits: {
 			get: async (userId) =>
 				user_credits.find((row) => row.user_id === Number(userId))

@@ -1650,6 +1650,13 @@ header .hamburger-button.active span:nth-child(3) {
 	margin-top: 28px;
 }
 
+.comment-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin-top: 0;
+}
+
 .route-cards {
 	display: grid;
 	gap: 12px;
@@ -2175,6 +2182,169 @@ app-route-feed {
 	margin-top: 4px;
 	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+/* Connect: latest comments list (thumbnail + standard comment row) */
+.connect-comment-list {
+	gap: 0;
+}
+
+.connect-comment {
+	display: grid;
+	grid-template-columns: 128px 1fr;
+	column-gap: 12px;
+	row-gap: 6px;
+	grid-template-areas:
+		'thumb title'
+		'thumb creator'
+		'thumb text'
+		'thumb footer';
+	align-items: start;
+	padding: 12px 0;
+	cursor: pointer;
+}
+
+.connect-comment+.connect-comment {
+	border-top: 1px solid var(--border);
+}
+
+.connect-comment:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 6px;
+	border-radius: 10px;
+}
+
+.connect-comment.is-disabled {
+	cursor: default;
+	opacity: 0.7;
+}
+
+.connect-comment-thumb {
+	grid-area: thumb;
+	width: 128px;
+	height: 128px;
+	border-radius: 0;
+	background: var(--surface-muted);
+	border: 1px solid var(--border);
+	overflow: hidden;
+}
+
+.connect-comment-thumb-img {
+	width: 100%;
+	height: 100%;
+	display: block;
+	object-fit: cover;
+}
+
+.connect-comment-creation-title {
+	grid-area: title;
+	font-weight: 600;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	word-break: break-word;
+}
+
+.connect-comment-creator {
+	grid-area: creator;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.connect-comment-creator-left {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.connect-comment-creator-who {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.connect-comment-creator .comment-avatar,
+.connect-comment-footer .comment-avatar {
+	width: 16px;
+	height: 16px;
+	margin-top: 0;
+	font-weight: 700;
+	font-size: 0.75em;
+}
+
+.connect-comment .comment-text {
+	grid-area: text;
+	margin-top: 0;
+}
+
+.connect-comment-footer {
+	grid-area: footer;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 2px;
+}
+
+.connect-comment-footer-left {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.connect-comment-footer-who {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+@media (max-width: 768px) {
+	.connect-comment {
+		grid-template-columns: 64px 1fr;
+		gap: 10px;
+		padding: 10px 0;
+		grid-template-areas:
+			'thumb title'
+			'thumb creator'
+			'text text'
+			'footer footer';
+	}
+
+	.connect-comment-thumb {
+		width: 64px;
+		height: 64px;
+		border-radius: 0;
+	}
+
+	.connect-comment-creation-title {
+		font-size: 1rem;
+		-webkit-line-clamp: 1;
+		line-clamp: 1;
+	}
+
+	.connect-comment-creator,
+	.connect-comment-footer {
+		font-size: 0.9rem;
+	}
+
+	.connect-comment .comment-text {
+		margin-top: 0;
+	}
+
+	/* Optional: reduce visual noise on small screens */
+	.connect-comment-creator-who .comment-author-handle,
+	.connect-comment-footer-who .comment-author-handle {
+		display: none;
+	}
 }
 
 /* Image grid layouts */

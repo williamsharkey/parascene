@@ -1,6 +1,6 @@
 import express from "express";
 import { sendDelegatedEmail, sendTemplatedEmail } from "../email/index.js";
-import { getBaseAppUrl } from "./utils/url.js";
+import { getBaseAppUrl, getThumbnailUrl } from "./utils/url.js";
 
 async function requireUser(req, res, queries) {
 	if (!req.auth?.userId) {
@@ -68,6 +68,27 @@ function getUserDisplayName(user) {
 
 export default function createCommentsRoutes({ queries }) {
 	const router = express.Router();
+
+	router.get("/api/comments/latest", async (req, res) => {
+		const user = await requireUser(req, res, queries);
+		if (!user) return;
+
+		const limit = normalizeLimit(req.query?.limit, 10);
+
+		const commentsRaw = await queries.selectLatestCreatedImageComments?.all({ limit })
+			?? [];
+
+		const comments = (commentsRaw || []).map((row) => {
+			const createdImageUrl = row?.created_image_url ?? null;
+			return {
+				...row,
+				created_image_url: createdImageUrl,
+				created_image_thumbnail_url: getThumbnailUrl(createdImageUrl)
+			};
+		});
+
+		return res.json({ comments });
+	});
 
 	router.get("/api/created-images/:id/comments", async (req, res) => {
 		const user = await requireUser(req, res, queries);

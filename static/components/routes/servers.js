@@ -1,26 +1,229 @@
 import { formatRelativeTime } from '../../shared/datetime.js';
 import { fetchJsonWithStatusDeduped } from '../../shared/api.js';
 import { getAvatarColor } from '../../shared/avatar.js';
+import { fetchLatestComments } from '../../shared/comments.js';
+import { textWithCreationLinks, hydrateYoutubeLinkTitles } from '../../shared/urls.js';
 
 const html = String.raw;
+
+function escapeHtml(str) {
+	return String(str ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#039;');
+}
 
 class AppRouteServers extends HTMLElement {
 	connectedCallback() {
 		this.innerHTML = html`
       <div class="servers-route">
         <div class="route-header">
-          <h3>Servers</h3>
-          <p>Browse and manage image generation servers.</p>
+          <h3>Connect</h3>
+          <p>See the latest comments across the site and manage image generation servers.</p>
         </div>
-        <div class="route-cards admin-cards" data-servers-container>
-          <div class="route-empty route-loading">
-            <div class="route-loading-spinner" aria-label="Loading" role="status"></div>
-          </div>
-        </div>
+		<div class="route-header">
+			<h4>Latest Comments</h4>
+		</div>
+		<div class="comment-list" data-comments-container>
+			<div class="route-empty route-loading">
+				<div class="route-loading-spinner" aria-label="Loading" role="status"></div>
+			</div>
+		</div>
+
+		<div class="route-header">
+			<h4>Servers</h4>
+		</div>
+		<div class="route-cards admin-cards" data-servers-container>
+			<div class="route-empty route-loading">
+				<div class="route-loading-spinner" aria-label="Loading" role="status"></div>
+			</div>
+		</div>
       </div>
     `;
 
+		this.loadLatestComments();
 		this.loadServers();
+	}
+
+	async loadLatestComments() {
+		const container = this.querySelector('[data-comments-container]');
+		if (!container) return;
+
+		try {
+			const result = await fetchLatestComments({ limit: 10 });
+			if (!result.ok) {
+				throw new Error('Failed to load comments');
+			}
+			const comments = Array.isArray(result.data?.comments) ? result.data.comments : [];
+			this.renderLatestComments(comments, container);
+		} catch {
+			container.innerHTML = '<div class="route-empty">Error loading comments.</div>';
+		}
+	}
+
+	renderLatestComments(comments, container) {
+		container.innerHTML = '';
+
+		if (!Array.isArray(comments) || comments.length === 0) {
+			container.innerHTML = '<div class="route-empty">No recent comments yet.</div>';
+			return;
+		}
+
+		container.classList.add('connect-comment-list');
+
+		comments.forEach((comment) => {
+			const createdImageId = Number(comment?.created_image_id);
+			const href = (Number.isFinite(createdImageId) && createdImageId > 0) ? `/creations/${createdImageId}` : null;
+
+			const displayName = (typeof comment?.display_name === 'string' && comment.display_name.trim())
+				? comment.display_name.trim()
+				: '';
+			const userName = (typeof comment?.user_name === 'string' && comment.user_name.trim())
+				? comment.user_name.trim()
+				: '';
+			const fallbackName = userName ? userName : 'User';
+			const commenterName = displayName || fallbackName;
+			const commenterHandle = userName ? `@${userName}` : '';
+
+			const createdImageTitle = (typeof comment?.created_image_title === 'string' && comment.created_image_title.trim())
+				? comment.created_image_title.trim()
+				: (Number.isFinite(createdImageId) && createdImageId > 0 ? `Creation ${createdImageId}` : 'Creation');
+
+			const creatorDisplayName = (typeof comment?.created_image_display_name === 'string' && comment.created_image_display_name.trim())
+				? comment.created_image_display_name.trim()
+				: '';
+			const creatorUserName = (typeof comment?.created_image_user_name === 'string' && comment.created_image_user_name.trim())
+				? comment.created_image_user_name.trim()
+				: '';
+			const creator = creatorDisplayName || (creatorUserName ? `@${creatorUserName}` : '');
+
+			const row = document.createElement('div');
+			row.className = `connect-comment${href ? '' : ' is-disabled'}`;
+			if (href) {
+				row.setAttribute('role', 'link');
+				row.tabIndex = 0;
+				row.dataset.href = href;
+				row.setAttribute('aria-label', `Open creation ${createdImageTitle}`);
+				row.addEventListener('click', (e) => {
+					const target = e.target;
+					if (target instanceof HTMLElement && target.closest('a')) return;
+					window.location.href = href;
+				});
+				row.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						window.location.href = href;
+					}
+				});
+			}
+
+			const thumbWrap = document.createElement('div');
+			thumbWrap.className = 'connect-comment-thumb';
+			thumbWrap.setAttribute('aria-hidden', 'true');
+			const thumbUrl = typeof comment?.created_image_thumbnail_url === 'string' ? comment.created_image_thumbnail_url.trim() : '';
+			const imageUrl = typeof comment?.created_image_url === 'string' ? comment.created_image_url.trim() : '';
+			const resolvedThumb = thumbUrl || imageUrl || '';
+			if (resolvedThumb) {
+				const img = document.createElement('img');
+				img.src = resolvedThumb;
+				img.alt = '';
+				img.loading = 'lazy';
+				img.decoding = 'async';
+				img.className = 'connect-comment-thumb-img';
+				thumbWrap.appendChild(img);
+			}
+
+			const creationTitle = document.createElement('div');
+			creationTitle.className = 'connect-comment-creation-title';
+			creationTitle.textContent = createdImageTitle;
+
+			const creatorRow = document.createElement('div');
+			creatorRow.className = 'connect-comment-creator';
+
+			const creatorId = Number(comment?.created_image_user_id ?? 0);
+			const creatorProfileHref = Number.isFinite(creatorId) && creatorId > 0 ? `/user/${creatorId}` : null;
+			const creatorName = creatorDisplayName || (creatorUserName ? creatorUserName : 'User');
+			const creatorHandle = creatorUserName ? `@${creatorUserName}` : '';
+			const creatorSeed = creatorUserName || String(creatorId || '') || creatorName;
+			const creatorColor = getAvatarColor(creatorSeed);
+			const creatorInitial = creatorName.charAt(0).toUpperCase() || '?';
+			const creatorAvatarUrl = typeof comment?.created_image_avatar_url === 'string' ? comment.created_image_avatar_url.trim() : '';
+
+			const creatorAvatarHtml = creatorProfileHref
+				? `
+					<a class="user-link user-avatar-link comment-avatar" href="${creatorProfileHref}" aria-label="View ${escapeHtml(creatorName)} profile" style="background: ${creatorColor};">
+						${creatorAvatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(creatorAvatarUrl)}" alt="">` : escapeHtml(creatorInitial)}
+					</a>
+				`
+				: `
+					<div class="comment-avatar" style="background: ${creatorColor};">
+						${creatorAvatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(creatorAvatarUrl)}" alt="">` : escapeHtml(creatorInitial)}
+					</div>
+				`;
+
+			const creationTimeAgo = comment?.created_image_created_at ? (formatRelativeTime(comment.created_image_created_at) || '') : '';
+			creatorRow.innerHTML = `
+				<div class="connect-comment-creator-left">
+					${creatorAvatarHtml}
+					<div class="connect-comment-creator-who">
+						<span class="comment-author-name">${escapeHtml(creatorName)}</span>
+						${creatorHandle ? `<span class="comment-author-handle">${escapeHtml(creatorHandle)}</span>` : ''}
+					</div>
+				</div>
+				${creationTimeAgo ? `<span class="comment-time">${escapeHtml(creationTimeAgo)}</span>` : ''}
+			`;
+
+			const commenterId = Number(comment?.user_id ?? 0);
+			const profileHref = Number.isFinite(commenterId) && commenterId > 0 ? `/user/${commenterId}` : null;
+			const seed = userName || String(comment?.user_id ?? '') || commenterName;
+			const color = getAvatarColor(seed);
+			const initial = commenterName.charAt(0).toUpperCase() || '?';
+			const avatarUrl = typeof comment?.avatar_url === 'string' ? comment.avatar_url.trim() : '';
+
+			const avatarHtml = profileHref
+				? `
+					<a class="user-link user-avatar-link comment-avatar" href="${profileHref}" aria-label="View ${escapeHtml(commenterName)} profile" style="background: ${color};">
+						${avatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(avatarUrl)}" alt="">` : escapeHtml(initial)}
+					</a>
+				`
+				: `
+					<div class="comment-avatar" style="background: ${color};">
+						${avatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(avatarUrl)}" alt="">` : escapeHtml(initial)}
+					</div>
+				`;
+
+			const timeAgo = comment?.created_at ? (formatRelativeTime(comment.created_at) || '') : '';
+			const safeText = textWithCreationLinks(comment?.text ?? '');
+
+			const commentText = document.createElement('div');
+			commentText.className = 'comment-text';
+			commentText.innerHTML = safeText;
+
+			const footer = document.createElement('div');
+			footer.className = 'connect-comment-footer';
+			footer.innerHTML = `
+				<div class="connect-comment-footer-left">
+					${avatarHtml}
+					<div class="connect-comment-footer-who">
+						<span class="comment-author-name">${escapeHtml(commenterName)}</span>
+						${commenterHandle ? `<span class="comment-author-handle">${escapeHtml(commenterHandle)}</span>` : ''}
+					</div>
+				</div>
+				${timeAgo ? `<span class="comment-time">${escapeHtml(timeAgo)}</span>` : ''}
+			`;
+
+			row.appendChild(thumbWrap);
+			row.appendChild(creationTitle);
+			row.appendChild(creatorRow);
+			row.appendChild(commentText);
+			row.appendChild(footer);
+			container.appendChild(row);
+		});
+
+		// Comments were rendered; hydrate any YouTube link labels within them.
+		hydrateYoutubeLinkTitles(container);
 	}
 
 	// Listen for server updates from modal

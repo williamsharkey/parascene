@@ -14,13 +14,6 @@
     "dependsOn": []
   },
   {
-    "name": "Community page: comment activity",
-    "description": "Evolve the Servers page into a Community page with tabs for Servers and Comments; Comments highlights recent site-wide activity and links to creations with the latest discussion.",
-    "cost": 58,
-    "impact": 78,
-    "dependsOn": []
-  },
-  {
     "name": "Feature requests",
     "description": "Let users submit feature requests via a lightweight form, store them for review, and acknowledge submission (basic feedback loop).",
     "cost": 10,

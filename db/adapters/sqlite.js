@@ -1089,6 +1089,32 @@ export async function openDb() {
 				return Promise.resolve(stmt.all(createdImageId, limit, offset));
 			}
 		},
+		selectLatestCreatedImageComments: {
+			all: async (options = {}) => {
+				const limitRaw = Number.parseInt(String(options?.limit ?? "10"), 10);
+				const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 10;
+
+				const stmt = db.prepare(
+					`SELECT c.id, c.user_id, c.created_image_id, c.text, c.created_at, c.updated_at,
+                  up.user_name, up.display_name, up.avatar_url,
+                  ci.title AS created_image_title,
+                  ci.file_path AS created_image_url,
+                  ci.created_at AS created_image_created_at,
+                  ci.user_id AS created_image_user_id,
+                  cup.user_name AS created_image_user_name,
+                  cup.display_name AS created_image_display_name,
+                  cup.avatar_url AS created_image_avatar_url
+           FROM comments_created_image c
+           INNER JOIN created_images ci ON ci.id = c.created_image_id
+           LEFT JOIN user_profiles up ON up.user_id = c.user_id
+           LEFT JOIN user_profiles cup ON cup.user_id = ci.user_id
+           WHERE ci.published = 1
+           ORDER BY c.created_at DESC
+           LIMIT ?`
+				);
+				return Promise.resolve(stmt.all(limit));
+			}
+		},
 		selectCreatedImageCommentCount: {
 			get: async (createdImageId) => {
 				const stmt = db.prepare(
