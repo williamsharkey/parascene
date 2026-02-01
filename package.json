@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "watch": "NODE_ENV=dev PORT=2367 nodemon api/index.js",
+    "dev": "DB_ADAPTER=mock NODE_ENV=dev PORT=3000 node api/index.js",
+    "dev:sqlite": "DB_ADAPTER=sqlite NODE_ENV=dev PORT=3000 node api/index.js",
+    "watch": "DB_ADAPTER=mock NODE_ENV=dev PORT=3000 nodemon api/index.js",
+    "watch:sqlite": "DB_ADAPTER=sqlite NODE_ENV=dev PORT=3000 nodemon api/index.js",
+    "start": "node api/index.js",
     "reset": "node db/reset.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"
   },
