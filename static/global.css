@@ -735,6 +735,36 @@ a.btn-secondary {
 	font: inherit;
 }
 
+.btn-danger,
+button.btn-danger {
+	background: var(--error-text);
+	color: var(--accent-text);
+	border-color: var(--error-text);
+	font-weight: 600;
+	transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-danger:hover:not(:disabled),
+button.btn-danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--error-text) 90%, black);
+	border-color: color-mix(in srgb, var(--error-text) 90%, black);
+	transform: translateY(-1px);
+}
+
+.btn-danger:active:not(:disabled),
+button.btn-danger:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.btn-danger:disabled,
+button.btn-danger:disabled {
+	background: var(--surface-strong);
+	color: var(--text);
+	border-color: var(--border);
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
 .btn-secondary:hover,
 a.btn-secondary:hover {
 	background: var(--surface-strong);
@@ -762,6 +792,31 @@ button:focus-visible {
 
 input:focus-visible {
 	border-color: var(--focus);
+}
+
+.user-danger-zone {
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border);
+}
+
+.user-danger-title {
+	font-weight: 700;
+	margin-bottom: 6px;
+}
+
+.user-danger-help {
+	color: var(--text-muted);
+	font-size: 0.95rem;
+	margin-bottom: 10px;
+}
+
+.user-delete-button.is-loading {
+	opacity: 0.8;
+}
+
+.user-delete-error {
+	margin-top: 10px;
 }
 
 table {

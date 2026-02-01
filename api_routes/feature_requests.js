@@ -1,7 +1,7 @@
 import express from "express";
 import { sendTemplatedEmail } from "../email/index.js";
 
-const ADMIN_FEATURE_REQUEST_EMAIL = "admin@parascene.crosshj.com";
+const ADMIN_FEATURE_REQUEST_EMAIL = "parascene.admin@crosshj.com";
 
 async function requireUser(req, res, queries) {
 	if (!req.auth?.userId) {

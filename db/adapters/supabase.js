@@ -1866,6 +1866,168 @@ export function openDb() {
 				const row = Array.isArray(data) ? data[0] : data;
 				return row || null;
 			}
+		},
+		deleteUserAndCleanup: {
+			run: async (rawUserId) => {
+				const userId = Number(rawUserId);
+				if (!Number.isFinite(userId) || userId <= 0) {
+					const err = new Error("Invalid user id");
+					err.code = "INVALID_USER_ID";
+					throw err;
+				}
+
+				// Collect created image ids for user to clean up feed/likes/comments referencing them.
+				const { data: images, error: imgErr } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.select("id")
+					.eq("user_id", userId);
+				if (imgErr) throw imgErr;
+				const imageIds = (Array.isArray(images) ? images : [])
+					.map((row) => Number(row?.id))
+					.filter((id) => Number.isFinite(id) && id > 0);
+
+				const changes = {};
+
+				const deleteByEq = async ({ table, column, value, selectColumns = "id" }) => {
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.eq(column, value)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				const deleteByOr = async ({ table, or, selectColumns = "id" }) => {
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.or(or)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				const deleteByIn = async ({ table, column, values, selectColumns = "id" }) => {
+					if (!Array.isArray(values) || values.length === 0) return 0;
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.in(column, values)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				// Content referencing user's created images
+				changes.feed_items_for_user_images = await deleteByIn({
+					table: "feed_items",
+					column: "created_image_id",
+					values: imageIds
+				});
+				changes.likes_on_user_images = await deleteByIn({
+					table: "likes_created_image",
+					column: "created_image_id",
+					values: imageIds
+				});
+				changes.comments_on_user_images = await deleteByIn({
+					table: "comments_created_image",
+					column: "created_image_id",
+					values: imageIds
+				});
+
+				// User's own interactions on other content
+				changes.likes_by_user = await deleteByEq({
+					table: "likes_created_image",
+					column: "user_id",
+					value: userId
+				});
+				changes.comments_by_user = await deleteByEq({
+					table: "comments_created_image",
+					column: "user_id",
+					value: userId
+				});
+
+				// User-owned content
+				changes.created_images = await deleteByEq({
+					table: "created_images",
+					column: "user_id",
+					value: userId
+				});
+				changes.creations = await deleteByEq({
+					table: "creations",
+					column: "user_id",
+					value: userId
+				});
+
+				// Server ownership and membership
+				changes.server_memberships = await deleteByEq({
+					table: "server_members",
+					column: "user_id",
+					value: userId,
+					// prsn_server_members has no id column (composite PK)
+					selectColumns: "server_id,user_id"
+				});
+				changes.servers_owned = await deleteByEq({
+					table: "servers",
+					column: "user_id",
+					value: userId
+				});
+
+				// Notifications and sessions/credits
+				changes.notifications = await deleteByEq({
+					table: "notifications",
+					column: "user_id",
+					value: userId
+				});
+				changes.sessions = await deleteByEq({
+					table: "sessions",
+					column: "user_id",
+					value: userId
+				});
+				changes.user_credits = await deleteByEq({
+					table: "user_credits",
+					column: "user_id",
+					value: userId
+				});
+
+				// Social graph + profile
+				// Some older deployments may have different column names for prsn_user_follows.
+				// Prefer explicit cleanup, but don't fail user deletion on schema drift.
+				try {
+					changes.user_follows = await deleteByOr({
+						table: "user_follows",
+						or: `follower_id.eq.${userId},following_id.eq.${userId}`
+					});
+				} catch (error) {
+					const message = String(error?.message || "");
+					const looksLikeMissingColumn =
+						message.toLowerCase().includes("does not exist") &&
+						message.toLowerCase().includes("prsn_user_follows");
+					if (looksLikeMissingColumn) {
+						// Rely on FK cascades when deleting the user row.
+						changes.user_follows = null;
+					} else {
+						throw error;
+					}
+				}
+				changes.user_profile = await deleteByEq({
+					table: "user_profiles",
+					column: "user_id",
+					value: userId,
+					// prsn_user_profiles has no id column (primary key is user_id)
+					selectColumns: "user_id"
+				});
+
+				// Finally delete user row
+				changes.user = await deleteByEq({
+					table: "users",
+					column: "id",
+					value: userId
+				});
+
+				return { changes };
+			}
 		}
 	};
 

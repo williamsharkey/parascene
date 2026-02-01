@@ -1,7 +1,7 @@
 import express from "express";
 import { buildProviderHeaders, resolveProviderAuthToken } from "./utils/providerAuth.js";
 
-export default function createAdminRoutes({ queries }) {
+export default function createAdminRoutes({ queries, storage }) {
 	const router = express.Router();
 
 	function safeJsonParse(value, fallback) {
@@ -74,6 +74,26 @@ export default function createAdminRoutes({ queries }) {
 		return user;
 	}
 
+	function extractGenericKey(url) {
+		const raw = typeof url === "string" ? url.trim() : "";
+		if (!raw) return null;
+		if (!raw.startsWith("/api/images/generic/")) return null;
+		const tail = raw.slice("/api/images/generic/".length);
+		if (!tail) return null;
+		// Decode each path segment to rebuild the storage key safely.
+		const segments = tail
+			.split("/")
+			.filter(Boolean)
+			.map((seg) => {
+				try {
+					return decodeURIComponent(seg);
+				} catch {
+					return seg;
+				}
+			});
+		return segments.join("/");
+	}
+
 	router.get("/admin/users", async (req, res) => {
 		const user = await requireAdmin(req, res);
 		if (!user) return;
@@ -92,6 +112,86 @@ export default function createAdminRoutes({ queries }) {
 		);
 
 		res.json({ users: usersWithCredits });
+	});
+
+	// Admin-only: delete a user and clean up related content (likes, comments, images, etc).
+	router.delete("/admin/users/:id", async (req, res) => {
+		const admin = await requireAdmin(req, res);
+		if (!admin) return;
+
+		const targetUserId = Number.parseInt(String(req.params?.id || ""), 10);
+		if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+			return res.status(400).json({ error: "Invalid user id" });
+		}
+
+		if (Number(targetUserId) === Number(admin.id)) {
+			return res.status(400).json({ error: "Refusing to delete current admin user" });
+		}
+
+		if (!queries?.deleteUserAndCleanup?.run) {
+			return res.status(500).json({ error: "User deletion not available" });
+		}
+
+		const target = await queries.selectUserById.get(targetUserId);
+		if (!target) {
+			return res.status(404).json({ error: "User not found" });
+		}
+
+		// Pre-fetch assets to delete from storage (best-effort, after DB cleanup).
+		let createdImages = [];
+		try {
+			if (queries.selectCreatedImagesForUser?.all) {
+				createdImages = await queries.selectCreatedImagesForUser.all(targetUserId);
+			}
+		} catch {
+			createdImages = [];
+		}
+
+		let profileRow = null;
+		try {
+			profileRow = await queries.selectUserProfileByUserId?.get?.(targetUserId);
+		} catch {
+			profileRow = null;
+		}
+
+		const avatarKey = extractGenericKey(profileRow?.avatar_url);
+		const coverKey = extractGenericKey(profileRow?.cover_image_url);
+		const imageFilenames = (Array.isArray(createdImages) ? createdImages : [])
+			.map((img) => String(img?.filename || "").trim())
+			.filter(Boolean);
+
+		let cleanupResult;
+		try {
+			cleanupResult = await queries.deleteUserAndCleanup.run(targetUserId);
+		} catch (error) {
+			return res.status(500).json({ error: "Failed to delete user", message: error?.message || String(error) });
+		}
+
+		// Best-effort storage cleanup: created images + profile images.
+		if (storage?.deleteImage) {
+			for (const filename of imageFilenames) {
+				try {
+					await storage.deleteImage(filename);
+				} catch {
+					// ignore
+				}
+			}
+		}
+		if (storage?.deleteGenericImage) {
+			for (const key of [avatarKey, coverKey].filter(Boolean)) {
+				try {
+					await storage.deleteGenericImage(key);
+				} catch {
+					// ignore
+				}
+			}
+		}
+
+		return res.json({
+			ok: true,
+			deleted_user_id: targetUserId,
+			result: cleanupResult ?? null
+		});
 	});
 
 	// Admin-only: override a user's username (write-once for normal users).

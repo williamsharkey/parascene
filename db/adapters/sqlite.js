@@ -6,7 +6,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dataDir = path.join(__dirname, "..", "data");
-const dbPath = path.join(dataDir, "app.db");
+// Jest runs test files in parallel across workers. Use a per-worker DB file
+// to avoid cross-test interference and "readonly database" errors.
+const workerId = String(process.env.JEST_WORKER_ID || "");
+const dbFileName = workerId ? `app_${workerId}.db` : "app.db";
+const dbPath = path.join(dataDir, dbFileName);
 
 // Dynamically import better-sqlite3 only when needed (not in production/Vercel)
 let Database;
@@ -96,6 +100,69 @@ export async function openDb() {
 			fromBalance: Number(nextFrom?.balance ?? 0),
 			toBalance: Number(nextTo?.balance ?? 0)
 		};
+	});
+
+	const deleteUserAndCleanupTxn = db.transaction((rawUserId) => {
+		const userId = Number(rawUserId);
+		if (!Number.isFinite(userId) || userId <= 0) {
+			const err = new Error("Invalid user id");
+			err.code = "INVALID_USER_ID";
+			throw err;
+		}
+
+		const changes = {};
+		const run = (sql, ...params) => {
+			const stmt = db.prepare(sql);
+			const result = stmt.run(...params);
+			return Number(result?.changes ?? 0);
+		};
+
+		// Clean up content that references the user's created images
+		changes.feed_items_for_user_images = run(
+			`DELETE FROM feed_items
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+		changes.likes_on_user_images = run(
+			`DELETE FROM likes_created_image
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+		changes.comments_on_user_images = run(
+			`DELETE FROM comments_created_image
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+
+		// Clean up user's interactions on other content
+		changes.likes_by_user = run(`DELETE FROM likes_created_image WHERE user_id = ?`, userId);
+		changes.comments_by_user = run(`DELETE FROM comments_created_image WHERE user_id = ?`, userId);
+
+		// User-owned content
+		changes.created_images = run(`DELETE FROM created_images WHERE user_id = ?`, userId);
+		changes.creations = run(`DELETE FROM creations WHERE user_id = ?`, userId);
+
+		// Server ownership and membership
+		changes.server_memberships = run(`DELETE FROM server_members WHERE user_id = ?`, userId);
+		changes.servers_owned = run(`DELETE FROM servers WHERE user_id = ?`, userId);
+
+		// Notifications and sessions/credits
+		changes.notifications = run(`DELETE FROM notifications WHERE user_id = ?`, userId);
+		changes.sessions = run(`DELETE FROM sessions WHERE user_id = ?`, userId);
+		changes.user_credits = run(`DELETE FROM user_credits WHERE user_id = ?`, userId);
+
+		// Social graph + profile
+		changes.user_follows = run(
+			`DELETE FROM user_follows WHERE follower_id = ? OR following_id = ?`,
+			userId,
+			userId
+		);
+		changes.user_profile = run(`DELETE FROM user_profiles WHERE user_id = ?`, userId);
+
+		// Finally: delete the user row
+		changes.user = run(`DELETE FROM users WHERE id = ?`, userId);
+
+		return { changes };
 	});
 
 	const queries = {
@@ -1387,6 +1454,12 @@ export async function openDb() {
 		transferCredits: {
 			run: async (fromUserId, toUserId, amount) => {
 				const result = transferCreditsTxn(Number(fromUserId), Number(toUserId), Number(amount));
+				return Promise.resolve(result);
+			}
+		},
+		deleteUserAndCleanup: {
+			run: async (userId) => {
+				const result = deleteUserAndCleanupTxn(userId);
 				return Promise.resolve(result);
 			}
 		}

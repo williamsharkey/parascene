@@ -953,6 +953,188 @@ export function openDb() {
 				toRow.updated_at = nowIso;
 				return { fromBalance: fromRow.balance, toBalance: toRow.balance };
 			}
+		},
+		deleteUserAndCleanup: {
+			run: async (rawUserId) => {
+				const userId = Number(rawUserId);
+				if (!Number.isFinite(userId) || userId <= 0) {
+					const err = new Error("Invalid user id");
+					err.code = "INVALID_USER_ID";
+					throw err;
+				}
+
+				const changes = {};
+				const before = (arr) => arr.length;
+
+				const userImageIds = new Set(
+					created_images
+						.filter((img) => Number(img?.user_id) === userId)
+						.map((img) => Number(img?.id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				);
+
+				// Content referencing user's created images
+				{
+					const b = before(feed_items);
+					for (let i = feed_items.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(feed_items[i]?.created_image_id))) {
+							feed_items.splice(i, 1);
+						}
+					}
+					changes.feed_items_for_user_images = b - feed_items.length;
+				}
+
+				{
+					const b = before(likes_created_image);
+					for (let i = likes_created_image.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(likes_created_image[i]?.created_image_id))) {
+							likes_created_image.splice(i, 1);
+						}
+					}
+					changes.likes_on_user_images = b - likes_created_image.length;
+				}
+
+				{
+					const b = before(comments_created_image);
+					for (let i = comments_created_image.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(comments_created_image[i]?.created_image_id))) {
+							comments_created_image.splice(i, 1);
+						}
+					}
+					changes.comments_on_user_images = b - comments_created_image.length;
+				}
+
+				// User's own interactions on other content
+				{
+					const b = before(likes_created_image);
+					for (let i = likes_created_image.length - 1; i >= 0; i -= 1) {
+						if (Number(likes_created_image[i]?.user_id) === userId) {
+							likes_created_image.splice(i, 1);
+						}
+					}
+					changes.likes_by_user = b - likes_created_image.length;
+				}
+
+				{
+					const b = before(comments_created_image);
+					for (let i = comments_created_image.length - 1; i >= 0; i -= 1) {
+						if (Number(comments_created_image[i]?.user_id) === userId) {
+							comments_created_image.splice(i, 1);
+						}
+					}
+					changes.comments_by_user = b - comments_created_image.length;
+				}
+
+				// User-owned content
+				{
+					const b = before(created_images);
+					for (let i = created_images.length - 1; i >= 0; i -= 1) {
+						if (Number(created_images[i]?.user_id) === userId) {
+							created_images.splice(i, 1);
+						}
+					}
+					changes.created_images = b - created_images.length;
+				}
+
+				{
+					const b = before(creations);
+					for (let i = creations.length - 1; i >= 0; i -= 1) {
+						if (Number(creations[i]?.user_id) === userId) {
+							creations.splice(i, 1);
+						}
+					}
+					changes.creations = b - creations.length;
+				}
+
+				// Server ownership and membership
+				{
+					const b = before(server_members);
+					for (let i = server_members.length - 1; i >= 0; i -= 1) {
+						if (Number(server_members[i]?.user_id) === userId) {
+							server_members.splice(i, 1);
+						}
+					}
+					changes.server_memberships = b - server_members.length;
+				}
+
+				{
+					const b = before(servers);
+					for (let i = servers.length - 1; i >= 0; i -= 1) {
+						if (Number(servers[i]?.user_id) === userId) {
+							servers.splice(i, 1);
+						}
+					}
+					changes.servers_owned = b - servers.length;
+				}
+
+				// Notifications and sessions/credits
+				{
+					const b = before(notifications);
+					for (let i = notifications.length - 1; i >= 0; i -= 1) {
+						if (Number(notifications[i]?.user_id) === userId) {
+							notifications.splice(i, 1);
+						}
+					}
+					changes.notifications = b - notifications.length;
+				}
+
+				{
+					const b = before(sessions);
+					for (let i = sessions.length - 1; i >= 0; i -= 1) {
+						if (Number(sessions[i]?.user_id) === userId) {
+							sessions.splice(i, 1);
+						}
+					}
+					changes.sessions = b - sessions.length;
+				}
+
+				{
+					const b = before(user_credits);
+					for (let i = user_credits.length - 1; i >= 0; i -= 1) {
+						if (Number(user_credits[i]?.user_id) === userId) {
+							user_credits.splice(i, 1);
+						}
+					}
+					changes.user_credits = b - user_credits.length;
+				}
+
+				// Social graph + profile
+				{
+					const b = before(user_follows);
+					for (let i = user_follows.length - 1; i >= 0; i -= 1) {
+						if (
+							Number(user_follows[i]?.follower_id) === userId ||
+							Number(user_follows[i]?.following_id) === userId
+						) {
+							user_follows.splice(i, 1);
+						}
+					}
+					changes.user_follows = b - user_follows.length;
+				}
+
+				{
+					const b = before(user_profiles);
+					for (let i = user_profiles.length - 1; i >= 0; i -= 1) {
+						if (Number(user_profiles[i]?.user_id) === userId) {
+							user_profiles.splice(i, 1);
+						}
+					}
+					changes.user_profile = b - user_profiles.length;
+				}
+
+				// Finally delete user row
+				{
+					const b = before(users);
+					for (let i = users.length - 1; i >= 0; i -= 1) {
+						if (Number(users[i]?.id) === userId) {
+							users.splice(i, 1);
+						}
+					}
+					changes.user = b - users.length;
+				}
+
+				return { changes };
+			}
 		}
 	};
 

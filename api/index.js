@@ -168,7 +168,7 @@ app.use(async (req, res, next) => {
 app.use(createUserRoutes({ queries }));
 app.use(createFollowsRoutes({ queries }));
 
-app.use(createAdminRoutes({ queries }));
+app.use(createAdminRoutes({ queries, storage }));
 app.use(createFeedRoutes({ queries }));
 app.use(createExploreRoutes({ queries }));
 app.use(createCreateRoutes({ queries, storage }));

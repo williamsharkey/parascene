@@ -1,9 +1,16 @@
 [
   {
-    "name": "Admin User CRUD",
-    "description": "ability for admin to modify users",
-    "cost": 63,
-    "impact": 28,
+    "name": "Invite credits",
+    "description": "Grant starter credits on invite acceptance; record inviter and source.",
+    "cost": 1,
+    "impact": 61,
+    "dependsOn": []
+  },
+  {
+    "name": "Credit Purchase",
+    "description": "users can buy credits using real money",
+    "cost": 74,
+    "impact": 88,
     "dependsOn": []
   },
   {
@@ -11,13 +18,6 @@
     "description": "Allow sharing a created image with someone who is not a user, likely via a secure share link/token flow similar to invites (view-only by default, with clear revocation/expiration behavior).",
     "cost": 84,
     "impact": 100,
-    "dependsOn": []
-  },
-  {
-    "name": "Invite credits",
-    "description": "Grant starter credits on invite acceptance; record inviter and source.",
-    "cost": 1,
-    "impact": 61,
     "dependsOn": []
   },
   {

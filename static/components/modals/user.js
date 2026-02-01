@@ -11,6 +11,7 @@ class AppModalUser extends HTMLElement {
 		super();
 		this._currentUser = null;
 		this._viewerUserId = null;
+		this._viewerRole = null;
 		this._boundEscape = (e) => {
 			if (e.key === 'Escape' && this._overlay?.classList.contains('open')) this.close();
 		};
@@ -22,11 +23,15 @@ class AppModalUser extends HTMLElement {
 		this._details = this.querySelector('[data-user-modal-details]');
 		this._form = this.querySelector('[data-user-tip-form]');
 		this._error = this.querySelector('[data-user-tip-error]');
+		this._dangerZone = this.querySelector('[data-user-danger-zone]');
+		this._deleteButton = this.querySelector('[data-user-delete-button]');
+		this._deleteError = this.querySelector('[data-user-delete-error]');
 		this._overlay?.addEventListener('click', (e) => {
 			if (e.target?.dataset?.userClose !== undefined || e.target === this._overlay) this.close();
 		});
 		document.addEventListener('keydown', this._boundEscape);
 		this._form?.addEventListener('submit', (e) => this.handleSubmit(e));
+		this._deleteButton?.addEventListener('click', () => this.handleDeleteUser());
 		this.loadViewerUser();
 	}
 
@@ -40,6 +45,7 @@ class AppModalUser extends HTMLElement {
 			if (!response.ok) return;
 			const data = await response.json();
 			this._viewerUserId = Number(data?.id) || null;
+			this._viewerRole = typeof data?.role === 'string' ? data.role : null;
 		} catch {
 			// ignore
 		}
@@ -69,6 +75,16 @@ class AppModalUser extends HTMLElement {
 							</label>
 							<div class="alert error user-tip-error" data-user-tip-error hidden></div>
 						</form>
+						<div class="user-danger-zone" data-user-danger-zone hidden>
+							<div class="user-danger-title">Danger zone</div>
+							<div class="user-danger-help">
+								Delete this user and clean up their created content, likes, comments, follows, sessions, credits, etc.
+							</div>
+							<button type="button" class="btn-danger user-delete-button" data-user-delete-button>
+								Delete user
+							</button>
+							<div class="alert error user-delete-error" data-user-delete-error hidden></div>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -88,6 +104,19 @@ class AppModalUser extends HTMLElement {
 			this._error.hidden = true;
 			this._error.textContent = '';
 		}
+		if (this._deleteError) {
+			this._deleteError.hidden = true;
+			this._deleteError.textContent = '';
+		}
+
+		const canDelete =
+			this._viewerRole === 'admin' &&
+			Number.isFinite(Number(user?.id)) &&
+			Number(user?.id) > 0 &&
+			(this._viewerUserId == null || Number(user?.id) !== Number(this._viewerUserId));
+		if (this._dangerZone) {
+			this._dangerZone.hidden = !canDelete;
+		}
 		this._overlay?.classList.add('open');
 	}
 
@@ -97,6 +126,10 @@ class AppModalUser extends HTMLElement {
 		if (this._error) {
 			this._error.hidden = true;
 			this._error.textContent = '';
+		}
+		if (this._deleteError) {
+			this._deleteError.hidden = true;
+			this._deleteError.textContent = '';
 		}
 	}
 
@@ -213,6 +246,81 @@ class AppModalUser extends HTMLElement {
 				submitButton.style.width = '';
 			}
 			if (amountInput) amountInput.disabled = false;
+		}
+	}
+
+	async handleDeleteUser() {
+		const userId = Number(this._currentUser?.id);
+		if (!Number.isFinite(userId) || userId <= 0) return;
+
+		if (this._viewerRole !== 'admin') {
+			if (this._deleteError) {
+				this._deleteError.hidden = false;
+				this._deleteError.textContent = 'Forbidden: Admin role required.';
+			}
+			return;
+		}
+
+		if (this._viewerUserId && Number(this._viewerUserId) === userId) {
+			if (this._deleteError) {
+				this._deleteError.hidden = false;
+				this._deleteError.textContent = 'Refusing to delete current admin user.';
+			}
+			return;
+		}
+
+		const challenge = `DELETE ${userId}`;
+		const response = window.prompt(
+			`This will permanently delete user #${userId} and clean up their content.\n\nType "${challenge}" to confirm:`,
+			''
+		);
+		if (String(response || '').trim() !== challenge) {
+			return;
+		}
+
+		if (this._deleteError) {
+			this._deleteError.hidden = true;
+			this._deleteError.textContent = '';
+		}
+
+		const btn = this._deleteButton;
+		if (btn) {
+			btn.disabled = true;
+			btn.classList.add('is-loading');
+		}
+
+		try {
+			const res = await fetch(`/admin/users/${userId}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				const message = data?.error || data?.message || 'Failed to delete user.';
+				if (this._deleteError) {
+					this._deleteError.hidden = false;
+					this._deleteError.textContent = message;
+				} else {
+					alert(message);
+				}
+				return;
+			}
+
+			this.close();
+			document.dispatchEvent(new CustomEvent('user-updated', { detail: { userId } }));
+		} catch (err) {
+			const message = err?.message || 'Failed to delete user.';
+			if (this._deleteError) {
+				this._deleteError.hidden = false;
+				this._deleteError.textContent = message;
+			} else {
+				alert(message);
+			}
+		} finally {
+			if (btn) {
+				btn.disabled = false;
+				btn.classList.remove('is-loading');
+			}
 		}
 	}
 }
