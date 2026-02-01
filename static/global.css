@@ -2307,6 +2307,27 @@ app-route-feed {
 	min-width: 0;
 }
 
+.connect-comment-footer-name-handle-time {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.connect-comment-footer-name-handle-time .comment-author-name {
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.connect-comment-footer-name-handle-time .comment-author-handle,
+.connect-comment-footer-name-handle-time .comment-time {
+	flex: 0 0 auto;
+}
+
+.connect-comment-footer-name-handle-time .comment-time {
+	font-weight: 400;
+}
+
 @media (max-width: 768px) {
 	.connect-comment {
 		grid-template-columns: 64px 1fr;

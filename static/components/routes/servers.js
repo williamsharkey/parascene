@@ -163,7 +163,7 @@ class AppRouteServers extends HTMLElement {
 					</div>
 				`;
 
-			const creationTimeAgo = comment?.created_image_created_at ? (formatRelativeTime(comment.created_image_created_at) || '') : '';
+			// Note: on Connect, we intentionally hide the creation timestamp to reduce clutter.
 			creatorRow.innerHTML = `
 				<div class="connect-comment-creator-left">
 					${creatorAvatarHtml}
@@ -172,7 +172,6 @@ class AppRouteServers extends HTMLElement {
 						${creatorHandle ? `<span class="comment-author-handle">${escapeHtml(creatorHandle)}</span>` : ''}
 					</div>
 				</div>
-				${creationTimeAgo ? `<span class="comment-time">${escapeHtml(creationTimeAgo)}</span>` : ''}
 			`;
 
 			const commenterId = Number(comment?.user_id ?? 0);
@@ -207,11 +206,13 @@ class AppRouteServers extends HTMLElement {
 				<div class="connect-comment-footer-left">
 					${avatarHtml}
 					<div class="connect-comment-footer-who">
-						<span class="comment-author-name">${escapeHtml(commenterName)}</span>
-						${commenterHandle ? `<span class="comment-author-handle">${escapeHtml(commenterHandle)}</span>` : ''}
+						<span class="connect-comment-footer-name-handle-time">
+							<span class="comment-author-name">${escapeHtml(commenterName)}</span>
+							${commenterHandle ? `<span class="comment-author-handle">${escapeHtml(commenterHandle)}</span>` : ''}
+							${timeAgo ? `<span class="comment-time">&nbsp;·&nbsp;${escapeHtml(timeAgo)}</span>` : ''}
+						</span>
 					</div>
 				</div>
-				${timeAgo ? `<span class="comment-time">${escapeHtml(timeAgo)}</span>` : ''}
 			`;
 
 			row.appendChild(thumbWrap);
