@@ -1,6 +1,6 @@
 import express from "express";
 import { sendDelegatedEmail, sendTemplatedEmail } from "../email/index.js";
-import { getBaseAppUrl } from "./utils/url.js";
+import { getBaseAppUrl, getThumbnailUrl } from "./utils/url.js";
 
 async function requireUser(req, res, queries) {
 	if (!req.auth?.userId) {
@@ -21,17 +21,21 @@ function isPublishedImage(image) {
 	return image?.published === true || image?.published === 1;
 }
 
-async function requireCreatedImageAccess({ queries, imageId, userId }) {
+async function requireCreatedImageAccess({ queries, imageId, userId, userRole }) {
 	// Owner access
 	const owned = await queries.selectCreatedImageById?.get(imageId, userId);
 	if (owned) {
 		return owned;
 	}
 
-	// Published access
+	// Published access or admin access
 	const anyImage = await queries.selectCreatedImageByIdAnyUser?.get(imageId);
-	if (anyImage && isPublishedImage(anyImage)) {
-		return anyImage;
+	if (anyImage) {
+		const isPublished = isPublishedImage(anyImage);
+		const isAdmin = userRole === 'admin';
+		if (isPublished || isAdmin) {
+			return anyImage;
+		}
 	}
 
 	return null;
@@ -65,6 +69,27 @@ function getUserDisplayName(user) {
 export default function createCommentsRoutes({ queries }) {
 	const router = express.Router();
 
+	router.get("/api/comments/latest", async (req, res) => {
+		const user = await requireUser(req, res, queries);
+		if (!user) return;
+
+		const limit = normalizeLimit(req.query?.limit, 10);
+
+		const commentsRaw = await queries.selectLatestCreatedImageComments?.all({ limit })
+			?? [];
+
+		const comments = (commentsRaw || []).map((row) => {
+			const createdImageUrl = row?.created_image_url ?? null;
+			return {
+				...row,
+				created_image_url: createdImageUrl,
+				created_image_thumbnail_url: getThumbnailUrl(createdImageUrl)
+			};
+		});
+
+		return res.json({ comments });
+	});
+
 	router.get("/api/created-images/:id/comments", async (req, res) => {
 		const user = await requireUser(req, res, queries);
 		if (!user) return;
@@ -74,7 +99,7 @@ export default function createCommentsRoutes({ queries }) {
 			return res.status(400).json({ error: "Invalid image id" });
 		}
 
-		const image = await requireCreatedImageAccess({ queries, imageId, userId: user.id });
+		const image = await requireCreatedImageAccess({ queries, imageId, userId: user.id, userRole: user.role });
 		if (!image) {
 			return res.status(404).json({ error: "Image not found" });
 		}
@@ -109,7 +134,7 @@ export default function createCommentsRoutes({ queries }) {
 			return res.status(400).json({ error: "Invalid image id" });
 		}
 
-		const image = await requireCreatedImageAccess({ queries, imageId, userId: user.id });
+		const image = await requireCreatedImageAccess({ queries, imageId, userId: user.id, userRole: user.role });
 		if (!image) {
 			return res.status(404).json({ error: "Image not found" });
 		}
@@ -125,7 +150,37 @@ export default function createCommentsRoutes({ queries }) {
 
 		const comment = await queries.insertCreatedImageComment?.run(user.id, imageId, text);
 
-		console.log(`[Comments] POST /api/created-images/${req.params.id}/comments`);
+		// console.log(`[Comments] POST /api/created-images/${req.params.id}/comments`);
+
+		// Best-effort in-app notifications for prior commenters on this creation.
+		// Do not block comment creation if notification insert fails.
+		try {
+			if (queries.insertNotification?.run && queries.selectCreatedImageCommenterUserIdsDistinct?.all) {
+				const rawIds = await queries.selectCreatedImageCommenterUserIdsDistinct.all(imageId);
+				const commenterId = Number(user.id);
+				const recipientIds = Array.from(new Set(
+					(rawIds ?? [])
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0 && id !== commenterId)
+				));
+
+				if (recipientIds.length > 0) {
+					const commenterName = getUserDisplayName(user);
+					const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
+					const title = "New comment";
+					const link = `/creations/${encodeURIComponent(String(imageId))}`;
+					const message = creationTitle
+						? `${commenterName} commented on “${creationTitle}”.`
+						: `${commenterName} commented on a creation you commented on.`;
+
+					for (const toUserId of recipientIds) {
+						await queries.insertNotification.run(toUserId, null, title, message, link);
+					}
+				}
+			}
+		} catch (error) {
+			// This catch exists so comment posting still succeeds even if notifications fail.
+		}
 
 		// Best-effort email notification to the creation owner.
 		// Do not block comment creation if email fails.
@@ -133,43 +188,43 @@ export default function createCommentsRoutes({ queries }) {
 			const ownerUserId = Number(image?.user_id);
 			if (!Number.isFinite(ownerUserId) || ownerUserId <= 0) {
 				// If this happens, the created_images row is missing/invalid.
-				console.warn("[Comments] Skipping comment email: invalid owner user_id on image", {
-					imageId,
-					ownerUserId: image?.user_id ?? null
-				});
+				// console.warn("[Comments] Skipping comment email: invalid owner user_id on image", {
+				// 	imageId,
+				// 		ownerUserId: image?.user_id ?? null
+				// });
 			} else if (ownerUserId === Number(user.id)) {
 				// We don't email you about your own comments.
-				console.log("[Comments] Skipping comment email: self-comment", { imageId, ownerUserId });
+				// console.log("[Comments] Skipping comment email: self-comment", { imageId, ownerUserId });
 			} else {
 				const owner = await queries.selectUserById?.get(ownerUserId);
 				if (!owner) {
 					// Owner record missing (data integrity issue).
-					console.warn("[Comments] Skipping comment email: owner user not found", { imageId, ownerUserId });
+					// console.warn("[Comments] Skipping comment email: owner user not found", { imageId, ownerUserId });
 				} else {
 					const ownerEmail = String(owner?.email || "").trim();
 					if (!ownerEmail) {
 						// No email on file → cannot deliver.
-						console.warn("[Comments] Skipping comment email: owner has no email address", {
-							imageId,
-							ownerUserId
-						});
+						// console.warn("[Comments] Skipping comment email: owner has no email address", {
+						// 	imageId,
+						// 	ownerUserId
+						// });
 					} else {
 						const ownerEmailLower = ownerEmail.toLowerCase();
 						const shouldSuppress = ownerEmailLower.includes("example.com");
 						if (!process.env.RESEND_API_KEY || !process.env.RESEND_SYSTEM_EMAIL) {
 							// Most common local/dev issue: missing env vars.
-							console.warn("[Comments] Skipping comment email: Resend env missing", {
-								imageId,
-								ownerUserId,
-								hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
-								hasResendSystemEmail: Boolean(process.env.RESEND_SYSTEM_EMAIL)
-							});
+							// console.warn("[Comments] Skipping comment email: Resend env missing", {
+							// 	imageId,
+							// 	ownerUserId,
+							// 	hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+							// 	hasResendSystemEmail: Boolean(process.env.RESEND_SYSTEM_EMAIL)
+							// });
 						} else if (shouldSuppress) {
-							console.log("[Comments] Sending delegated comment email: suppressed domain match (example.com)", {
-								imageId,
-								ownerUserId,
-								ownerEmailDomain: ownerEmailLower.split("@")[1] || null
-							});
+							// console.log("[Comments] Sending delegated comment email: suppressed domain match (example.com)", {
+							// 	imageId,
+							// 	ownerUserId,
+							// 	ownerEmailDomain: ownerEmailLower.split("@")[1] || null
+							// });
 
 							const baseUrl = getBaseAppUrl();
 							const creationPath = `/creations/${encodeURIComponent(String(imageId))}`;
@@ -202,13 +257,13 @@ export default function createCommentsRoutes({ queries }) {
 							const recipientName = getUserDisplayName(owner);
 							const creationTitle = typeof image?.title === "string" ? image.title.trim() : "";
 
-							console.log("[Comments] Sending comment notification email", {
-								// ownerEmail,
-								recipientName,
-								commenterName,
-								commentText: text,
-								creationTitle,
-							});
+							// console.log("[Comments] Sending comment notification email", {
+							// 	// ownerEmail,
+							// 	recipientName,
+							// 	commenterName,
+							// 	commentText: text,
+							// 	creationTitle,
+							// });
 							await sendTemplatedEmail({
 								to: ownerEmail,
 								template: "commentReceived",
@@ -230,11 +285,11 @@ export default function createCommentsRoutes({ queries }) {
 			// - Missing/invalid Resend env (RESEND_API_KEY / RESEND_SYSTEM_EMAIL)
 			// - Resend API error / rate limit
 			// - Invalid recipient address
-			console.warn("[Comments] Failed to send comment notification email:", {
-				imageId,
-				commenterUserId: user?.id ?? null,
-				error: error?.message || String(error)
-			});
+			// console.warn("[Comments] Failed to send comment notification email:", {
+			// 	imageId,
+			// 	commenterUserId: user?.id ?? null,
+			// 	error: error?.message || String(error)
+			// });
 		}
 
 		let commentCount = null;

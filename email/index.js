@@ -55,12 +55,12 @@ export async function sendTemplatedEmail({ to, template, data, replyTo } = {}) {
 	}
 
 	// Server log for successful sends (useful for debugging and audits).
-	console.log("[Email] Sent", {
-		template,
-		to: recipients,
-		subject,
-		id: responseData?.id || null
-	});
+	// console.log("[Email] Sent", {
+	// 	template,
+	// 	to: recipients,
+	// 	subject,
+	// 	id: responseData?.id || null
+	// });
 
 	return responseData;
 }

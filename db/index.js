@@ -2,9 +2,13 @@ import { openDb as openMockDb } from "./adapters/mock.js";
 import { openDb as openSupabaseDb } from "./adapters/supabase.js";
 import { seedDatabase } from "./seed.js";
 
+function shouldLogDbAdapter() {
+	return process.env.ENABLE_DB_ADAPTER_LOGS === "true";
+}
+
 async function openDb(options = {}) {
   const { quiet = false } = options;
-  const log = quiet ? () => {} : console.log;
+  const log = quiet || !shouldLogDbAdapter() ? () => {} : console.log;
 
   // Determine which adapter to use based on environment
   // On Vercel, prefer Supabase if credentials are available, otherwise use mock

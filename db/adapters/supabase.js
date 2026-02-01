@@ -1081,24 +1081,20 @@ export function openDb() {
 			}
 		},
 		insertCreatedImage: {
-			run: async (userId, filename, filePath, width, height, color, status = "creating", seed = null) => {
+			run: async (userId, filename, filePath, width, height, color, status = "creating", meta = null) => {
 				// Use serviceClient to bypass RLS for backend operations
-				const insertData = {
-					user_id: userId,
-					filename,
-					file_path: filePath,
-					width,
-					height,
-					color,
-					status
-				};
-				// Only include seed if provided (optional field)
-				if (seed !== null) {
-					insertData.seed = seed;
-				}
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
-					.insert(insertData)
+					.insert({
+						user_id: userId,
+						filename,
+						file_path: filePath,
+						width,
+						height,
+						color,
+						status,
+						meta
+					})
 					.select("id")
 					.single();
 				if (error) throw error;
@@ -1107,6 +1103,58 @@ export function openDb() {
 					lastInsertRowid: data.id,
 					changes: 1
 				};
+			}
+		},
+		updateCreatedImageJobCompleted: {
+			run: async (id, userId, { filename, file_path, width, height, color, meta }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						filename,
+						file_path,
+						width,
+						height,
+						color: color ?? null,
+						status: "completed",
+						meta
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		updateCreatedImageJobFailed: {
+			run: async (id, userId, { meta }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						status: "failed",
+						meta
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						status: "creating",
+						meta,
+						filename: filename ?? null,
+						file_path: ""
+					})
+					.eq("id", id)
+					.eq("user_id", userId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
 			}
 		},
 		updateCreatedImageStatus: {
@@ -1132,7 +1180,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, meta"
 					)
 					.eq("user_id", userId)
 					.order("created_at", { ascending: false });
@@ -1145,7 +1193,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, meta"
 					)
 					.eq("user_id", userId)
 					.eq("published", true)
@@ -1201,7 +1249,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("id", id)
 					.eq("user_id", userId)
@@ -1216,7 +1264,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("id", id)
 					.maybeSingle();
@@ -1230,7 +1278,7 @@ export function openDb() {
 				const { data, error } = await serviceClient
 					.from(prefixedTable("created_images"))
 					.select(
-						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id"
+						"id, filename, file_path, width, height, color, status, created_at, published, published_at, title, description, user_id, meta"
 					)
 					.eq("filename", filename)
 					.maybeSingle();
@@ -1319,6 +1367,22 @@ export function openDb() {
 				};
 			}
 		},
+		selectCreatedImageCommenterUserIdsDistinct: {
+			all: async (createdImageId) => {
+				const { data, error } = await serviceClient
+					.from(prefixedTable("comments_created_image"))
+					.select("user_id")
+					.eq("created_image_id", createdImageId);
+				if (error) throw error;
+				return Array.from(new Set(
+					(data ?? [])
+						.map((row) => row?.user_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+			}
+		},
 		selectCreatedImageComments: {
 			all: async (createdImageId, options = {}) => {
 				const order = String(options?.order || "asc").toLowerCase() === "desc" ? "desc" : "asc";
@@ -1361,6 +1425,118 @@ export function openDb() {
 				}
 
 				return comments.map((row) => {
+					const profile = row?.user_id !== null && row?.user_id !== undefined
+						? profileByUserId.get(String(row.user_id)) ?? null
+						: null;
+					return {
+						...row,
+						user_name: profile?.user_name ?? null,
+						display_name: profile?.display_name ?? null,
+						avatar_url: profile?.avatar_url ?? null
+					};
+				});
+			}
+		},
+		selectLatestCreatedImageComments: {
+			all: async (options = {}) => {
+				const limitRaw = Number.parseInt(String(options?.limit ?? "10"), 10);
+				const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 10;
+
+				// Over-fetch a bit so filtering unpublished creations still returns enough rows.
+				const fetchLimit = Math.min(200, Math.max(10, limit * 5));
+
+				const { data: rawComments, error: commentsError } = await serviceClient
+					.from(prefixedTable("comments_created_image"))
+					.select("id, user_id, created_image_id, text, created_at, updated_at")
+					.order("created_at", { ascending: false })
+					.limit(fetchLimit);
+				if (commentsError) throw commentsError;
+
+				const comments = rawComments ?? [];
+
+				const createdImageIds = Array.from(new Set(
+					comments
+						.map((row) => row?.created_image_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let imageById = new Map();
+				if (createdImageIds.length > 0) {
+					const { data: imageRows, error: imageError } = await serviceClient
+						.from(prefixedTable("created_images"))
+						.select("id, title, published, user_id, file_path, created_at")
+						.in("id", createdImageIds);
+					if (imageError) throw imageError;
+					imageById = new Map((imageRows ?? []).map((row) => [String(row.id), row]));
+				}
+
+				const creatorUserIds = Array.from(new Set(
+					Array.from(imageById.values())
+						.map((row) => row?.user_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let creatorProfileByUserId = new Map();
+				if (creatorUserIds.length > 0) {
+					const { data: creatorProfiles, error: creatorProfileError } = await serviceClient
+						.from(prefixedTable("user_profiles"))
+						.select("user_id, user_name, display_name, avatar_url")
+						.in("user_id", creatorUserIds);
+					if (creatorProfileError) throw creatorProfileError;
+					creatorProfileByUserId = new Map(
+						(creatorProfiles ?? []).map((row) => [String(row.user_id), row])
+					);
+				}
+
+				const visibleComments = comments
+					.map((row) => {
+						const image = row?.created_image_id !== null && row?.created_image_id !== undefined
+							? imageById.get(String(row.created_image_id)) ?? null
+							: null;
+						const creatorProfile = image?.user_id !== null && image?.user_id !== undefined
+							? creatorProfileByUserId.get(String(image.user_id)) ?? null
+							: null;
+						return {
+							...row,
+							created_image_title: image?.title ?? null,
+							created_image_url: image?.file_path ?? null,
+							created_image_created_at: image?.created_at ?? null,
+							created_image_published: image?.published ?? null,
+							created_image_user_id: image?.user_id ?? null,
+							created_image_user_name: creatorProfile?.user_name ?? null,
+							created_image_display_name: creatorProfile?.display_name ?? null,
+							created_image_avatar_url: creatorProfile?.avatar_url ?? null
+						};
+					})
+					.filter((row) => row?.created_image_published === true);
+
+				const trimmed = visibleComments.slice(0, limit);
+
+				const userIds = Array.from(new Set(
+					trimmed
+						.map((row) => row?.user_id)
+						.filter((id) => id !== null && id !== undefined)
+						.map((id) => Number(id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				));
+
+				let profileByUserId = new Map();
+				if (userIds.length > 0) {
+					const { data: profileRows, error: profileError } = await serviceClient
+						.from(prefixedTable("user_profiles"))
+						.select("user_id, user_name, display_name, avatar_url")
+						.in("user_id", userIds);
+					if (profileError) throw profileError;
+					profileByUserId = new Map(
+						(profileRows ?? []).map((row) => [String(row.user_id), row])
+					);
+				}
+
+				return trimmed.map((row) => {
 					const profile = row?.user_id !== null && row?.user_id !== undefined
 						? profileByUserId.get(String(row.user_id)) ?? null
 						: null;
@@ -1448,6 +1624,99 @@ export function openDb() {
 					.maybeSingle();
 				if (error) throw error;
 				return data ?? undefined;
+			}
+		},
+		updateCreatedImage: {
+			run: async (id, userId, title, description, isAdmin = false) => {
+				// Use serviceClient to bypass RLS for backend operations
+				// Admin can update any image, owner can only update their own
+				const query = serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						title,
+						description
+					})
+					.eq("id", id);
+
+				if (!isAdmin) {
+					query.eq("user_id", userId);
+				}
+
+				const { data, error } = await query.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		unpublishCreatedImage: {
+			run: async (id, userId, isAdmin = false) => {
+				// Use serviceClient to bypass RLS for backend operations
+				// Admin can unpublish any image, owner can only unpublish their own
+				const query = serviceClient
+					.from(prefixedTable("created_images"))
+					.update({
+						published: false,
+						published_at: null
+					})
+					.eq("id", id);
+
+				if (!isAdmin) {
+					query.eq("user_id", userId);
+				}
+
+				const { data, error } = await query.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		updateFeedItem: {
+			run: async (createdImageId, title, summary) => {
+				// Use serviceClient to bypass RLS for backend operations
+				const { data, error } = await serviceClient
+					.from(prefixedTable("feed_items"))
+					.update({
+						title,
+						summary
+					})
+					.eq("created_image_id", createdImageId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		deleteFeedItemByCreatedImageId: {
+			run: async (createdImageId) => {
+				// Use serviceClient to bypass RLS for backend operations
+				const { data, error } = await serviceClient
+					.from(prefixedTable("feed_items"))
+					.delete()
+					.eq("created_image_id", createdImageId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		deleteAllLikesForCreatedImage: {
+			run: async (createdImageId) => {
+				// Use serviceClient to bypass RLS for backend operations
+				const { data, error } = await serviceClient
+					.from(prefixedTable("likes_created_image"))
+					.delete()
+					.eq("created_image_id", createdImageId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
+			}
+		},
+		deleteAllCommentsForCreatedImage: {
+			run: async (createdImageId) => {
+				// Use serviceClient to bypass RLS for backend operations
+				const { data, error } = await serviceClient
+					.from(prefixedTable("comments_created_image"))
+					.delete()
+					.eq("created_image_id", createdImageId)
+					.select("id");
+				if (error) throw error;
+				return { changes: data?.length ?? 0 };
 			}
 		},
 		selectUserCredits: {
@@ -1597,6 +1866,168 @@ export function openDb() {
 				const row = Array.isArray(data) ? data[0] : data;
 				return row || null;
 			}
+		},
+		deleteUserAndCleanup: {
+			run: async (rawUserId) => {
+				const userId = Number(rawUserId);
+				if (!Number.isFinite(userId) || userId <= 0) {
+					const err = new Error("Invalid user id");
+					err.code = "INVALID_USER_ID";
+					throw err;
+				}
+
+				// Collect created image ids for user to clean up feed/likes/comments referencing them.
+				const { data: images, error: imgErr } = await serviceClient
+					.from(prefixedTable("created_images"))
+					.select("id")
+					.eq("user_id", userId);
+				if (imgErr) throw imgErr;
+				const imageIds = (Array.isArray(images) ? images : [])
+					.map((row) => Number(row?.id))
+					.filter((id) => Number.isFinite(id) && id > 0);
+
+				const changes = {};
+
+				const deleteByEq = async ({ table, column, value, selectColumns = "id" }) => {
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.eq(column, value)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				const deleteByOr = async ({ table, or, selectColumns = "id" }) => {
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.or(or)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				const deleteByIn = async ({ table, column, values, selectColumns = "id" }) => {
+					if (!Array.isArray(values) || values.length === 0) return 0;
+					const { data, error } = await serviceClient
+						.from(prefixedTable(table))
+						.delete()
+						.in(column, values)
+						.select(selectColumns);
+					if (error) throw error;
+					return data?.length ?? 0;
+				};
+
+				// Content referencing user's created images
+				changes.feed_items_for_user_images = await deleteByIn({
+					table: "feed_items",
+					column: "created_image_id",
+					values: imageIds
+				});
+				changes.likes_on_user_images = await deleteByIn({
+					table: "likes_created_image",
+					column: "created_image_id",
+					values: imageIds
+				});
+				changes.comments_on_user_images = await deleteByIn({
+					table: "comments_created_image",
+					column: "created_image_id",
+					values: imageIds
+				});
+
+				// User's own interactions on other content
+				changes.likes_by_user = await deleteByEq({
+					table: "likes_created_image",
+					column: "user_id",
+					value: userId
+				});
+				changes.comments_by_user = await deleteByEq({
+					table: "comments_created_image",
+					column: "user_id",
+					value: userId
+				});
+
+				// User-owned content
+				changes.created_images = await deleteByEq({
+					table: "created_images",
+					column: "user_id",
+					value: userId
+				});
+				changes.creations = await deleteByEq({
+					table: "creations",
+					column: "user_id",
+					value: userId
+				});
+
+				// Server ownership and membership
+				changes.server_memberships = await deleteByEq({
+					table: "server_members",
+					column: "user_id",
+					value: userId,
+					// prsn_server_members has no id column (composite PK)
+					selectColumns: "server_id,user_id"
+				});
+				changes.servers_owned = await deleteByEq({
+					table: "servers",
+					column: "user_id",
+					value: userId
+				});
+
+				// Notifications and sessions/credits
+				changes.notifications = await deleteByEq({
+					table: "notifications",
+					column: "user_id",
+					value: userId
+				});
+				changes.sessions = await deleteByEq({
+					table: "sessions",
+					column: "user_id",
+					value: userId
+				});
+				changes.user_credits = await deleteByEq({
+					table: "user_credits",
+					column: "user_id",
+					value: userId
+				});
+
+				// Social graph + profile
+				// Some older deployments may have different column names for prsn_user_follows.
+				// Prefer explicit cleanup, but don't fail user deletion on schema drift.
+				try {
+					changes.user_follows = await deleteByOr({
+						table: "user_follows",
+						or: `follower_id.eq.${userId},following_id.eq.${userId}`
+					});
+				} catch (error) {
+					const message = String(error?.message || "");
+					const looksLikeMissingColumn =
+						message.toLowerCase().includes("does not exist") &&
+						message.toLowerCase().includes("prsn_user_follows");
+					if (looksLikeMissingColumn) {
+						// Rely on FK cascades when deleting the user row.
+						changes.user_follows = null;
+					} else {
+						throw error;
+					}
+				}
+				changes.user_profile = await deleteByEq({
+					table: "user_profiles",
+					column: "user_id",
+					value: userId,
+					// prsn_user_profiles has no id column (primary key is user_id)
+					selectColumns: "user_id"
+				});
+
+				// Finally delete user row
+				changes.user = await deleteByEq({
+					table: "users",
+					column: "id",
+					value: userId
+				});
+
+				return { changes };
+			}
 		}
 	};
 
@@ -1722,12 +2153,12 @@ export function openDb() {
 				.download(filename);
 
 			if (error) {
-				console.error("Supabase image fetch failed, serving fallback image.", {
-					bucket,
-					filename,
-					variant: options?.variant ?? null,
-					error: error?.message ?? error
-				});
+				// console.error("Supabase image fetch failed, serving fallback image.", {
+				// 	bucket,
+				// 		filename,
+				// 		variant: options?.variant ?? null,
+				// 			error: error?.message ?? error
+				// });
 				return sharp({
 					create: {
 						width: 250,

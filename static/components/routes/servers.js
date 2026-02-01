@@ -1,41 +1,372 @@
 import { formatRelativeTime } from '../../shared/datetime.js';
 import { fetchJsonWithStatusDeduped } from '../../shared/api.js';
 import { getAvatarColor } from '../../shared/avatar.js';
+import { fetchLatestComments } from '../../shared/comments.js';
+import { textWithCreationLinks, hydrateYoutubeLinkTitles } from '../../shared/urls.js';
+import { attachAutoGrowTextarea } from '../../shared/autogrow.js';
 
 const html = String.raw;
+
+function escapeHtml(str) {
+	return String(str ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#039;');
+}
 
 class AppRouteServers extends HTMLElement {
 	connectedCallback() {
 		this.innerHTML = html`
       <div class="servers-route">
         <div class="route-header">
-          <h3>Servers</h3>
-          <p>Browse and manage image generation servers.</p>
+          <h3>Connect</h3>
+          <p>See what the community is talking about, manage your image generation servers, and send feature requests directly to the team.</p>
         </div>
-        <div class="route-cards admin-cards" data-servers-container>
-          <div class="route-empty route-loading">
-            <div class="route-loading-spinner" aria-label="Loading" role="status"></div>
-          </div>
-        </div>
+		<app-tabs>
+			<tab data-id="latest-comments" label="Comments" default>
+				<div class="comment-list" data-comments-container>
+					<div class="route-empty route-loading">
+						<div class="route-loading-spinner" aria-label="Loading" role="status"></div>
+					</div>
+				</div>
+			</tab>
+
+			<tab data-id="servers" label="Servers">
+				<div class="route-cards admin-cards" data-servers-container>
+					<div class="route-empty route-loading">
+						<div class="route-loading-spinner" aria-label="Loading" role="status"></div>
+					</div>
+				</div>
+			</tab>
+
+			<tab data-id="feature-requests" label="Feature Requests">
+				<div class="route-header">
+					<p>Tell us what you want to see next. We read every submission.</p>
+				</div>
+				<div class="alert" data-feature-request-status hidden></div>
+				<form data-feature-request-form>
+					<textarea
+						name="message"
+						rows="10"
+						maxlength="5000"
+						placeholder="What should we build? What problem does it solve?"
+						aria-label="Feature request details"
+						data-feature-request-message
+						required
+					></textarea>
+					<button type="submit" class="btn-primary btn-inline" data-feature-request-submit>Send</button>
+				</form>
+			</tab>
+		</app-tabs>
       </div>
     `;
 
+		this.loadLatestComments();
 		this.loadServers();
-		this.setupEventListeners();
+		this.setupFeatureRequestForm();
 	}
 
-	disconnectedCallback() {
-		if (this._serverUpdatedHandler) {
-			document.removeEventListener('server-updated', this._serverUpdatedHandler);
+	async loadLatestComments() {
+		const container = this.querySelector('[data-comments-container]');
+		if (!container) return;
+
+		try {
+			const result = await fetchLatestComments({ limit: 10 });
+			if (!result.ok) {
+				throw new Error('Failed to load comments');
+			}
+			const comments = Array.isArray(result.data?.comments) ? result.data.comments : [];
+			this.renderLatestComments(comments, container);
+		} catch {
+			container.innerHTML = '<div class="route-empty">Error loading comments.</div>';
 		}
+	}
+
+	renderLatestComments(comments, container) {
+		container.innerHTML = '';
+
+		if (!Array.isArray(comments) || comments.length === 0) {
+			container.innerHTML = '<div class="route-empty">No recent comments yet.</div>';
+			return;
+		}
+
+		container.classList.add('connect-comment-list');
+
+		comments.forEach((comment) => {
+			const createdImageId = Number(comment?.created_image_id);
+			const href = (Number.isFinite(createdImageId) && createdImageId > 0) ? `/creations/${createdImageId}` : null;
+
+			const displayName = (typeof comment?.display_name === 'string' && comment.display_name.trim())
+				? comment.display_name.trim()
+				: '';
+			const userName = (typeof comment?.user_name === 'string' && comment.user_name.trim())
+				? comment.user_name.trim()
+				: '';
+			const fallbackName = userName ? userName : 'User';
+			const commenterName = displayName || fallbackName;
+			const commenterHandle = userName ? `@${userName}` : '';
+
+			const createdImageTitle = (typeof comment?.created_image_title === 'string' && comment.created_image_title.trim())
+				? comment.created_image_title.trim()
+				: (Number.isFinite(createdImageId) && createdImageId > 0 ? `Creation ${createdImageId}` : 'Creation');
+
+			const creatorDisplayName = (typeof comment?.created_image_display_name === 'string' && comment.created_image_display_name.trim())
+				? comment.created_image_display_name.trim()
+				: '';
+			const creatorUserName = (typeof comment?.created_image_user_name === 'string' && comment.created_image_user_name.trim())
+				? comment.created_image_user_name.trim()
+				: '';
+			const creator = creatorDisplayName || (creatorUserName ? `@${creatorUserName}` : '');
+
+			const row = document.createElement('div');
+			row.className = `connect-comment${href ? '' : ' is-disabled'}`;
+			if (href) {
+				row.setAttribute('role', 'link');
+				row.tabIndex = 0;
+				row.dataset.href = href;
+				row.setAttribute('aria-label', `Open creation ${createdImageTitle}`);
+				row.addEventListener('click', (e) => {
+					const target = e.target;
+					if (target instanceof HTMLElement && target.closest('a')) return;
+					window.location.href = href;
+				});
+				row.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						window.location.href = href;
+					}
+				});
+			}
+
+			const thumbWrap = document.createElement('div');
+			thumbWrap.className = 'connect-comment-thumb';
+			thumbWrap.setAttribute('aria-hidden', 'true');
+			const thumbUrl = typeof comment?.created_image_thumbnail_url === 'string' ? comment.created_image_thumbnail_url.trim() : '';
+			const imageUrl = typeof comment?.created_image_url === 'string' ? comment.created_image_url.trim() : '';
+			const resolvedThumb = thumbUrl || imageUrl || '';
+			if (resolvedThumb) {
+				const img = document.createElement('img');
+				img.src = resolvedThumb;
+				img.alt = '';
+				img.loading = 'lazy';
+				img.decoding = 'async';
+				img.className = 'connect-comment-thumb-img';
+				thumbWrap.appendChild(img);
+			}
+
+			const creationTitle = document.createElement('div');
+			creationTitle.className = 'connect-comment-creation-title';
+			creationTitle.textContent = createdImageTitle;
+
+			const creatorRow = document.createElement('div');
+			creatorRow.className = 'connect-comment-creator';
+
+			const creatorId = Number(comment?.created_image_user_id ?? 0);
+			const creatorProfileHref = Number.isFinite(creatorId) && creatorId > 0 ? `/user/${creatorId}` : null;
+			const creatorName = creatorDisplayName || (creatorUserName ? creatorUserName : 'User');
+			const creatorHandle = creatorUserName ? `@${creatorUserName}` : '';
+			const creatorSeed = creatorUserName || String(creatorId || '') || creatorName;
+			const creatorColor = getAvatarColor(creatorSeed);
+			const creatorInitial = creatorName.charAt(0).toUpperCase() || '?';
+			const creatorAvatarUrl = typeof comment?.created_image_avatar_url === 'string' ? comment.created_image_avatar_url.trim() : '';
+
+			const creatorAvatarHtml = creatorProfileHref
+				? `
+					<a class="user-link user-avatar-link comment-avatar" href="${creatorProfileHref}" aria-label="View ${escapeHtml(creatorName)} profile" style="background: ${creatorColor};">
+						${creatorAvatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(creatorAvatarUrl)}" alt="">` : escapeHtml(creatorInitial)}
+					</a>
+				`
+				: `
+					<div class="comment-avatar" style="background: ${creatorColor};">
+						${creatorAvatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(creatorAvatarUrl)}" alt="">` : escapeHtml(creatorInitial)}
+					</div>
+				`;
+
+			// Note: on Connect, we intentionally hide the creation timestamp to reduce clutter.
+			creatorRow.innerHTML = `
+				<div class="connect-comment-creator-left">
+					${creatorAvatarHtml}
+					<div class="connect-comment-creator-who">
+						<span class="comment-author-name">${escapeHtml(creatorName)}</span>
+						${creatorHandle ? `<span class="comment-author-handle">${escapeHtml(creatorHandle)}</span>` : ''}
+					</div>
+				</div>
+			`;
+
+			const commenterId = Number(comment?.user_id ?? 0);
+			const profileHref = Number.isFinite(commenterId) && commenterId > 0 ? `/user/${commenterId}` : null;
+			const seed = userName || String(comment?.user_id ?? '') || commenterName;
+			const color = getAvatarColor(seed);
+			const initial = commenterName.charAt(0).toUpperCase() || '?';
+			const avatarUrl = typeof comment?.avatar_url === 'string' ? comment.avatar_url.trim() : '';
+
+			const avatarHtml = profileHref
+				? `
+					<a class="user-link user-avatar-link comment-avatar" href="${profileHref}" aria-label="View ${escapeHtml(commenterName)} profile" style="background: ${color};">
+						${avatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(avatarUrl)}" alt="">` : escapeHtml(initial)}
+					</a>
+				`
+				: `
+					<div class="comment-avatar" style="background: ${color};">
+						${avatarUrl ? `<img class="comment-avatar-img" src="${escapeHtml(avatarUrl)}" alt="">` : escapeHtml(initial)}
+					</div>
+				`;
+
+			const timeAgo = comment?.created_at ? (formatRelativeTime(comment.created_at) || '') : '';
+			const safeText = textWithCreationLinks(comment?.text ?? '');
+
+			const commentText = document.createElement('div');
+			commentText.className = 'comment-text';
+			commentText.innerHTML = safeText;
+
+			const footer = document.createElement('div');
+			footer.className = 'connect-comment-footer';
+			footer.innerHTML = `
+				<div class="connect-comment-footer-left">
+					${avatarHtml}
+					<div class="connect-comment-footer-who">
+						<span class="connect-comment-footer-name-handle-time">
+							<span class="comment-author-name">${escapeHtml(commenterName)}</span>
+							${commenterHandle ? `<span class="comment-author-handle">${escapeHtml(commenterHandle)}</span>` : ''}
+							${timeAgo ? `<span class="comment-time">&nbsp;·&nbsp;${escapeHtml(timeAgo)}</span>` : ''}
+						</span>
+					</div>
+				</div>
+			`;
+
+			row.appendChild(thumbWrap);
+			row.appendChild(creationTitle);
+			row.appendChild(creatorRow);
+			row.appendChild(commentText);
+			row.appendChild(footer);
+			container.appendChild(row);
+		});
+
+		// Comments were rendered; hydrate any YouTube link labels within them.
+		hydrateYoutubeLinkTitles(container);
 	}
 
 	// Listen for server updates from modal
 	setupEventListeners() {
-		this._serverUpdatedHandler = () => {
+		document.addEventListener('server-updated', () => {
 			this.loadServers({ force: true });
+		});
+	}
+
+	setupFeatureRequestForm() {
+		const form = this.querySelector('[data-feature-request-form]');
+		if (!(form instanceof HTMLFormElement)) return;
+
+		const status = this.querySelector('[data-feature-request-status]');
+		const submit = this.querySelector('[data-feature-request-submit]');
+		const messageEl = this.querySelector('[data-feature-request-message]');
+		const refreshMessage = messageEl instanceof HTMLTextAreaElement
+			? attachAutoGrowTextarea(messageEl)
+			: () => { };
+
+		let statusTimer = null;
+
+		const setStatus = ({ type, text } = {}) => {
+			if (!(status instanceof HTMLElement)) return;
+			if (statusTimer) {
+				clearTimeout(statusTimer);
+				statusTimer = null;
+			}
+			status.hidden = !text;
+			status.classList.toggle('error', type === 'error');
+			if (!text) {
+				status.textContent = '';
+				return;
+			}
+
+			// Render a dismissible alert.
+			status.innerHTML = `
+				<span>${escapeHtml(text)}</span>
+				<button type="button" class="alert-close" data-alert-close aria-label="Dismiss">✕</button>
+			`;
+
+			const close = status.querySelector('[data-alert-close]');
+			if (close instanceof HTMLButtonElement) {
+				close.addEventListener('click', () => {
+					setStatus({ type: 'info', text: '' });
+				});
+			}
+
+			// Auto-dismiss non-error notices.
+			if (type !== 'error') {
+				statusTimer = setTimeout(() => {
+					setStatus({ type: 'info', text: '' });
+				}, 4000);
+			}
 		};
-		document.addEventListener('server-updated', this._serverUpdatedHandler);
+
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			setStatus({ type: 'info', text: '' });
+
+			const message = String(form.elements.message.value || '').trim();
+			const context = {
+				route: (document.documentElement?.dataset?.route || window.__CURRENT_ROUTE__ || '').toString(),
+				referrer: (document.referrer || '').toString(),
+				timezone: (() => {
+					try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; }
+				})(),
+				locale: (navigator.language || '').toString(),
+				platform: (navigator.platform || '').toString(),
+				colorScheme: (() => {
+					try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return ''; }
+				})(),
+				reducedMotion: (() => {
+					try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference'; } catch { return ''; }
+				})(),
+				network: (() => {
+					const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+					const effectiveType = conn?.effectiveType ? String(conn.effectiveType) : '';
+					const saveData = typeof conn?.saveData === 'boolean' ? (conn.saveData ? 'save-data' : '') : '';
+					return [effectiveType, saveData].filter(Boolean).join(' ');
+				})(),
+				viewportWidth: window.innerWidth || 0,
+				viewportHeight: window.innerHeight || 0,
+				screenWidth: window.screen?.width || 0,
+				screenHeight: window.screen?.height || 0,
+				devicePixelRatio: window.devicePixelRatio || 1
+			};
+
+			if (!message) {
+				setStatus({ type: 'error', text: 'Please share your idea.' });
+				return;
+			}
+
+			if (submit instanceof HTMLButtonElement) {
+				submit.disabled = true;
+				submit.textContent = 'Sending…';
+			}
+
+			try {
+				const response = await fetch('/api/feature-requests', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include',
+					body: JSON.stringify({ message, context })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					throw new Error(data.error || 'Failed to send feature request.');
+				}
+				form.reset();
+				refreshMessage();
+				setStatus({ type: 'info', text: 'Sent. Thanks — we’ll review it soon.' });
+			} catch (err) {
+				setStatus({ type: 'error', text: err?.message || 'Failed to send feature request.' });
+			} finally {
+				if (submit instanceof HTMLButtonElement) {
+					submit.disabled = false;
+					submit.textContent = 'Send';
+				}
+			}
+		});
 	}
 
 	async loadServers({ force = false } = {}) {
@@ -51,7 +382,7 @@ class AppRouteServers extends HTMLElement {
 			const servers = Array.isArray(result.data?.servers) ? result.data.servers : [];
 			this.renderServers(servers, container);
 		} catch (error) {
-			console.error('Error loading servers:', error);
+			// console.error('Error loading servers:', error);
 			container.innerHTML = '<div class="route-empty">Error loading servers.</div>';
 		}
 	}
@@ -190,435 +521,6 @@ class AppRouteServers extends HTMLElement {
 		});
 
 		container.appendChild(ghostCard);
-
-		// AI Server Generator card (opens modal)
-		const aiCard = document.createElement('button');
-		aiCard.type = 'button';
-		aiCard.className = 'card server-card server-card-ghost';
-		aiCard.setAttribute('aria-label', 'Create server with AI');
-
-		const aiTitle = document.createElement('div');
-		aiTitle.className = 'server-card-ghost-title';
-		aiTitle.textContent = 'Create with AI';
-
-		const aiSubtitle = document.createElement('div');
-		aiSubtitle.className = 'server-card-ghost-subtitle';
-		aiSubtitle.textContent = 'Generate instructions for AI to build and deploy a server.';
-
-		aiCard.appendChild(aiTitle);
-		aiCard.appendChild(aiSubtitle);
-		aiCard.addEventListener('click', () => {
-			const modal = document.querySelector('app-modal-ai-server-generator');
-			if (modal) {
-				modal.open();
-			}
-		});
-
-		container.appendChild(aiCard);
-	}
-
-	openAIGeneratorModal() {
-		// Remove existing modal if any
-		const existing = document.querySelector('.ai-generator-overlay');
-		if (existing) existing.remove();
-
-		const overlay = document.createElement('div');
-		overlay.className = 'ai-generator-overlay';
-
-		overlay.innerHTML = html`
-			<div class="ai-generator-modal">
-				<div class="ai-generator-modal-header">
-					<h3>Create Server with AI</h3>
-					<button type="button" class="ai-generator-modal-close" data-close>&times;</button>
-				</div>
-
-				<div class="ai-generator-modal-body">
-					<p class="ai-generator-intro">
-						Describe what you want and get complete instructions that an AI assistant (like Claude) can use to create, deploy, and register a custom image generation server for you.
-					</p>
-
-					<label class="ai-generator-label">
-						<span>I want to create a Parascene server that...</span>
-						<textarea
-							class="ai-generator-textarea"
-							data-ai-prompt
-							placeholder="generates voxel hats, rotating 360 degrees as an animated GIF loop"
-							rows="3"
-						></textarea>
-					</label>
-
-					<label class="ai-generator-checkbox-label">
-						<input type="checkbox" data-include-token />
-						<span>Include credentials for auto-registration</span>
-					</label>
-
-					<div class="ai-generator-security-note" data-security-note style="display: none;">
-						<strong>Security:</strong> A temporary registration token will be included, allowing the AI to register the server under your account automatically. Only use in private, trusted AI conversations. Token expires in 1 hour.
-					</div>
-
-					<details class="ai-generator-details">
-						<summary>What does the AI need to complete this?</summary>
-						<div class="ai-generator-requirements">
-							<p>The AI assistant needs access to:</p>
-							<ul>
-								<li><strong>Terminal/Bash</strong> - to run commands and create files</li>
-								<li><strong>Vercel CLI</strong> - installed and logged in (<code>npm i -g vercel && vercel login</code>)</li>
-								<li><strong>Git</strong> - to create and push to a repository</li>
-								<li><strong>Node.js & npm</strong> - to install dependencies</li>
-								<li><strong>Network access</strong> - to deploy and register the server</li>
-							</ul>
-							<p><strong>What is Vercel?</strong> A free cloud platform for hosting serverless APIs. The AI will create a project, deploy it to Vercel, and give you a public URL.</p>
-							<p><strong>What happens?</strong> The AI creates the code, deploys it, and (if credentials included) registers it here so you just refresh and it appears.</p>
-						</div>
-					</details>
-				</div>
-
-				<div class="ai-generator-modal-actions">
-					<div class="ai-generator-copied" data-copied-msg style="display: none;">
-						Copied to clipboard!
-					</div>
-					<button type="button" class="ai-generator-btn ai-generator-btn-secondary" data-view-prompt>
-						View Instructions
-					</button>
-					<button type="button" class="ai-generator-btn ai-generator-btn-primary" data-copy-prompt>
-						Copy to Clipboard
-					</button>
-				</div>
-			</div>
-		`;
-
-		// Setup event listeners
-		const closeModal = () => overlay.remove();
-
-		overlay.querySelector('[data-close]').addEventListener('click', closeModal);
-		overlay.addEventListener('click', (e) => {
-			if (e.target === overlay) closeModal();
-		});
-
-		const tokenCheckbox = overlay.querySelector('[data-include-token]');
-		const securityNote = overlay.querySelector('[data-security-note]');
-		const viewBtn = overlay.querySelector('[data-view-prompt]');
-		const copyBtn = overlay.querySelector('[data-copy-prompt]');
-		const promptTextarea = overlay.querySelector('[data-ai-prompt]');
-		const copiedMsg = overlay.querySelector('[data-copied-msg]');
-
-		tokenCheckbox.addEventListener('change', () => {
-			securityNote.style.display = tokenCheckbox.checked ? 'block' : 'none';
-		});
-
-		viewBtn.addEventListener('click', async () => {
-			const token = tokenCheckbox.checked ? await this.fetchRegistrationToken() : null;
-			if (tokenCheckbox.checked && !token) return; // Failed to get token
-			const markdown = this.generateAIPrompt(promptTextarea.value, token);
-			this.showMarkdownModal(markdown);
-		});
-
-		copyBtn.addEventListener('click', async () => {
-			const token = tokenCheckbox.checked ? await this.fetchRegistrationToken() : null;
-			if (tokenCheckbox.checked && !token) return; // Failed to get token
-			const markdown = this.generateAIPrompt(promptTextarea.value, token);
-			try {
-				await navigator.clipboard.writeText(markdown);
-				copiedMsg.style.display = 'flex';
-				setTimeout(() => {
-					copiedMsg.style.display = 'none';
-				}, 2000);
-			} catch (err) {
-				console.error('Failed to copy:', err);
-				this.showMarkdownModal(markdown);
-			}
-		});
-
-		document.body.appendChild(overlay);
-		promptTextarea.focus();
-	}
-
-	async fetchRegistrationToken() {
-		try {
-			const response = await fetch('/api/servers/registration-token', {
-				method: 'GET',
-				credentials: 'include'
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				alert(data.error || 'Failed to generate registration token. Please try again.');
-				return null;
-			}
-			const data = await response.json();
-			return data.token;
-		} catch (error) {
-			console.error('Error fetching registration token:', error);
-			alert('Failed to generate registration token. Please check your connection.');
-			return null;
-		}
-	}
-
-	generateAIPrompt(userDescription, registrationToken) {
-		const parasceneUrl = window.location.origin;
-		const description = userDescription.trim() || 'custom image generator';
-
-		let authSection = '';
-		if (registrationToken) {
-			authSection = `
-## Auto-Registration Credentials
-
-The user has authorized automatic server registration. Use these credentials to register the server after deployment:
-
-- **Parascene URL:** ${parasceneUrl}
-- **Registration Token:** \`${registrationToken}\`
-
-To register the server, make a POST request:
-\`\`\`bash
-curl -X POST "${parasceneUrl}/api/servers" \\
-  -H "Content-Type: application/json" \\
-  -H "Cookie: ps_session=${registrationToken}" \\
-  -d '{
-    "name": "YOUR_SERVER_NAME",
-    "server_url": "YOUR_DEPLOYED_URL",
-    "auth_token": "YOUR_API_KEY",
-    "description": "YOUR_DESCRIPTION"
-  }'
-\`\`\`
-
-**Note:** This token expires in 1 hour. Complete the registration before it expires.
-`;
-		}
-
-		return `# Parascene Server Creation Request
-
-I want to create a Parascene-compatible image generation server that: **${description}**
-
-## Prerequisites for AI Agent
-
-To complete this task, you need access to:
-
-1. **Terminal/Bash** - To run commands, create files, and execute scripts
-2. **Vercel CLI** - Must be installed (\`npm i -g vercel\`) and logged in (\`vercel login\`)
-3. **Git** - To create repos and push code
-4. **GitHub CLI (gh)** - Optional but helpful for creating repos (\`gh repo create\`)
-5. **Node.js & npm** - To install dependencies and test locally
-6. **File system access** - To create project files and directories
-7. **Network access** - To deploy to Vercel and${registrationToken ? ' register with Parascene' : ' test the deployment'}
-
-**Verify Vercel is ready:**
-\`\`\`bash
-vercel --version  # Should show version
-vercel whoami     # Should show logged-in user
-\`\`\`
-
-If Vercel CLI is not logged in, the user must run \`vercel login\` first.
-
-## What is Parascene?
-
-Parascene is a platform for generative art. Users can connect to "provider servers" that generate images on demand. Each provider server exposes an API that Parascene calls to generate images.
-
-## What is Vercel?
-
-Vercel is a cloud platform for deploying serverless functions and static sites. It's free for hobby projects and perfect for hosting image generation APIs. You deploy by pushing to GitHub and Vercel automatically builds and hosts your code.
-
-## Reference Repositories
-
-Study these repositories to understand the patterns:
-
-1. **Parascene Platform:** https://github.com/crosshj/parascene
-   - The main platform that calls provider servers
-   - See \`api_routes/create.js\` for how it calls providers
-
-2. **Example Provider:** https://github.com/crosshj/parascene-provider
-   - Simple reference implementation
-   - Shows the required API structure
-
-## Required API Structure
-
-Your server must implement this exact API:
-
-### GET / (Capabilities Endpoint)
-Returns server info and available generation methods.
-
-\`\`\`javascript
-// Response format:
-{
-  "status": "operational",
-  "name": "Your Server Name",
-  "description": "What your server does",
-  "icon": "https://your-server.vercel.app/branding/icon.png",      // Optional
-  "banner": "https://your-server.vercel.app/branding/banner.png",  // Optional
-  "methods": {
-    "method_name": {
-      "name": "Display Name",
-      "description": "What this method generates",
-      "credits": 0.25,
-      "fields": {},  // Empty for no options, or define input fields
-      "preview": "https://your-server.vercel.app/previews/example.png"  // Optional
-    }
-  }
-}
-\`\`\`
-
-### POST / (Generation Endpoint)
-Generates and returns an image.
-
-**Request body:**
-\`\`\`json
-{
-  "method": "method_name",
-  "options": {}
-}
-\`\`\`
-
-**Response:** Return the image binary with these headers:
-- \`Content-Type\`: \`image/png\` or \`image/gif\`
-- \`X-Image-Width\`: Image width in pixels
-- \`X-Image-Height\`: Image height in pixels
-- \`X-Image-Seed\`: Random seed used (for reproducibility)
-- \`X-Image-Color\`: Hex color representing the image (e.g., \`#ff5500\`)
-- \`X-Image-Name\`: Suggested title for the image (optional)
-- \`X-Image-Description\`: Suggested description (optional)
-
-### Authentication
-
-Both endpoints require Bearer token authentication:
-\`\`\`
-Authorization: Bearer YOUR_API_KEY
-\`\`\`
-
-Validate with:
-\`\`\`javascript
-const authHeader = req.headers.authorization;
-if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== process.env.YOUR_API_KEY) {
-  return res.status(401).json({ error: 'Unauthorized' });
-}
-\`\`\`
-
-## Implementation Steps
-
-1. **Create a new GitHub repository** for your server
-
-2. **Create the project structure:**
-   \`\`\`
-   your-server/
-   ├── api/
-   │   └── index.js          # Main API handler
-   ├── public/
-   │   ├── branding/
-   │   │   ├── icon.png      # 128x128 server icon
-   │   │   └── banner.png    # 768x256 banner
-   │   └── previews/
-   │       └── example.png   # Preview for each method
-   ├── vercel.json           # Vercel configuration
-   └── package.json
-   \`\`\`
-
-3. **Create vercel.json:**
-   \`\`\`json
-   {
-     "version": 2,
-     "builds": [
-       { "src": "api/index.js", "use": "@vercel/node" },
-       { "src": "public/**", "use": "@vercel/static" }
-     ],
-     "routes": [
-       { "src": "/api", "dest": "/api/index.js" },
-       { "src": "/branding/(.*)", "dest": "/public/branding/$1" },
-       { "src": "/previews/(.*)", "dest": "/public/previews/$1" },
-       { "src": "/(.*\\\\.png)", "dest": "/public/$1" },
-       { "src": "/(.*\\\\.gif)", "dest": "/public/$1" }
-     ]
-   }
-   \`\`\`
-
-4. **Create package.json:**
-   \`\`\`json
-   {
-     "name": "your-server-name",
-     "version": "1.0.0",
-     "dependencies": {
-       "sharp": "^0.33.0"
-     }
-   }
-   \`\`\`
-
-5. **Implement api/index.js** with the image generation logic
-
-6. **Deploy to Vercel:**
-   - Connect your GitHub repo to Vercel
-   - Add environment variable for your API key
-   - Deploy
-
-7. **Register with Parascene** (see below)
-
-## User's Request
-
-Create a server that generates: **${description}**
-
-Requirements:
-- Output should be 1024x1024 pixels
-- Use \`sharp\` for image processing if needed
-- Generate unique images each time (use random seeds)
-- Return appropriate headers for Parascene integration
-- Include preview images showing example output
-- Include icon and banner for branding
-${authSection}
-## After Deployment
-
-${registrationToken ? `Use the auto-registration credentials above to register the server automatically.` : `The user will manually register the server at ${parasceneUrl}/servers using:
-- The deployed Vercel URL
-- The API key set in Vercel environment variables`}
-
-## Important Notes
-
-- Keep the code simple and focused on the generation task
-- Don't over-engineer - start with basic functionality
-- Test locally with \`vercel dev\` before deploying
-- Make sure all static assets (icons, previews) are generated and committed
-`;
-	}
-
-	showMarkdownModal(markdown) {
-		// Create a simple modal to display the markdown
-		const overlay = document.createElement('div');
-		overlay.className = 'ai-markdown-overlay';
-		overlay.innerHTML = html`
-			<div class="ai-markdown-modal">
-				<div class="ai-markdown-header">
-					<h3>AI Server Creation Instructions</h3>
-					<button type="button" class="ai-markdown-close">&times;</button>
-				</div>
-				<div class="ai-markdown-content">
-					<pre class="ai-markdown-pre"></pre>
-				</div>
-				<div class="ai-markdown-actions">
-					<button type="button" class="ai-generator-btn ai-generator-btn-primary" data-modal-copy>
-						Copy to Clipboard
-					</button>
-				</div>
-			</div>
-		`;
-
-		// Set text content safely (not innerHTML to avoid XSS)
-		overlay.querySelector('.ai-markdown-pre').textContent = markdown;
-
-		const closeModal = () => overlay.remove();
-
-		overlay.querySelector('.ai-markdown-close').addEventListener('click', closeModal);
-		overlay.addEventListener('click', (e) => {
-			if (e.target === overlay) closeModal();
-		});
-
-		overlay.querySelector('[data-modal-copy]').addEventListener('click', async () => {
-			try {
-				await navigator.clipboard.writeText(markdown);
-				const btn = overlay.querySelector('[data-modal-copy]');
-				btn.textContent = 'Copied!';
-				setTimeout(() => {
-					btn.textContent = 'Copy to Clipboard';
-				}, 2000);
-			} catch (err) {
-				alert('Failed to copy');
-			}
-		});
-
-		document.body.appendChild(overlay);
 	}
 
 	async handleJoin(serverId) {
@@ -634,10 +536,10 @@ ${registrationToken ? `Use the auto-registration credentials above to register t
 				return;
 			}
 
-			// Reload servers
-			await this.loadServers({ force: true });
+			// Refresh the page to show updated state
+			window.location.reload();
 		} catch (error) {
-			console.error('Error joining server:', error);
+			// console.error('Error joining server:', error);
 			alert('Failed to join server');
 		}
 	}
@@ -659,10 +561,10 @@ ${registrationToken ? `Use the auto-registration credentials above to register t
 				return;
 			}
 
-			// Reload servers
-			await this.loadServers({ force: true });
+			// Refresh the page to show updated state
+			window.location.reload();
 		} catch (error) {
-			console.error('Error leaving server:', error);
+			// console.error('Error leaving server:', error);
 			alert('Failed to leave server');
 		}
 	}

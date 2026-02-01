@@ -10,9 +10,11 @@ import {
 	clearAuthCookie,
 	getJwtSecret,
 	hashToken,
-	setAuthCookie
+	setAuthCookie,
+	shouldLogSession
 } from "./auth.js";
 import { getThumbnailUrl } from "./utils/url.js";
+import { computeWelcome, WELCOME_VERSION } from "./utils/welcome.js";
 
 export default function createProfileRoutes({ queries }) {
 	const router = express.Router();
@@ -96,6 +98,40 @@ export default function createProfileRoutes({ queries }) {
 			created_at: row.created_at ?? null,
 			updated_at: row.updated_at ?? null
 		};
+	}
+
+	async function suggestAvailableUsername({ base, userId } = {}) {
+		const normalizedBase = normalizeUsername(base);
+		if (!normalizedBase) return null;
+
+		// Fast path: available already
+		if (queries.selectUserProfileByUsername?.get) {
+			const existing = await queries.selectUserProfileByUsername.get(normalizedBase);
+			if (!existing || Number(existing.user_id) === Number(userId)) {
+				return normalizedBase;
+			}
+		} else {
+			// If we can't check availability, just return the base.
+			return normalizedBase;
+		}
+
+		// Suffix probing: john_1, john_2, ...
+		for (let i = 1; i <= 200; i++) {
+			const suffix = `_${i}`;
+			const maxBaseLen = 24 - suffix.length;
+			let candidateBase = normalizedBase.slice(0, Math.max(1, maxBaseLen));
+			candidateBase = candidateBase.replace(/_+$/g, "");
+			if (!candidateBase) candidateBase = "user";
+			const candidate = normalizeUsername(`${candidateBase}${suffix}`);
+			if (!candidate) continue;
+
+			const existing = await queries.selectUserProfileByUsername.get(candidate);
+			if (!existing || Number(existing.user_id) === Number(userId)) {
+				return candidate;
+			}
+		}
+
+		return null;
 	}
 
 	function extractGenericKey(url) {
@@ -212,11 +248,11 @@ export default function createProfileRoutes({ queries }) {
 		try {
 			await queries.insertUserCredits.run(userId, 100, null);
 		} catch (error) {
-			console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
-				error: error.message,
-				stack: error.stack,
-				name: error.name
-			});
+			// console.error(`[Signup] Failed to initialize credits for user ${userId}:`, {
+			// 	error: error.message,
+			// 	stack: error.stack,
+			// 	name: error.name
+			// });
 			// Don't fail signup if credits initialization fails
 		}
 
@@ -225,16 +261,22 @@ export default function createProfileRoutes({ queries }) {
 		if (queries.insertSession) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-			console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+			if (shouldLogSession()) {
+				// console.log(`[Signup] Creating session for new user ${userId}, expires at: ${expiresAt}`);
+			}
 			try {
 				await queries.insertSession.run(userId, tokenHash, expiresAt);
-				console.log(`[Signup] Session created successfully for user ${userId}`);
+				if (shouldLogSession()) {
+					// console.log(`[Signup] Session created successfully for user ${userId}`);
+				}
 			} catch (error) {
-				console.error(`[Signup] Failed to create session for user ${userId}:`, {
-					error: error.message,
-					stack: error.stack,
-					name: error.name
-				});
+				if (shouldLogSession()) {
+					// console.error(`[Signup] Failed to create session for user ${userId}:`, {
+					// 	error: error.message,
+					// 	stack: error.stack,
+					// 	name: error.name
+					// });
+				}
 				// Don't fail signup if session creation fails - cookie is still set
 			}
 		}
@@ -271,16 +313,22 @@ export default function createProfileRoutes({ queries }) {
 		if (queries.insertSession) {
 			const tokenHash = hashToken(token);
 			const expiresAt = new Date(Date.now() + ONE_WEEK_MS).toISOString();
-			console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+			if (shouldLogSession()) {
+				// console.log(`[Login] Creating session for user ${user.id}, expires at: ${expiresAt}`);
+			}
 			try {
 				await queries.insertSession.run(user.id, tokenHash, expiresAt);
-				console.log(`[Login] Session created successfully for user ${user.id}`);
+				if (shouldLogSession()) {
+					// console.log(`[Login] Session created successfully for user ${user.id}`);
+				}
 			} catch (error) {
-				console.error(`[Login] Failed to create session for user ${user.id}:`, {
-					error: error.message,
-					stack: error.stack,
-					name: error.name
-				});
+				if (shouldLogSession()) {
+					// console.error(`[Login] Failed to create session for user ${user.id}:`, {
+					// 	error: error.message,
+					// 	stack: error.stack,
+					// 	name: error.name
+					// });
+				}
 				// Don't fail login if session creation fails - cookie is still set
 			}
 		}
@@ -299,11 +347,43 @@ export default function createProfileRoutes({ queries }) {
 			}
 		}
 		clearAuthCookie(res, req);
-		res.redirect("/");
+		res.redirect("/auth");
 	});
 
 	router.get("/me", (req, res) => {
 		res.json({ userId: req.auth?.userId || null });
+	});
+
+	// Username availability helper (used by /welcome)
+	router.get("/api/username-suggest", async (req, res) => {
+		if (!req.auth?.userId) {
+			return res.status(401).json({ error: "Unauthorized" });
+		}
+
+		const raw = req.query?.user_name ?? req.query?.username ?? "";
+		const base = typeof raw === "string" ? raw.trim() : "";
+		const normalizedBase = normalizeUsername(base);
+		if (!normalizedBase) {
+			return res.status(400).json({
+				error: "Invalid username",
+				message: "Username must be 3-24 chars, lowercase letters/numbers/underscore, starting with a letter/number."
+			});
+		}
+
+		const suggested = await suggestAvailableUsername({ base: normalizedBase, userId: req.auth.userId });
+		if (!suggested) {
+			return res.status(409).json({
+				error: "No usernames available",
+				message: "Unable to suggest an available username. Please try a different one."
+			});
+		}
+
+		return res.json({
+			ok: true,
+			input: normalizedBase,
+			suggested,
+			available: suggested === normalizedBase
+		});
 	});
 
 	router.get("/api/profile", async (req, res) => {
@@ -318,6 +398,7 @@ export default function createProfileRoutes({ queries }) {
 
 		const profileRow = await queries.selectUserProfileByUserId?.get(req.auth.userId);
 		const profile = normalizeProfileRow(profileRow);
+		const welcome = computeWelcome({ profileRow });
 
 		// Get credits balance
 		let credits = await queries.selectUserCredits.get(req.auth.userId);
@@ -327,12 +408,12 @@ export default function createProfileRoutes({ queries }) {
 				await queries.insertUserCredits.run(req.auth.userId, 100, null);
 				credits = { balance: 100 };
 			} catch (error) {
-				console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
+				// console.error(`[Profile] Failed to initialize credits for user ${req.auth.userId}:`, error);
 				credits = { balance: 0 };
 			}
 		}
 
-		return res.json({ ...user, credits: credits.balance, profile });
+		return res.json({ ...user, credits: credits.balance, profile, welcome });
 	});
 
 	// Update current user's profile (user_profiles table)
@@ -347,9 +428,25 @@ export default function createProfileRoutes({ queries }) {
 				return res.status(404).json({ error: "User not found" });
 			}
 
+			const existingRow = await queries.selectUserProfileByUserId?.get(req.auth.userId);
+			const existingProfile = normalizeProfileRow(existingRow);
+			const existingUserName = typeof existingProfile.user_name === "string"
+				? existingProfile.user_name.trim()
+				: "";
+
 			const rawUserName = req.body?.user_name ?? req.body?.username;
 			const userName = normalizeUsername(rawUserName);
-			if (typeof rawUserName === "string" && !userName) {
+			const hasExistingUserName = Boolean(existingUserName);
+			const hasUserNameInput = rawUserName !== undefined && rawUserName !== null;
+			if (hasExistingUserName && hasUserNameInput) {
+				// Username is permanent once set (admin override is a separate endpoint).
+				if (!userName || userName !== existingUserName) {
+					return res.status(409).json({
+						error: "Username is permanent",
+						message: "Username cannot be changed after it is set."
+					});
+				}
+			} else if (typeof rawUserName === "string" && !userName) {
 				return res.status(400).json({
 					error: "Invalid username",
 					message: "Username must be 3-24 chars, lowercase letters/numbers/underscore, starting with a letter/number."
@@ -357,22 +454,42 @@ export default function createProfileRoutes({ queries }) {
 			}
 
 			// Enforce uniqueness if username provided
-			if (userName && queries.selectUserProfileByUsername?.get) {
+			if (!hasExistingUserName && userName && queries.selectUserProfileByUsername?.get) {
 				const existing = await queries.selectUserProfileByUsername.get(userName);
 				if (existing && Number(existing.user_id) !== Number(req.auth.userId)) {
 					return res.status(409).json({ error: "Username already taken" });
 				}
 			}
 
+			const requestedMeta = typeof req.body?.meta === "object" && req.body.meta && !Array.isArray(req.body.meta)
+				? req.body.meta
+				: null;
+			const nextMeta = {
+				...(typeof existingProfile.meta === "object" && existingProfile.meta ? existingProfile.meta : {}),
+				...(requestedMeta || {})
+			};
+
+			const finalUserName = hasExistingUserName
+				? existingUserName
+				: userName;
+
+			if (finalUserName) {
+				const legacy = nextMeta?.["onb_version"];
+				const prev = Number(nextMeta.welcome_version ?? legacy);
+				const prevVersion = Number.isFinite(prev) ? prev : 0;
+				nextMeta.welcome_version = Math.max(prevVersion, WELCOME_VERSION);
+				delete nextMeta["onb_version"];
+			}
+
 			const payload = {
-				user_name: userName,
+				user_name: finalUserName,
 				display_name: typeof req.body?.display_name === "string" ? req.body.display_name.trim() : null,
 				about: typeof req.body?.about === "string" ? req.body.about.trim() : null,
 				socials: typeof req.body?.socials === "object" && req.body.socials ? req.body.socials : {},
 				avatar_url: typeof req.body?.avatar_url === "string" ? req.body.avatar_url.trim() : null,
 				cover_image_url: typeof req.body?.cover_image_url === "string" ? req.body.cover_image_url.trim() : null,
 				badges: Array.isArray(req.body?.badges) ? req.body.badges : [],
-				meta: typeof req.body?.meta === "object" && req.body.meta ? req.body.meta : {}
+				meta: nextMeta
 			};
 
 			if (!queries.upsertUserProfile?.run) {
@@ -384,7 +501,7 @@ export default function createProfileRoutes({ queries }) {
 			const profile = normalizeProfileRow(updatedRow);
 			return res.json({ ok: true, profile });
 		} catch (error) {
-			console.error("Error updating profile:", error);
+			// console.error("Error updating profile:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -425,6 +542,19 @@ export default function createProfileRoutes({ queries }) {
 
 			const existingRow = await queries.selectUserProfileByUserId?.get(req.auth.userId);
 			const existingProfile = normalizeProfileRow(existingRow);
+			const existingUserName = typeof existingProfile.user_name === "string"
+				? existingProfile.user_name.trim()
+				: "";
+			const hasExistingUserName = Boolean(existingUserName);
+			const hasUserNameInput = rawUserName !== undefined && rawUserName !== null && String(rawUserName).trim() !== "";
+			if (hasExistingUserName && hasUserNameInput) {
+				if (!userName || userName !== existingUserName) {
+					return res.status(409).json({
+						error: "Username is permanent",
+						message: "Username cannot be changed after it is set."
+					});
+				}
+			}
 
 			const avatarRemove = Boolean(fields?.avatar_remove);
 			const coverRemove = Boolean(fields?.cover_remove);
@@ -452,6 +582,19 @@ export default function createProfileRoutes({ queries }) {
 			const meta = parseJsonField(fields?.meta, existingProfile.meta || {}, "Meta must be valid JSON.");
 			if (meta == null || typeof meta !== "object" || Array.isArray(meta)) {
 				return res.status(400).json({ error: "Meta must be a JSON object" });
+			}
+			if (hasExistingUserName) {
+				const legacy = meta?.["onb_version"];
+				const prev = Number(meta.welcome_version ?? legacy);
+				const prevVersion = Number.isFinite(prev) ? prev : 0;
+				meta.welcome_version = Math.max(prevVersion, WELCOME_VERSION);
+				delete meta["onb_version"];
+			} else if (userName) {
+				const legacy = meta?.["onb_version"];
+				const prev = Number(meta.welcome_version ?? legacy);
+				const prevVersion = Number.isFinite(prev) ? prev : 0;
+				meta.welcome_version = Math.max(prevVersion, WELCOME_VERSION);
+				delete meta["onb_version"];
 			}
 
 			let avatar_url = avatarRemove ? null : (oldAvatarUrl || null);
@@ -501,7 +644,7 @@ export default function createProfileRoutes({ queries }) {
 			}
 
 			const payload = {
-				user_name: userName || existingProfile.user_name || null,
+				user_name: hasExistingUserName ? existingUserName : (userName || null),
 				display_name: typeof fields?.display_name === "string" ? fields.display_name.trim() : existingProfile.display_name || null,
 				about: typeof fields?.about === "string" ? fields.about.trim() : existingProfile.about || null,
 				socials: nextSocials,
@@ -521,7 +664,7 @@ export default function createProfileRoutes({ queries }) {
 					try {
 						await storage.deleteGenericImage(key);
 					} catch (error) {
-						console.warn("Failed to delete previous profile image:", error?.message || error);
+						// console.warn("Failed to delete previous profile image:", error?.message || error);
 					}
 				}
 			}
@@ -534,7 +677,7 @@ export default function createProfileRoutes({ queries }) {
 			if (error?.code === "INVALID_JSON") {
 				return res.status(400).json({ error: error.message || "Invalid JSON" });
 			}
-			console.error("Error updating profile (multipart):", error);
+			// console.error("Error updating profile (multipart):", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -603,7 +746,7 @@ export default function createProfileRoutes({ queries }) {
 				viewer_follows: viewerFollows
 			});
 		} catch (error) {
-			console.error("Error loading user profile summary:", error);
+			// console.error("Error loading user profile summary:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -631,11 +774,12 @@ export default function createProfileRoutes({ queries }) {
 			}
 
 			const isSelf = Number(targetUserId) === Number(req.auth.userId);
+			const isAdmin = viewer?.role === 'admin';
 			const include = String(req.query?.include || "").toLowerCase();
 			const wantAll = include === "all";
 
 			let images = [];
-			if (isSelf && wantAll && queries.selectCreatedImagesForUser?.all) {
+			if ((isSelf || isAdmin) && wantAll && queries.selectCreatedImagesForUser?.all) {
 				images = await queries.selectCreatedImagesForUser.all(targetUserId);
 			} else if (queries.selectPublishedCreatedImagesForUser?.all) {
 				images = await queries.selectPublishedCreatedImagesForUser.all(targetUserId);
@@ -666,7 +810,7 @@ export default function createProfileRoutes({ queries }) {
 
 			return res.json({ images: mapped, is_self: isSelf, scope: isSelf && wantAll ? "all" : "published" });
 		} catch (error) {
-			console.error("Error loading user created images:", error);
+			// console.error("Error loading user created images:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -688,7 +832,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ notifications });
 		} catch (error) {
-			console.error("Error loading notifications:", error);
+			// console.error("Error loading notifications:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -710,7 +854,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ count: result?.count ?? 0 });
 		} catch (error) {
-			console.error("Error loading unread notification count:", error);
+			// console.error("Error loading unread notification count:", error);
 			return res.json({ count: 0 });
 		}
 	});
@@ -738,7 +882,7 @@ export default function createProfileRoutes({ queries }) {
 			);
 			return res.json({ ok: true, updated: result.changes });
 		} catch (error) {
-			console.error("Error acknowledging notification:", error);
+			// console.error("Error acknowledging notification:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -762,7 +906,7 @@ export default function createProfileRoutes({ queries }) {
 						lastClaimDate: null
 					});
 				} catch (error) {
-					console.error("Error initializing credits:", error);
+					// console.error("Error initializing credits:", error);
 					return res.status(500).json({ error: "Internal server error" });
 				}
 			}
@@ -783,7 +927,7 @@ export default function createProfileRoutes({ queries }) {
 				lastClaimDate: credits.last_daily_claim_at
 			});
 		} catch (error) {
-			console.error("Error loading credits:", error);
+			// console.error("Error loading credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -810,7 +954,7 @@ export default function createProfileRoutes({ queries }) {
 				message: "Daily credits claimed successfully"
 			});
 		} catch (error) {
-			console.error("Error claiming daily credits:", error);
+			// console.error("Error claiming daily credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -866,7 +1010,7 @@ export default function createProfileRoutes({ queries }) {
 				if (isSelfTip) {
 					return res.status(400).json({ error: "Cannot tip yourself" });
 				}
-				console.error("Error transferring credits:", error);
+				// console.error("Error transferring credits:", error);
 				return res.status(500).json({ error: "Internal server error" });
 			}
 
@@ -879,7 +1023,7 @@ export default function createProfileRoutes({ queries }) {
 					await queries.insertNotification.run(toUserId, null, title, message, null);
 				}
 			} catch (error) {
-				console.error("Failed to insert tip notification:", error);
+				// console.error("Failed to insert tip notification:", error);
 				// do not fail the transfer
 			}
 
@@ -902,7 +1046,7 @@ export default function createProfileRoutes({ queries }) {
 				toBalance
 			});
 		} catch (error) {
-			console.error("Error tipping credits:", error);
+			// console.error("Error tipping credits:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});

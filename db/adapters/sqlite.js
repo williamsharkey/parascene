@@ -6,7 +6,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dataDir = path.join(__dirname, "..", "data");
-const dbPath = path.join(dataDir, "app.db");
+// Jest runs test files in parallel across workers. Use a per-worker DB file
+// to avoid cross-test interference and "readonly database" errors.
+const workerId = String(process.env.JEST_WORKER_ID || "");
+const dbFileName = workerId ? `app_${workerId}.db` : "app.db";
+const dbPath = path.join(dataDir, dbFileName);
 
 // Dynamically import better-sqlite3 only when needed (not in production/Vercel)
 let Database;
@@ -27,13 +31,6 @@ function initSchema(db) {
 	const schemaPath = path.join(__dirname, "..", "schemas", "sqlite_01.sql");
 	const schemaSql = fs.readFileSync(schemaPath, "utf8");
 	db.exec(schemaSql);
-
-	// Load AI servers schema
-	const aiServersSchemaPath = path.join(__dirname, "..", "schemas", "sqlite_02_ai_servers.sql");
-	if (fs.existsSync(aiServersSchemaPath)) {
-		const aiServersSchemaSql = fs.readFileSync(aiServersSchemaPath, "utf8");
-		db.exec(aiServersSchemaSql);
-	}
 }
 
 function ensureServersAuthTokenColumn(db) {
@@ -44,19 +41,7 @@ function ensureServersAuthTokenColumn(db) {
 			db.exec("ALTER TABLE servers ADD COLUMN auth_token TEXT");
 		}
 	} catch (error) {
-		console.warn("Failed to ensure auth_token column on servers:", error);
-	}
-}
-
-function ensureCreatedImagesSeedColumn(db) {
-	try {
-		const columns = db.prepare("PRAGMA table_info(created_images)").all();
-		const hasSeed = columns.some((column) => column.name === "seed");
-		if (!hasSeed) {
-			db.exec("ALTER TABLE created_images ADD COLUMN seed TEXT");
-		}
-	} catch (error) {
-		console.warn("Failed to ensure seed column on created_images:", error);
+		// console.warn("Failed to ensure auth_token column on servers:", error);
 	}
 }
 
@@ -66,7 +51,6 @@ export async function openDb() {
 	const db = new DbClass(dbPath);
 	initSchema(db);
 	ensureServersAuthTokenColumn(db);
-	ensureCreatedImagesSeedColumn(db);
 
 	const transferCreditsTxn = db.transaction((fromUserId, toUserId, amount) => {
 		const ensureCreditsRowStmt = db.prepare(
@@ -116,6 +100,69 @@ export async function openDb() {
 			fromBalance: Number(nextFrom?.balance ?? 0),
 			toBalance: Number(nextTo?.balance ?? 0)
 		};
+	});
+
+	const deleteUserAndCleanupTxn = db.transaction((rawUserId) => {
+		const userId = Number(rawUserId);
+		if (!Number.isFinite(userId) || userId <= 0) {
+			const err = new Error("Invalid user id");
+			err.code = "INVALID_USER_ID";
+			throw err;
+		}
+
+		const changes = {};
+		const run = (sql, ...params) => {
+			const stmt = db.prepare(sql);
+			const result = stmt.run(...params);
+			return Number(result?.changes ?? 0);
+		};
+
+		// Clean up content that references the user's created images
+		changes.feed_items_for_user_images = run(
+			`DELETE FROM feed_items
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+		changes.likes_on_user_images = run(
+			`DELETE FROM likes_created_image
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+		changes.comments_on_user_images = run(
+			`DELETE FROM comments_created_image
+       WHERE created_image_id IN (SELECT id FROM created_images WHERE user_id = ?)`,
+			userId
+		);
+
+		// Clean up user's interactions on other content
+		changes.likes_by_user = run(`DELETE FROM likes_created_image WHERE user_id = ?`, userId);
+		changes.comments_by_user = run(`DELETE FROM comments_created_image WHERE user_id = ?`, userId);
+
+		// User-owned content
+		changes.created_images = run(`DELETE FROM created_images WHERE user_id = ?`, userId);
+		changes.creations = run(`DELETE FROM creations WHERE user_id = ?`, userId);
+
+		// Server ownership and membership
+		changes.server_memberships = run(`DELETE FROM server_members WHERE user_id = ?`, userId);
+		changes.servers_owned = run(`DELETE FROM servers WHERE user_id = ?`, userId);
+
+		// Notifications and sessions/credits
+		changes.notifications = run(`DELETE FROM notifications WHERE user_id = ?`, userId);
+		changes.sessions = run(`DELETE FROM sessions WHERE user_id = ?`, userId);
+		changes.user_credits = run(`DELETE FROM user_credits WHERE user_id = ?`, userId);
+
+		// Social graph + profile
+		changes.user_follows = run(
+			`DELETE FROM user_follows WHERE follower_id = ? OR following_id = ?`,
+			userId,
+			userId
+		);
+		changes.user_profile = run(`DELETE FROM user_profiles WHERE user_id = ?`, userId);
+
+		// Finally: delete the user row
+		changes.user = run(`DELETE FROM users WHERE id = ?`, userId);
+
+		return { changes };
 	});
 
 	const queries = {
@@ -414,7 +461,7 @@ export async function openDb() {
 						try {
 							serverConfig = JSON.parse(row.server_config);
 						} catch (e) {
-							console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+							// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 							serverConfig = null;
 						}
 					}
@@ -644,7 +691,7 @@ export async function openDb() {
 						try {
 							serverConfig = JSON.parse(row.server_config);
 						} catch (e) {
-							console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+							// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 							serverConfig = null;
 						}
 					}
@@ -684,7 +731,7 @@ export async function openDb() {
 					try {
 						serverConfig = JSON.parse(row.server_config);
 					} catch (e) {
-						console.warn(`Failed to parse server_config for server ${row.id}:`, e);
+						// console.warn(`Failed to parse server_config for server ${row.id}:`, e);
 						serverConfig = null;
 					}
 				}
@@ -823,17 +870,95 @@ export async function openDb() {
 			}
 		},
 		insertCreatedImage: {
-			run: async (userId, filename, filePath, width, height, color, status = 'creating', seed = null) => {
+			run: async (userId, filename, filePath, width, height, color, status = 'creating', meta = null) => {
+				const toJsonText = (value) => {
+					if (value == null) return null;
+					if (typeof value === "string") return value;
+					try {
+						return JSON.stringify(value);
+					} catch {
+						return null;
+					}
+				};
 				const stmt = db.prepare(
-					`INSERT INTO created_images (user_id, filename, file_path, width, height, color, status, seed)
+					`INSERT INTO created_images (user_id, filename, file_path, width, height, color, status, meta)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 				);
-				const result = stmt.run(userId, filename, filePath, width, height, color, status, seed);
+				const result = stmt.run(userId, filename, filePath, width, height, color, status, toJsonText(meta));
 				return Promise.resolve({
 					insertId: result.lastInsertRowid,
 					lastInsertRowid: result.lastInsertRowid,
 					changes: result.changes
 				});
+			}
+		},
+		updateCreatedImageJobCompleted: {
+			run: async (id, userId, { filename, file_path, width, height, color, meta }) => {
+				const toJsonText = (value) => {
+					if (value == null) return null;
+					if (typeof value === "string") return value;
+					try {
+						return JSON.stringify(value);
+					} catch {
+						return null;
+					}
+				};
+				const stmt = db.prepare(
+					`UPDATE created_images
+             SET filename = ?, file_path = ?, width = ?, height = ?, color = ?, status = 'completed', meta = ?
+             WHERE id = ? AND user_id = ?`
+				);
+				const result = stmt.run(
+					filename,
+					file_path,
+					width,
+					height,
+					color ?? null,
+					toJsonText(meta),
+					id,
+					userId
+				);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		updateCreatedImageJobFailed: {
+			run: async (id, userId, { meta }) => {
+				const toJsonText = (value) => {
+					if (value == null) return null;
+					if (typeof value === "string") return value;
+					try {
+						return JSON.stringify(value);
+					} catch {
+						return null;
+					}
+				};
+				const stmt = db.prepare(
+					`UPDATE created_images
+             SET status = 'failed', meta = ?
+             WHERE id = ? AND user_id = ?`
+				);
+				const result = stmt.run(toJsonText(meta), id, userId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const toJsonText = (value) => {
+					if (value == null) return null;
+					if (typeof value === "string") return value;
+					try {
+						return JSON.stringify(value);
+					} catch {
+						return null;
+					}
+				};
+				const stmt = db.prepare(
+					`UPDATE created_images
+             SET status = 'creating', meta = ?, filename = ?, file_path = ''
+             WHERE id = ? AND user_id = ?`
+				);
+				const result = stmt.run(toJsonText(meta), filename || "", id, userId);
+				return Promise.resolve({ changes: result.changes });
 			}
 		},
 		updateCreatedImageStatus: {
@@ -861,7 +986,7 @@ export async function openDb() {
 			all: async (userId) => {
 				const stmt = db.prepare(
 					`SELECT id, filename, file_path, width, height, color, status, created_at, 
-                  published, published_at, title, description
+                  published, published_at, title, description, meta
            FROM created_images
            WHERE user_id = ?
            ORDER BY created_at DESC`
@@ -873,7 +998,7 @@ export async function openDb() {
 			all: async (userId) => {
 				const stmt = db.prepare(
 					`SELECT id, filename, file_path, width, height, color, status, created_at, 
-                  published, published_at, title, description
+                  published, published_at, title, description, meta
            FROM created_images
            WHERE user_id = ? AND published = 1
            ORDER BY created_at DESC`
@@ -916,7 +1041,7 @@ export async function openDb() {
 			get: async (id, userId) => {
 				const stmt = db.prepare(
 					`SELECT id, filename, file_path, width, height, color, status, created_at,
-                  published, published_at, title, description, user_id
+                  published, published_at, title, description, user_id, meta
            FROM created_images
            WHERE id = ? AND user_id = ?`
 				);
@@ -927,7 +1052,7 @@ export async function openDb() {
 			get: async (id) => {
 				const stmt = db.prepare(
 					`SELECT id, filename, file_path, width, height, color, status, created_at,
-                  published, published_at, title, description, user_id
+                  published, published_at, title, description, user_id, meta
            FROM created_images
            WHERE id = ?`
 				);
@@ -938,7 +1063,7 @@ export async function openDb() {
 			get: async (filename) => {
 				const stmt = db.prepare(
 					`SELECT id, filename, file_path, width, height, color, status, created_at,
-                  published, published_at, title, description, user_id
+                  published, published_at, title, description, user_id, meta
            FROM created_images
            WHERE filename = ?`
 				);
@@ -1011,6 +1136,21 @@ export async function openDb() {
 				});
 			}
 		},
+		selectCreatedImageCommenterUserIdsDistinct: {
+			all: async (createdImageId) => {
+				const stmt = db.prepare(
+					`SELECT DISTINCT user_id
+           FROM comments_created_image
+           WHERE created_image_id = ?`
+				);
+				const rows = stmt.all(createdImageId) ?? [];
+				return Promise.resolve(
+					rows
+						.map((row) => Number(row?.user_id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				);
+			}
+		},
 		selectCreatedImageComments: {
 			all: async (createdImageId, options = {}) => {
 				const order = String(options?.order || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
@@ -1029,6 +1169,32 @@ export async function openDb() {
            LIMIT ? OFFSET ?`
 				);
 				return Promise.resolve(stmt.all(createdImageId, limit, offset));
+			}
+		},
+		selectLatestCreatedImageComments: {
+			all: async (options = {}) => {
+				const limitRaw = Number.parseInt(String(options?.limit ?? "10"), 10);
+				const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 10;
+
+				const stmt = db.prepare(
+					`SELECT c.id, c.user_id, c.created_image_id, c.text, c.created_at, c.updated_at,
+                  up.user_name, up.display_name, up.avatar_url,
+                  ci.title AS created_image_title,
+                  ci.file_path AS created_image_url,
+                  ci.created_at AS created_image_created_at,
+                  ci.user_id AS created_image_user_id,
+                  cup.user_name AS created_image_user_name,
+                  cup.display_name AS created_image_display_name,
+                  cup.avatar_url AS created_image_avatar_url
+           FROM comments_created_image c
+           INNER JOIN created_images ci ON ci.id = c.created_image_id
+           LEFT JOIN user_profiles up ON up.user_id = c.user_id
+           LEFT JOIN user_profiles cup ON cup.user_id = ci.user_id
+           WHERE ci.published = 1
+           ORDER BY c.created_at DESC
+           LIMIT ?`
+				);
+				return Promise.resolve(stmt.all(limit));
 			}
 		},
 		selectCreatedImageCommentCount: {
@@ -1086,6 +1252,87 @@ export async function openDb() {
            LIMIT 1`
 				);
 				return Promise.resolve(stmt.get(createdImageId));
+			}
+		},
+		updateCreatedImage: {
+			run: async (id, userId, title, description, isAdmin = false) => {
+				// Admin can update any image, owner can only update their own
+				const stmt = isAdmin
+					? db.prepare(
+						`UPDATE created_images
+             SET title = ?, description = ?
+             WHERE id = ?`
+					)
+					: db.prepare(
+						`UPDATE created_images
+             SET title = ?, description = ?
+             WHERE id = ? AND user_id = ?`
+					);
+				const result = isAdmin
+					? stmt.run(title, description, id)
+					: stmt.run(title, description, id, userId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		unpublishCreatedImage: {
+			run: async (id, userId, isAdmin = false) => {
+				// Admin can unpublish any image, owner can only unpublish their own
+				const stmt = isAdmin
+					? db.prepare(
+						`UPDATE created_images
+             SET published = 0, published_at = NULL
+             WHERE id = ?`
+					)
+					: db.prepare(
+						`UPDATE created_images
+             SET published = 0, published_at = NULL
+             WHERE id = ? AND user_id = ?`
+					);
+				const result = isAdmin
+					? stmt.run(id)
+					: stmt.run(id, userId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		updateFeedItem: {
+			run: async (createdImageId, title, summary) => {
+				const stmt = db.prepare(
+					`UPDATE feed_items
+           SET title = ?, summary = ?
+           WHERE created_image_id = ?`
+				);
+				const result = stmt.run(title, summary, createdImageId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		deleteFeedItemByCreatedImageId: {
+			run: async (createdImageId) => {
+				const stmt = db.prepare(
+					`DELETE FROM feed_items
+           WHERE created_image_id = ?`
+				);
+				const result = stmt.run(createdImageId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		deleteAllLikesForCreatedImage: {
+			run: async (createdImageId) => {
+				const stmt = db.prepare(
+					`DELETE FROM likes_created_image
+           WHERE created_image_id = ?`
+				);
+				const result = stmt.run(createdImageId);
+				return Promise.resolve({ changes: result.changes });
+			}
+		},
+		deleteAllCommentsForCreatedImage: {
+			run: async (createdImageId) => {
+				const stmt = db.prepare(
+					`DELETE FROM comments_created_image
+           WHERE created_image_id = ?`
+				);
+				const result = stmt.run(createdImageId);
+				return Promise.resolve({ changes: result.changes });
 			}
 		},
 		selectUserCredits: {
@@ -1210,247 +1457,10 @@ export async function openDb() {
 				return Promise.resolve(result);
 			}
 		},
-
-		// AI Server Projects queries
-		selectAiServerProjects: {
-			all: async (userId) => {
-				const stmt = db.prepare(
-					`SELECT
-						p.id, p.user_id, p.name, p.description, p.status, p.hosting_type,
-						p.live_version_id, p.deployed_server_id, p.banner_url, p.icon_url,
-						p.created_at, p.updated_at,
-						(SELECT COUNT(*) FROM ai_server_versions WHERE project_id = p.id) as version_count
-					FROM ai_server_projects p
-					WHERE p.user_id = ?
-					ORDER BY p.updated_at DESC`
-				);
-				return Promise.resolve(stmt.all(userId));
-			}
-		},
-		selectAiServerProjectById: {
-			get: async (projectId) => {
-				const stmt = db.prepare(
-					`SELECT
-						p.id, p.user_id, p.name, p.description, p.status, p.hosting_type,
-						p.live_version_id, p.deployed_server_id, p.banner_url, p.icon_url,
-						p.created_at, p.updated_at
-					FROM ai_server_projects p
-					WHERE p.id = ?`
-				);
-				return Promise.resolve(stmt.get(projectId));
-			}
-		},
-		insertAiServerProject: {
-			run: async (userId, name, description = null) => {
-				const stmt = db.prepare(
-					`INSERT INTO ai_server_projects (user_id, name, description)
-					VALUES (?, ?, ?)`
-				);
-				const result = stmt.run(userId, name, description);
-				return Promise.resolve({
-					insertId: result.lastInsertRowid,
-					changes: result.changes
-				});
-			}
-		},
-		updateAiServerProject: {
-			run: async (projectId, updates) => {
-				const fields = [];
-				const values = [];
-
-				if (updates.name !== undefined) {
-					fields.push('name = ?');
-					values.push(updates.name);
-				}
-				if (updates.description !== undefined) {
-					fields.push('description = ?');
-					values.push(updates.description);
-				}
-				if (updates.status !== undefined) {
-					fields.push('status = ?');
-					values.push(updates.status);
-				}
-				if (updates.hosting_type !== undefined) {
-					fields.push('hosting_type = ?');
-					values.push(updates.hosting_type);
-				}
-				if (updates.live_version_id !== undefined) {
-					fields.push('live_version_id = ?');
-					values.push(updates.live_version_id);
-				}
-				if (updates.deployed_server_id !== undefined) {
-					fields.push('deployed_server_id = ?');
-					values.push(updates.deployed_server_id);
-				}
-				if (updates.banner_url !== undefined) {
-					fields.push('banner_url = ?');
-					values.push(updates.banner_url);
-				}
-				if (updates.icon_url !== undefined) {
-					fields.push('icon_url = ?');
-					values.push(updates.icon_url);
-				}
-
-				fields.push("updated_at = datetime('now')");
-				values.push(projectId);
-
-				const stmt = db.prepare(
-					`UPDATE ai_server_projects SET ${fields.join(', ')} WHERE id = ?`
-				);
-				const result = stmt.run(...values);
-				return Promise.resolve({ changes: result.changes });
-			}
-		},
-		deleteAiServerProject: {
-			run: async (projectId) => {
-				const stmt = db.prepare('DELETE FROM ai_server_projects WHERE id = ?');
-				const result = stmt.run(projectId);
-				return Promise.resolve({ changes: result.changes });
-			}
-		},
-
-		// AI Server Versions queries
-		selectAiServerVersions: {
-			all: async (projectId) => {
-				const stmt = db.prepare(
-					`SELECT
-						id, project_id, version_number, parent_version_id,
-						user_prompt, refinement_prompt, generated_code, generated_config,
-						generation_cost, status, test_result, created_at
-					FROM ai_server_versions
-					WHERE project_id = ?
-					ORDER BY version_number DESC`
-				);
-				const rows = stmt.all(projectId);
-				return Promise.resolve(rows.map(row => ({
-					...row,
-					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
-					test_result: row.test_result ? JSON.parse(row.test_result) : null
-				})));
-			}
-		},
-		selectAiServerVersionById: {
-			get: async (versionId) => {
-				const stmt = db.prepare(
-					`SELECT
-						id, project_id, version_number, parent_version_id,
-						user_prompt, refinement_prompt, generated_code, generated_config,
-						generation_cost, status, test_result, created_at
-					FROM ai_server_versions
-					WHERE id = ?`
-				);
-				const row = stmt.get(versionId);
-				if (!row) return null;
-				return Promise.resolve({
-					...row,
-					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
-					test_result: row.test_result ? JSON.parse(row.test_result) : null
-				});
-			}
-		},
-		selectLatestAiServerVersion: {
-			get: async (projectId) => {
-				const stmt = db.prepare(
-					`SELECT
-						id, project_id, version_number, parent_version_id,
-						user_prompt, refinement_prompt, generated_code, generated_config,
-						generation_cost, status, test_result, created_at
-					FROM ai_server_versions
-					WHERE project_id = ?
-					ORDER BY version_number DESC
-					LIMIT 1`
-				);
-				const row = stmt.get(projectId);
-				if (!row) return null;
-				return Promise.resolve({
-					...row,
-					generated_config: row.generated_config ? JSON.parse(row.generated_config) : null,
-					test_result: row.test_result ? JSON.parse(row.test_result) : null
-				});
-			}
-		},
-		insertAiServerVersion: {
-			run: async (projectId, versionNumber, userPrompt, refinementPrompt, generatedCode, generatedConfig, generationCost, parentVersionId = null) => {
-				const stmt = db.prepare(
-					`INSERT INTO ai_server_versions
-					(project_id, version_number, parent_version_id, user_prompt, refinement_prompt, generated_code, generated_config, generation_cost)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-				);
-				const configJson = generatedConfig ? JSON.stringify(generatedConfig) : null;
-				const result = stmt.run(
-					projectId, versionNumber, parentVersionId, userPrompt, refinementPrompt,
-					generatedCode, configJson, generationCost
-				);
-				return Promise.resolve({
-					insertId: result.lastInsertRowid,
-					changes: result.changes
-				});
-			}
-		},
-		updateAiServerVersionStatus: {
-			run: async (versionId, status, testResult = null) => {
-				const testResultJson = testResult ? JSON.stringify(testResult) : null;
-				const stmt = db.prepare(
-					`UPDATE ai_server_versions
-					SET status = ?, test_result = ?
-					WHERE id = ?`
-				);
-				const result = stmt.run(status, testResultJson, versionId);
-				return Promise.resolve({ changes: result.changes });
-			}
-		},
-		getNextVersionNumber: {
-			get: async (projectId) => {
-				const stmt = db.prepare(
-					`SELECT COALESCE(MAX(version_number), 0) + 1 as next_version
-					FROM ai_server_versions
-					WHERE project_id = ?`
-				);
-				const row = stmt.get(projectId);
-				return Promise.resolve(row?.next_version || 1);
-			}
-		},
-
-		// AI Server Royalties queries
-		insertAiServerRoyalty: {
-			run: async (projectId, createdImageId, creditsCharged, creatorShare, platformShare) => {
-				const stmt = db.prepare(
-					`INSERT INTO ai_server_royalties
-					(project_id, created_image_id, credits_charged, creator_share, platform_share)
-					VALUES (?, ?, ?, ?, ?)`
-				);
-				const result = stmt.run(projectId, createdImageId, creditsCharged, creatorShare, platformShare);
-				return Promise.resolve({
-					insertId: result.lastInsertRowid,
-					changes: result.changes
-				});
-			}
-		},
-		selectAiServerRoyalties: {
-			all: async (projectId, options = {}) => {
-				const limit = Math.min(options.limit || 50, 200);
-				const offset = options.offset || 0;
-				const stmt = db.prepare(
-					`SELECT id, project_id, created_image_id, credits_charged, creator_share, platform_share, created_at
-					FROM ai_server_royalties
-					WHERE project_id = ?
-					ORDER BY created_at DESC
-					LIMIT ? OFFSET ?`
-				);
-				return Promise.resolve(stmt.all(projectId, limit, offset));
-			}
-		},
-		selectAiServerRoyaltyStats: {
-			get: async (projectId) => {
-				const stmt = db.prepare(
-					`SELECT
-						COUNT(*) as total_generations,
-						COALESCE(SUM(credits_charged), 0) as total_credits,
-						COALESCE(SUM(creator_share), 0) as total_creator_earnings
-					FROM ai_server_royalties
-					WHERE project_id = ?`
-				);
-				return Promise.resolve(stmt.get(projectId));
+		deleteUserAndCleanup: {
+			run: async (userId) => {
+				const result = deleteUserAndCleanupTxn(userId);
+				return Promise.resolve(result);
 			}
 		}
 	};

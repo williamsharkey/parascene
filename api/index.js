@@ -14,32 +14,40 @@ import createPageRoutes from "../api_routes/pages.js";
 import createProviderRoutes from "../api_routes/provider.js";
 import createServersRoutes from "../api_routes/servers.js";
 import createTemplatesRoutes from "../api_routes/templates.js";
-import createAiServersRoutes from "../api_routes/ai-servers.js";
-import createHostedServersRoutes from "../api_routes/hosted-servers.js";
 import createLikesRoutes from "../api_routes/likes.js";
 import createCommentsRoutes from "../api_routes/comments.js";
 import createUserRoutes from "../api_routes/user.js";
 import createFollowsRoutes from "../api_routes/follows.js";
 import createTodoRoutes from "../api_routes/todo.js";
+import createYoutubeRoutes from "../api_routes/youtube.js";
+import createFeatureRequestRoutes from "../api_routes/feature_requests.js";
+import createShareRoutes from "../api_routes/share.js";
+import { computeWelcome } from "../api_routes/utils/welcome.js";
 import {
 	authMiddleware,
 	clearAuthCookie,
 	COOKIE_NAME,
 	probabilisticSessionCleanup,
-	sessionMiddleware
+	sessionMiddleware,
+	shouldLogSession
 } from "../api_routes/auth.js";
+import { injectCommonHead } from "../api_routes/utils/head.js";
+
+function shouldLogStartup() {
+	return process.env.ENABLE_STARTUP_LOGS === "true";
+}
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
-	console.error("Unhandled Promise Rejection:", reason);
+	// console.error("Unhandled Promise Rejection:", reason);
 	if (reason instanceof Error) {
-		console.error("Error stack:", reason.stack);
+		// console.error("Error stack:", reason.stack);
 	}
 	// Don't exit in production, but log the error
 	if (process.env.NODE_ENV === "production") {
-		console.error("Continuing in production mode...");
+		// console.error("Continuing in production mode...");
 	} else {
-		console.error("Exiting due to unhandled rejection in development");
+		// console.error("Exiting due to unhandled rejection in development");
 		process.exit(1);
 	}
 });
@@ -55,25 +63,44 @@ const staticDir = path.join(__dirname, "..", "static");
 // Initialize database asynchronously using top-level await
 let queries, storage;
 try {
-	console.log("[Startup] Initializing database...");
-	console.log("[Startup] Environment:", {
-		VERCEL: !!process.env.VERCEL,
-		NODE_ENV: process.env.NODE_ENV,
-		DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
-	});
+	if (shouldLogStartup()) {
+		// console.log("[Startup] Initializing database...");
+		// console.log("[Startup] Environment:", {
+		// 	VERCEL: !!process.env.VERCEL,
+		// 	NODE_ENV: process.env.NODE_ENV,
+		// 	DB_ADAPTER: process.env.DB_ADAPTER || "sqlite (default)"
+		// });
+	}
 	const dbResult = await openDb();
 	queries = dbResult.queries;
 	storage = dbResult.storage;
-	console.log("[Startup] Database initialized successfully");
+	if (shouldLogStartup()) {
+		// console.log("[Startup] Database initialized successfully");
+	}
 } catch (error) {
-	console.error("[Startup] Failed to initialize database:", error);
-	console.error("[Startup] Error details:", error.message);
-	if (error.message?.includes("Missing required env var")) {
-		console.error("\n[Startup] Please ensure all required environment variables are set.");
-		console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+	if (shouldLogStartup()) {
+		// console.error("[Startup] Failed to initialize database:", error);
+		// console.error("[Startup] Error details:", error.message);
+		if (error.message?.includes("Missing required env var")) {
+			// console.error("\n[Startup] Please ensure all required environment variables are set.");
+			// console.error("[Startup] For Supabase: SUPABASE_URL and SUPABASE_ANON_KEY are required.");
+		}
 	}
 	process.exit(1);
 }
+
+// CRITICAL: Log EVERY request at the absolute top to see if Vercel is invoking the function
+// app.use((req, res, next) => {
+// 	console.log("[Vercel] Function invoked", {
+// 		method: req.method,
+// 		path: req.path,
+// 		originalUrl: req.originalUrl,
+// 		url: req.url,
+// 		timestamp: new Date().toISOString(),
+// 		userAgent: req.get("user-agent"),
+// 	});
+// 	next();
+// });
 
 app.use(express.static(staticDir));
 app.use(express.json());
@@ -85,22 +112,64 @@ app.locals.storage = storage;
 
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
-	console.log(`[Request] ${req.method} ${req.path}`, {
-		hasCookie: !!req.cookies?.[COOKIE_NAME],
-		cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
-		userAgent: req.get("user-agent")?.substring(0, 50),
-		referer: req.get("referer")
-	});
+	if (shouldLogSession()) {
+		// console.log(`[Request] ${req.method} ${req.path}`, {
+		// 	hasCookie: !!req.cookies?.[COOKIE_NAME],
+		// 	cookieValue: req.cookies?.[COOKIE_NAME] ? `${req.cookies[COOKIE_NAME].substring(0, 20)}...` : "none",
+		// 	userAgent: req.get("user-agent")?.substring(0, 50),
+		// 	referer: req.get("referer")
+		// });
+	}
 	next();
 });
 
 app.use(authMiddleware());
 app.use(sessionMiddleware(queries));
 app.use(probabilisticSessionCleanup(queries));
+
+// Welcome gate: block most authenticated actions until user is welcomed.
+app.use(async (req, res, next) => {
+	const userId = req.auth?.userId;
+	if (!userId) {
+		return next();
+	}
+
+	try {
+		const method = String(req.method || "GET").toUpperCase();
+		const pathName = String(req.path || "");
+
+		const allow =
+			(pathName === "/welcome" && method === "GET") ||
+			(pathName === "/api/profile" && (method === "GET" || method === "PUT" || method === "POST")) ||
+			(pathName === "/api/username-suggest" && method === "GET") ||
+			(pathName === "/logout" && method === "POST") ||
+			(pathName === "/auth.html" && method === "GET") ||
+			(pathName === "/me" && method === "GET");
+		if (allow) {
+			return next();
+		}
+
+		const profileRow = await queries.selectUserProfileByUserId?.get(userId);
+		const welcome = computeWelcome({ profileRow });
+		if (!welcome.required) {
+			return next();
+		}
+
+		if (pathName.startsWith("/api/")) {
+			return res.status(409).json({ error: "WELCOME_REQUIRED", welcome });
+		}
+
+		return res.redirect("/welcome");
+	} catch {
+		// Fail-open on unexpected errors to avoid hard-locking the app.
+		return next();
+	}
+});
+
 app.use(createUserRoutes({ queries }));
 app.use(createFollowsRoutes({ queries }));
 
-app.use(createAdminRoutes({ queries }));
+app.use(createAdminRoutes({ queries, storage }));
 app.use(createFeedRoutes({ queries }));
 app.use(createExploreRoutes({ queries }));
 app.use(createCreateRoutes({ queries, storage }));
@@ -108,32 +177,31 @@ app.use(createImagesRoutes({ storage }));
 app.use(createCreationsRoutes({ queries }));
 app.use(createLikesRoutes({ queries }));
 app.use(createCommentsRoutes({ queries }));
+app.use(createShareRoutes({ queries, storage }));
 app.use(createProviderRoutes({ queries }));
 app.use(createServersRoutes({ queries }));
-app.use(createAiServersRoutes({ queries, storage }));
-app.use(createHostedServersRoutes({ queries }));
 app.use(createTemplatesRoutes({ queries }));
 app.use(createPageRoutes({ queries, pagesDir }));
 app.use(createTodoRoutes());
+app.use(createYoutubeRoutes());
+app.use(createFeatureRequestRoutes({ queries }));
 
-app.use((err, req, res, next) => {
+app.use(async (err, req, res, next) => {
 	if (err?.name !== "UnauthorizedError") {
 		return next(err);
 	}
 
-	console.log(
-		`[ErrorHandler] UnauthorizedError for path: ${req.path}, ` +
-		`cookie present: ${!!req.cookies?.[COOKIE_NAME]}, ` +
-		`error: ${err.message || "Unknown"}`
-	);
+	console.log("[ErrorHandler] UnauthorizedError", {
+		path: req.path,
+		originalUrl: req.originalUrl,
+		hasCookie: !!req.cookies?.[COOKIE_NAME],
+		error: err.message
+	});
 
 	// Only clear cookie if one was actually sent in the request
 	// This prevents clearing cookies that weren't sent (e.g., due to SameSite issues)
 	if (req.cookies?.[COOKIE_NAME]) {
-		console.log(`[ErrorHandler] Clearing cookie due to UnauthorizedError`);
 		clearAuthCookie(res, req);
-	} else {
-		console.log(`[ErrorHandler] No cookie present, skipping clear`);
 	}
 
 	if (req.path.startsWith("/api/") || req.path === "/me") {
@@ -143,7 +211,11 @@ app.use((err, req, res, next) => {
 	// Preserve the user's original destination so login can return them there.
 	// Avoid redirect loops when the user is already on the auth page.
 	if (req.path === "/auth.html") {
-		return res.sendFile(path.join(pagesDir, "auth.html"));
+		const fs = await import("fs/promises");
+		let htmlContent = await fs.readFile(path.join(pagesDir, "auth.html"), "utf-8");
+		htmlContent = injectCommonHead(htmlContent);
+		res.setHeader("Content-Type", "text/html");
+		return res.send(htmlContent);
 	}
 	try {
 		const rawReturnUrl = typeof req.originalUrl === "string" ? req.originalUrl : "/";
@@ -154,7 +226,11 @@ app.use((err, req, res, next) => {
 		const qs = new URLSearchParams({ returnUrl });
 		return res.redirect(`/auth.html?${qs.toString()}`);
 	} catch {
-		return res.sendFile(path.join(pagesDir, "auth.html"));
+		const fs = await import("fs/promises");
+		let htmlContent = await fs.readFile(path.join(pagesDir, "auth.html"), "utf-8");
+		htmlContent = injectCommonHead(htmlContent);
+		res.setHeader("Content-Type", "text/html");
+		return res.send(htmlContent);
 	}
 });
 
@@ -165,20 +241,20 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // Log startup completion
-console.log("[Startup] Express app configured and ready");
-console.log("[Startup] Routes registered:", {
-	userRoutes: "✓",
-	adminRoutes: "✓",
-	feedRoutes: "✓",
-	exploreRoutes: "✓",
-	createRoutes: "✓",
-	creationsRoutes: "✓",
-	providerRoutes: "✓",
-	serversRoutes: "✓",
-	aiServersRoutes: "✓",
-	hostedServersRoutes: "✓",
-	templatesRoutes: "✓",
-	pageRoutes: "✓"
-});
+if (shouldLogStartup()) {
+	// console.log("[Startup] Express app configured and ready");
+	// console.log("[Startup] Routes registered:", {
+	// 	userRoutes: "✓",
+	// 	adminRoutes: "✓",
+	// 	feedRoutes: "✓",
+	// 	exploreRoutes: "✓",
+	// 	createRoutes: "✓",
+	// 	creationsRoutes: "✓",
+	// 	providerRoutes: "✓",
+	// 	serversRoutes: "✓",
+	// 	templatesRoutes: "✓",
+	// 	pageRoutes: "✓"
+	// });
+}
 
 export default app;

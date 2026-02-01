@@ -35,7 +35,8 @@ class AppNavigationMobile extends HTMLElement {
 		const route = button?.getAttribute('data-route');
 		if (!route) return;
 
-		const isServerSentPage = /^\/creations\/\d+$/.test(window.location.pathname) ||
+		const isServerSentPage = /^\/creations\/\d+(\/(edit|mutat|mutate))?$/.test(window.location.pathname) ||
+			window.location.pathname.startsWith('/s/') ||
 			window.location.pathname.startsWith('/help/') ||
 			window.location.pathname === '/user' ||
 			/^\/user\/\d+$/.test(window.location.pathname);
@@ -81,6 +82,9 @@ class AppNavigationMobile extends HTMLElement {
 		const defaultRoute = header?.getAttribute('default-route') || 'feed';
 		let currentRoute = pathname === '/' || pathname === '' ? defaultRoute : pathname.slice(1);
 		if (pathname.startsWith('/creations/')) {
+			currentRoute = null;
+		}
+		if (pathname.startsWith('/s/')) {
 			currentRoute = null;
 		}
 		if (pathname === '/user' || /^\/user\/\d+$/.test(pathname)) {
@@ -132,14 +136,15 @@ class AppNavigationMobile extends HTMLElement {
             </svg>
             <span class="mobile-bottom-nav-text" aria-hidden="true">Explore</span>
           </button>
-          <button class="mobile-bottom-nav-item" data-route="servers" aria-label="Servers">
+          <button class="mobile-bottom-nav-item" data-route="servers" aria-label="Connect">
             <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="6" rx="2"></rect>
-              <rect x="3" y="14" width="18" height="6" rx="2"></rect>
-              <path d="M7 7h.01"></path>
-              <path d="M7 17h.01"></path>
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.6" y1="10.5" x2="15.5" y2="6.9"></line>
+              <line x1="8.6" y1="13.5" x2="15.5" y2="17.1"></line>
             </svg>
-            <span class="mobile-bottom-nav-text" aria-hidden="true">Servers</span>
+            <span class="mobile-bottom-nav-text" aria-hidden="true">Connect</span>
           </button>
         </div>
       </div>

@@ -58,13 +58,13 @@ export default function createServersRoutes({ queries }) {
 			if (server.user_id) {
 				const ownerUser = await queries.selectUserById.get(server.user_id);
 				const ownerProfile = ownerUser ? await queries.selectUserProfileByUserId?.get(server.user_id) : null;
-				
+
 				if (ownerUser) {
 					const emailPrefix = ownerUser.email ? ownerUser.email.split('@')[0] : null;
 					const displayName = ownerProfile?.display_name?.trim() || ownerProfile?.user_name?.trim() || emailPrefix || `User ${ownerUser.id}`;
 					const userName = ownerProfile?.user_name?.trim() || emailPrefix || null;
 					const avatarUrl = ownerProfile?.avatar_url?.trim() || null;
-					
+
 					result.owner = {
 						id: ownerUser.id,
 						display_name: displayName,
@@ -185,13 +185,13 @@ export default function createServersRoutes({ queries }) {
 		if (server.user_id) {
 			const ownerUser = await queries.selectUserById.get(server.user_id);
 			const ownerProfile = ownerUser ? await queries.selectUserProfileByUserId?.get(server.user_id) : null;
-			
+
 			if (ownerUser) {
 				const emailPrefix = ownerUser.email ? ownerUser.email.split('@')[0] : null;
 				const displayName = ownerProfile?.display_name?.trim() || ownerProfile?.user_name?.trim() || emailPrefix || `User ${ownerUser.id}`;
 				const userName = ownerProfile?.user_name?.trim() || emailPrefix || null;
 				const avatarUrl = ownerProfile?.avatar_url?.trim() || null;
-				
+
 				result.owner = {
 					id: ownerUser.id,
 					display_name: displayName,
@@ -326,7 +326,7 @@ export default function createServersRoutes({ queries }) {
 				server: serversWithFlags[0]
 			});
 		} catch (dbError) {
-			console.error("Database error creating server:", dbError);
+			// console.error("Database error creating server:", dbError);
 			return res.status(500).json({ error: "Failed to create server" });
 		}
 	});
@@ -442,7 +442,7 @@ export default function createServersRoutes({ queries }) {
 			await queries.addServerMember.run(serverId, user.id);
 			return res.status(200).json({ success: true });
 		} catch (error) {
-			console.error("Error joining server:", error);
+			// console.error("Error joining server:", error);
 			return res.status(500).json({ error: "Failed to join server" });
 		}
 	});
@@ -482,7 +482,7 @@ export default function createServersRoutes({ queries }) {
 			await queries.removeServerMember.run(serverId, user.id);
 			return res.status(200).json({ success: true });
 		} catch (error) {
-			console.error("Error leaving server:", error);
+			// console.error("Error leaving server:", error);
 			return res.status(500).json({ error: "Failed to leave server" });
 		}
 	});

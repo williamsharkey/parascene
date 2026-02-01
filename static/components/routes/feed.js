@@ -5,6 +5,33 @@ import { getAvatarColor } from '../../shared/avatar.js';
 
 const html = String.raw;
 
+// localStorage helpers for hidden feed items
+function getHiddenFeedItems() {
+	try {
+		const stored = localStorage.getItem('hiddenFeedItems');
+		return stored ? JSON.parse(stored) : [];
+	} catch {
+		return [];
+	}
+}
+
+function addHiddenFeedItem(itemId) {
+	try {
+		const hidden = getHiddenFeedItems();
+		if (!hidden.includes(itemId)) {
+			hidden.push(itemId);
+			localStorage.setItem('hiddenFeedItems', JSON.stringify(hidden));
+		}
+	} catch {
+		// Ignore localStorage errors
+	}
+}
+
+function isFeedItemHidden(itemId) {
+	const hidden = getHiddenFeedItems();
+	return hidden.includes(itemId);
+}
+
 function scheduleImageWork(start) {
 	if (typeof start !== 'function') return Promise.resolve();
 	if (document.visibilityState === 'visible') {
@@ -210,31 +237,57 @@ class AppRouteFeed extends HTMLElement {
           <div class="feed-card-title">${title}</div>
           <div class="feed-card-metadata" title="${formatDateTime(item.created_at)}">
             ${profileHref
-		? html`<a class="user-link" href="${profileHref}" data-profile-link>${displayName} @${handle}</a>`
-		: html`${displayName} @${handle}`} • ${relativeTime}
+				? html`<a class="user-link" href="${profileHref}" data-profile-link>${displayName} @${handle}</a>`
+				: html`${displayName} @${handle}`} • ${relativeTime}
           </div>
         </div>
       </div>
       <div class="feed-card-actions">
-        <button class="feed-card-action" type="button" aria-label="Like" data-like-button>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l1.7 1.7L12 21l7.1-7.6 1.7-1.7a5 5 0 0 0 0-7.1z"></path>
-          </svg>
-          <span class="feed-card-action-count" data-like-count>${item.like_count ?? 0}</span>
-        </button>
-        <button class="feed-card-action" type="button" aria-label="Comment" data-comment-button>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a4 4 0 0 1-4 4H8l-5 5V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
-          </svg>
-          <span class="feed-card-action-count">${item.comment_count ?? 0}</span>
-        </button>
-        <button class="feed-card-action feed-card-action-more" type="button" aria-label="More">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5" r="1.6"></circle>
-            <circle cx="12" cy="12" r="1.6"></circle>
-            <circle cx="12" cy="19" r="1.6"></circle>
-          </svg>
-        </button>
+        <div class="feed-card-actions-left">
+          ${item.created_image_id ? html`
+            <button class="feed-card-action" type="button" data-details-button aria-label="Details">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 8v8"></path>
+                <path d="M12 6h.01"></path>
+              </svg>
+              <span>Details</span>
+            </button>
+          ` : ``}
+          ${profileHref ? html`
+            <button class="feed-card-action" type="button" data-creator-button aria-label="Creator">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span>Creator</span>
+            </button>
+          ` : ``}
+        </div>
+        <div class="feed-card-actions-right">
+          <button class="feed-card-action" type="button" aria-label="Comment" data-comment-button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 5V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+            </svg>
+            <span class="feed-card-action-count">${item.comment_count ?? 0}</span>
+          </button>
+          <button class="feed-card-action" type="button" aria-label="Like" data-like-button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.8 4.6a5 5 0 0 0-7.1 0L12 6.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l1.7 1.7L12 21l7.1-7.6 1.7-1.7a5 5 0 0 0 0-7.1z"></path>
+            </svg>
+            <span class="feed-card-action-count" data-like-count>${item.like_count ?? 0}</span>
+          </button>
+          <button class="feed-card-action feed-card-action-more" type="button" aria-label="More" data-more-button data-item-id="${item.created_image_id || item.id}">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.6"></circle>
+              <circle cx="12" cy="12" r="1.6"></circle>
+              <circle cx="12" cy="19" r="1.6"></circle>
+            </svg>
+          </button>
+          <div class="feed-card-menu" data-feed-menu style="display: none;">
+            <button class="feed-card-menu-item" type="button" data-hide-item>Hide from my feed</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -249,6 +302,86 @@ class AppRouteFeed extends HTMLElement {
 				e.preventDefault();
 				e.stopPropagation();
 				window.location.href = `/creations/${item.created_image_id}#comments`;
+			});
+		}
+
+		const detailsButton = card.querySelector('button[data-details-button]');
+		if (detailsButton && item.created_image_id) {
+			detailsButton.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				window.location.href = `/creations/${item.created_image_id}`;
+			});
+		}
+
+		const creatorButton = card.querySelector('button[data-creator-button]');
+		if (creatorButton && profileHref) {
+			creatorButton.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				window.location.href = profileHref;
+			});
+		}
+
+		// Setup more menu button
+		const moreButton = card.querySelector('button[data-more-button]');
+		const menu = card.querySelector('[data-feed-menu]');
+		const hideButton = card.querySelector('button[data-hide-item]');
+		const itemId = item.created_image_id || item.id;
+
+		if (moreButton && menu && hideButton && itemId) {
+			// Close any open menus when clicking outside
+			const closeMenu = (e) => {
+				if (!menu.contains(e.target) && !moreButton.contains(e.target)) {
+					menu.style.display = 'none';
+					document.removeEventListener('click', closeMenu);
+				}
+			};
+
+			moreButton.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+
+				// Close other open menus first
+				document.querySelectorAll('[data-feed-menu]').forEach(m => {
+					if (m !== menu) m.style.display = 'none';
+				});
+
+				// Toggle this menu
+				const isVisible = menu.style.display !== 'none';
+				menu.style.display = isVisible ? 'none' : 'block';
+
+				if (!isVisible) {
+					// Position menu above the button
+					const buttonRect = moreButton.getBoundingClientRect();
+					const cardRect = card.getBoundingClientRect();
+					menu.style.position = 'absolute';
+					menu.style.right = `${cardRect.right - buttonRect.right}px`;
+					menu.style.bottom = `${cardRect.bottom - buttonRect.top + 4}px`;
+					menu.style.zIndex = '1000';
+
+					// Add click listener to close on outside click
+					setTimeout(() => {
+						document.addEventListener('click', closeMenu);
+					}, 0);
+				} else {
+					document.removeEventListener('click', closeMenu);
+				}
+			});
+
+			hideButton.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+
+				// Add to hidden items
+				addHiddenFeedItem(String(itemId));
+
+				// Hide the card
+				card.style.display = 'none';
+
+				// Close menu
+				menu.style.display = 'none';
+				document.removeEventListener('click', closeMenu);
 			});
 		}
 
@@ -336,7 +469,14 @@ class AppRouteFeed extends HTMLElement {
 				credentials: 'include'
 			}, { windowMs: 2000 });
 			if (!feed.ok) throw new Error("Failed to load feed.");
-			const items = Array.isArray(feed.data?.items) ? feed.data.items : [];
+			let items = Array.isArray(feed.data?.items) ? feed.data.items : [];
+
+			// Filter out hidden items
+			const hiddenIds = getHiddenFeedItems();
+			items = items.filter(item => {
+				const itemId = String(item.created_image_id || item.id);
+				return !hiddenIds.includes(itemId);
+			});
 
 			container.innerHTML = "";
 			if (items.length === 0) {

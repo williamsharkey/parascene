@@ -1,4 +1,6 @@
 import { fetchJsonWithStatusDeduped } from '../../shared/api.js';
+import { submitCreationWithPending } from '../../shared/createSubmit.js';
+import { attachAutoGrowTextarea } from '../../shared/autogrow.js';
 
 const html = String.raw;
 
@@ -11,6 +13,23 @@ class AppRouteCreate extends HTMLElement {
 		this.fieldValues = {};
 		this.servers = [];
 		this.handleCreditsUpdated = this.handleCreditsUpdated.bind(this);
+	}
+
+	isPromptLikeField(fieldKey, field) {
+		const key = String(fieldKey || '');
+		const label = String(field?.label || '');
+		return /prompt/i.test(key) || /prompt/i.test(label);
+	}
+
+	isMultilineField(fieldKey, field) {
+		const type = typeof field?.type === 'string' ? field.type.toLowerCase() : '';
+		if (type === 'textarea' || type === 'multiline') return true;
+		if (field?.multiline === true) return true;
+		// Back-compat: many server configs encode prompt as a text input.
+		if (type === '' || type === 'text' || type === 'string') {
+			return this.isPromptLikeField(fieldKey, field);
+		}
+		return false;
 	}
 
 	connectedCallback() {
@@ -111,19 +130,9 @@ class AppRouteCreate extends HTMLElement {
         <form class="create-form" data-create-form>
           <div class="form-group">
             <label class="form-label" for="server-select">Server</label>
-            <div class="server-select-row" style="display: flex; gap: 8px; align-items: center;">
-              <select class="form-select" id="server-select" data-server-select required style="flex: 1;">
-                <option value="">Select a server...</option>
-              </select>
-              <button type="button" class="refresh-server-btn" data-refresh-server title="Refresh server methods" style="display: none; padding: 8px; background: var(--color-surface-2, #333); border: 1px solid var(--color-border, #444); border-radius: 4px; cursor: pointer; color: inherit;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 2v6h-6"></path>
-                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-                  <path d="M3 22v-6h6"></path>
-                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
-                </svg>
-              </button>
-            </div>
+            <select class="form-select" id="server-select" data-server-select required>
+              <option value="">Select a server...</option>
+            </select>
           </div>
           <div class="form-group" data-method-group style="display: none;">
             <label class="form-label" for="method-select">Generation Method</label>
@@ -150,7 +159,6 @@ class AppRouteCreate extends HTMLElement {
 
 	disconnectedCallback() {
 		document.removeEventListener('credits-updated', this.handleCreditsUpdated);
-		document.removeEventListener('server-updated', this.handleServerUpdated);
 	}
 
 	setupEventListeners() {
@@ -169,16 +177,7 @@ class AppRouteCreate extends HTMLElement {
 			methodSelect.addEventListener("change", (e) => this.handleMethodChange(e.target.value));
 		}
 
-		const refreshBtn = this.querySelector("[data-refresh-server]");
-		if (refreshBtn) {
-			refreshBtn.addEventListener("click", () => this.handleRefreshServer());
-		}
-
 		document.addEventListener('credits-updated', this.handleCreditsUpdated);
-
-		// Refresh server list when a server is added/updated
-		this.handleServerUpdated = () => this.loadServers();
-		document.addEventListener('server-updated', this.handleServerUpdated);
 	}
 
 	async loadServers() {
@@ -197,7 +196,7 @@ class AppRouteCreate extends HTMLElement {
 						try {
 							server.server_config = JSON.parse(server.server_config);
 						} catch (e) {
-							console.warn('Failed to parse server_config for server', server.id, e);
+							// console.warn('Failed to parse server_config for server', server.id, e);
 							server.server_config = null;
 						}
 					}
@@ -216,7 +215,7 @@ class AppRouteCreate extends HTMLElement {
 				}
 			}
 		} catch (error) {
-			console.error('Error loading servers:', error);
+			// console.error('Error loading servers:', error);
 		}
 	}
 
@@ -239,8 +238,6 @@ class AppRouteCreate extends HTMLElement {
 	}
 
 	handleServerChange(serverId) {
-		const refreshBtn = this.querySelector("[data-refresh-server]");
-
 		if (!serverId) {
 			this.selectedServer = null;
 			this.selectedMethod = null;
@@ -248,7 +245,6 @@ class AppRouteCreate extends HTMLElement {
 			this.hideMethodGroup();
 			this.hideFieldsGroup();
 			this.updateButtonState();
-			if (refreshBtn) refreshBtn.style.display = 'none';
 			return;
 		}
 
@@ -261,54 +257,6 @@ class AppRouteCreate extends HTMLElement {
 		this.renderMethodOptions();
 		this.hideFieldsGroup();
 		this.updateButtonState();
-		// Show refresh button when a server is selected (but not for built-in server id=1)
-		if (refreshBtn) refreshBtn.style.display = server.id !== 1 ? 'block' : 'none';
-	}
-
-	async handleRefreshServer() {
-		if (!this.selectedServer) return;
-
-		const refreshBtn = this.querySelector("[data-refresh-server]");
-		if (refreshBtn) {
-			refreshBtn.disabled = true;
-			refreshBtn.style.opacity = '0.5';
-		}
-
-		try {
-			const response = await fetch(`/api/servers/${this.selectedServer.id}/refresh`, {
-				method: 'POST',
-				credentials: 'include'
-			});
-
-			const data = await response.json();
-			if (!response.ok) {
-				alert(data.error || 'Failed to refresh server');
-				return;
-			}
-
-			// Update local server config with new capabilities
-			this.selectedServer.server_config = data.capabilities;
-
-			// Also update in the servers array
-			const serverIndex = this.servers.findIndex(s => s.id === this.selectedServer.id);
-			if (serverIndex !== -1) {
-				this.servers[serverIndex].server_config = data.capabilities;
-			}
-
-			// Re-render method options with updated config
-			this.selectedMethod = null;
-			this.fieldValues = {};
-			this.renderMethodOptions();
-			this.hideFieldsGroup();
-			this.updateButtonState();
-		} catch (error) {
-			alert(error.message || 'Failed to refresh server');
-		} finally {
-			if (refreshBtn) {
-				refreshBtn.disabled = false;
-				refreshBtn.style.opacity = '1';
-			}
-		}
 	}
 
 	renderMethodOptions() {
@@ -333,7 +281,7 @@ class AppRouteCreate extends HTMLElement {
 				serverConfig = JSON.parse(serverConfig);
 				this.selectedServer.server_config = serverConfig;
 			} catch (e) {
-				console.warn('Failed to parse server_config:', e);
+				// console.warn('Failed to parse server_config:', e);
 				methodGroup.style.display = 'none';
 				return;
 			}
@@ -390,7 +338,7 @@ class AppRouteCreate extends HTMLElement {
 				serverConfig = JSON.parse(serverConfig);
 				this.selectedServer.server_config = serverConfig;
 			} catch (e) {
-				console.warn('Failed to parse server_config:', e);
+				// console.warn('Failed to parse server_config:', e);
 				return;
 			}
 		}
@@ -464,26 +412,49 @@ class AppRouteCreate extends HTMLElement {
 					this.updateButtonState();
 				});
 			} else {
-				input = document.createElement('input');
-				input.type = field.type || 'text';
-				input.id = `field-${fieldKey}`;
-				input.name = fieldKey;
-				input.className = 'form-input';
-				input.placeholder = field.label || fieldKey;
-				if (field.required) {
-					input.required = true;
+				const isMultiline = this.isMultilineField(fieldKey, field);
+				if (isMultiline) {
+					input = document.createElement('textarea');
+					input.id = `field-${fieldKey}`;
+					input.name = fieldKey;
+					input.className = 'form-input';
+					input.placeholder = field.label || fieldKey;
+					input.rows = typeof field.rows === 'number' && field.rows > 0 ? field.rows : 3;
+					if (field.required) {
+						input.required = true;
+					}
+
+					// Initialize field value
+					this.fieldValues[fieldKey] = '';
+
+					attachAutoGrowTextarea(input);
+
+					input.addEventListener('input', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						this.updateButtonState();
+					});
+				} else {
+					input = document.createElement('input');
+					input.type = field.type || 'text';
+					input.id = `field-${fieldKey}`;
+					input.name = fieldKey;
+					input.className = 'form-input';
+					input.placeholder = field.label || fieldKey;
+					if (field.required) {
+						input.required = true;
+					}
+					// Initialize field value
+					this.fieldValues[fieldKey] = '';
+					input.addEventListener('input', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						this.updateButtonState();
+					});
+					// Also listen to change event for text inputs
+					input.addEventListener('change', (e) => {
+						this.fieldValues[fieldKey] = e.target.value;
+						this.updateButtonState();
+					});
 				}
-				// Initialize field value
-				this.fieldValues[fieldKey] = '';
-				input.addEventListener('input', (e) => {
-					this.fieldValues[fieldKey] = e.target.value;
-					this.updateButtonState();
-				});
-				// Also listen to change event for text inputs
-				input.addEventListener('change', (e) => {
-					this.fieldValues[fieldKey] = e.target.value;
-					this.updateButtonState();
-				});
 			}
 
 			fieldGroup.appendChild(label);
@@ -589,13 +560,13 @@ class AppRouteCreate extends HTMLElement {
 				if (!isNaN(parsedCost)) {
 					cost = parsedCost;
 				} else {
-					console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
+					// console.warn('updateButtonState - Could not parse credits:', this.selectedMethod.credits);
 				}
 			} else {
-				console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
+				// console.warn('updateButtonState - Credits is undefined or null, using default 0.5');
 			}
 		} else {
-			console.warn('updateButtonState - No selectedMethod');
+			// console.warn('updateButtonState - No selectedMethod');
 		}
 
 		const hasEnoughCredits = this.creditsCount >= cost;
@@ -643,106 +614,29 @@ class AppRouteCreate extends HTMLElement {
 
 		// Validate required data
 		if (!this.selectedServer.id || !methodKey) {
-			console.error('Missing required data: server_id and method are required');
+			// console.error('Missing required data: server_id and method are required');
 			return;
 		}
 
 		button.disabled = true;
 
-		// Create pending creation item
-		const pendingId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		const pendingItem = {
-			id: pendingId,
-			status: "creating",
-			created_at: new Date().toISOString()
-		};
-		const pendingKey = "pendingCreations";
-		const pendingList = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-		pendingList.unshift(pendingItem);
-		sessionStorage.setItem(pendingKey, JSON.stringify(pendingList));
-
-		document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-		const creationsRoute = document.querySelector("app-route-creations");
-		if (creationsRoute && typeof creationsRoute.loadCreations === "function") {
-			await creationsRoute.loadCreations();
-		}
-
-		// Navigate to Creations page immediately (optimistic UI)
-		const header = document.querySelector('app-navigation');
-		if (header && typeof header.handleRouteChange === 'function') {
-			window.history.pushState({ route: 'creations' }, '', '/creations');
-			header.handleRouteChange();
-		} else {
-			// Fallback: use hash-based routing
-			window.location.hash = 'creations';
-		}
-
-		// Make API call to create image
-		fetch("/api/create", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json"
-			},
-			credentials: "include",
-			body: JSON.stringify({
-				server_id: this.selectedServer.id,
-				method: methodKey,
-				args: collectedArgs || {}
-			})
-		})
-			.then(async (response) => {
-				if (!response.ok) {
-					const error = await response.json();
-					// Handle insufficient credits error specifically
-					if (response.status === 402) {
-						// Refresh credits to get updated balance
-						document.dispatchEvent(new CustomEvent('credits-updated', {
-							detail: { count: error.current ?? 0 }
-						}));
-						// Trigger credits refresh in create component
-						await this.loadCredits();
-						throw new Error(error.message || "Insufficient credits");
-					}
-					throw new Error(error.error || "Failed to create image");
-				}
-				const data = await response.json();
-				// Update credits if returned in response
-				if (typeof data.credits_remaining === 'number') {
-					document.dispatchEvent(new CustomEvent('credits-updated', {
-						detail: { count: data.credits_remaining }
-					}));
-				}
-				// Store suggested title/description if provider sent them (optional)
-				if (data.id && (data.suggested_title || data.suggested_description)) {
-					try {
-						localStorage.setItem(`creation_suggestions_${data.id}`, JSON.stringify({
-							title: data.suggested_title || '',
-							description: data.suggested_description || ''
-						}));
-					} catch (e) {
-						// Ignore localStorage errors
-					}
-				}
-				return null;
-			})
-			.then(() => {
-				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-				const next = current.filter(item => item.id !== pendingId);
-				sessionStorage.setItem(pendingKey, JSON.stringify(next));
-				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-			})
-			.catch(async (error) => {
-				const current = JSON.parse(sessionStorage.getItem(pendingKey) || "[]");
-				const next = current.filter(item => item.id !== pendingId);
-				sessionStorage.setItem(pendingKey, JSON.stringify(next));
-				document.dispatchEvent(new CustomEvent("creations-pending-updated"));
-				console.error("Error creating image:", error);
-				// Refresh credits display in case of error
+		submitCreationWithPending({
+			serverId: this.selectedServer.id,
+			methodKey,
+			args: collectedArgs || {},
+			navigate: 'spa',
+			onInsufficientCredits: async () => {
 				await this.loadCredits();
-			})
-			.finally(() => {
-				button.disabled = false;
-			});
+			},
+			onError: async () => {
+				await this.loadCredits();
+			}
+		});
+
+		// In most cases we navigate away immediately; still re-enable just in case.
+		setTimeout(() => {
+			button.disabled = false;
+		}, 0);
 	}
 }
 

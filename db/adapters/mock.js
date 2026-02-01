@@ -21,6 +21,8 @@ const user_follows = [];
 const created_images = [];
 const sessions = [];
 const user_credits = [];
+const likes_created_image = [];
+const comments_created_image = [];
 
 // On Vercel, use /tmp directory which is writable
 // Otherwise use the local data directory
@@ -38,8 +40,8 @@ function ensureImagesDir() {
 	} catch (error) {
 		// If directory creation fails (e.g., on Vercel without /tmp access),
 		// log a warning but don't throw - images will be stored in memory only
-		console.warn(`Warning: Could not create images directory: ${error.message}`);
-		console.warn("Images will not be persisted to disk. Consider using Supabase adapter on Vercel.");
+		// console.warn(`Warning: Could not create images directory: ${error.message}`);
+		// console.warn("Images will not be persisted to disk. Consider using Supabase adapter on Vercel.");
 	}
 }
 
@@ -49,7 +51,7 @@ function ensureGenericImagesDir() {
 			fs.mkdirSync(genericImagesDir, { recursive: true });
 		}
 	} catch (error) {
-		console.warn(`Warning: Could not create generic images directory: ${error.message}`);
+		// console.warn(`Warning: Could not create generic images directory: ${error.message}`);
 	}
 }
 
@@ -514,24 +516,24 @@ export function openDb() {
 			run: async (serverId, userId) => {
 				const serverIdNum = Number(serverId);
 				const userIdNum = Number(userId);
-				
+
 				// Check if already a member
 				if (server_members.some(m => m.server_id === serverIdNum && m.user_id === userIdNum)) {
 					return { changes: 0 };
 				}
-				
+
 				server_members.push({
 					server_id: serverIdNum,
 					user_id: userIdNum,
 					created_at: new Date().toISOString()
 				});
-				
+
 				// Update members_count
 				const server = servers.find(s => s.id === serverIdNum);
 				if (server) {
 					server.members_count = (server.members_count || 0) + 1;
 				}
-				
+
 				return { changes: 1 };
 			}
 		},
@@ -542,19 +544,19 @@ export function openDb() {
 				const index = server_members.findIndex(
 					m => m.server_id === serverIdNum && m.user_id === userIdNum
 				);
-				
+
 				if (index === -1) {
 					return { changes: 0 };
 				}
-				
+
 				server_members.splice(index, 1);
-				
+
 				// Update members_count
 				const server = servers.find(s => s.id === serverIdNum);
 				if (server) {
 					server.members_count = Math.max(0, (server.members_count || 0) - 1);
 				}
-				
+
 				return { changes: 1 };
 			}
 		},
@@ -628,6 +630,21 @@ export function openDb() {
 				return { changes: 1 };
 			}
 		},
+		resetCreatedImageForRetry: {
+			run: async (id, userId, { meta, filename }) => {
+				const image = created_images.find(
+					(img) => img.id === Number(id) && img.user_id === Number(userId)
+				);
+				if (!image) {
+					return { changes: 0 };
+				}
+				image.status = "creating";
+				image.meta = meta;
+				if (filename != null) image.filename = filename;
+				image.file_path = "";
+				return { changes: 1 };
+			}
+		},
 		selectCreatedImagesForUser: {
 			all: async (userId) => {
 				return created_images.filter(
@@ -663,6 +680,13 @@ export function openDb() {
 				);
 			}
 		},
+		selectCreatedImageByIdAnyUser: {
+			get: async (id) => {
+				return created_images.find(
+					(img) => img.id === Number(id)
+				);
+			}
+		},
 		selectCreatedImageByFilename: {
 			get: async (filename) => {
 				return created_images.find(
@@ -695,6 +719,109 @@ export function openDb() {
 				}
 				created_images.splice(index, 1);
 				return { changes: 1 };
+			}
+		},
+		updateCreatedImage: {
+			run: async (id, userId, title, description, isAdmin = false) => {
+				const image = created_images.find(
+					(img) => img.id === Number(id) && (isAdmin || img.user_id === Number(userId))
+				);
+				if (!image) {
+					return { changes: 0 };
+				}
+				image.title = title;
+				image.description = description;
+				return { changes: 1 };
+			}
+		},
+		unpublishCreatedImage: {
+			run: async (id, userId, isAdmin = false) => {
+				const image = created_images.find(
+					(img) => img.id === Number(id) && (isAdmin || img.user_id === Number(userId))
+				);
+				if (!image) {
+					return { changes: 0 };
+				}
+				image.published = false;
+				image.published_at = null;
+				return { changes: 1 };
+			}
+		},
+		insertFeedItem: {
+			run: async (title, summary, author, tags, createdImageId) => {
+				const id = feed_items.length > 0
+					? Math.max(...feed_items.map(item => item.id || 0)) + 1
+					: 1;
+				const now = new Date().toISOString();
+				const item = {
+					id,
+					title,
+					summary,
+					author,
+					tags: tags || null,
+					created_at: now,
+					created_image_id: createdImageId || null
+				};
+				feed_items.push(item);
+				return {
+					insertId: id,
+					lastInsertRowid: id,
+					changes: 1
+				};
+			}
+		},
+		selectFeedItemByCreatedImageId: {
+			get: async (createdImageId) => {
+				return feed_items
+					.filter(item => item.created_image_id === Number(createdImageId))
+					.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0];
+			}
+		},
+		updateFeedItem: {
+			run: async (createdImageId, title, summary) => {
+				const items = feed_items.filter(item => item.created_image_id === Number(createdImageId));
+				if (items.length === 0) {
+					return { changes: 0 };
+				}
+				items.forEach(item => {
+					item.title = title;
+					item.summary = summary;
+				});
+				return { changes: items.length };
+			}
+		},
+		deleteFeedItemByCreatedImageId: {
+			run: async (createdImageId) => {
+				const initialLength = feed_items.length;
+				const filtered = feed_items.filter(item => item.created_image_id !== Number(createdImageId));
+				feed_items.length = 0;
+				feed_items.push(...filtered);
+				return { changes: initialLength - feed_items.length };
+			}
+		},
+		deleteAllLikesForCreatedImage: {
+			run: async (createdImageId) => {
+				const initialLength = likes_created_image.length;
+				const filtered = likes_created_image.filter(like => like.created_image_id !== Number(createdImageId));
+				likes_created_image.length = 0;
+				likes_created_image.push(...filtered);
+				return { changes: initialLength - likes_created_image.length };
+			}
+		},
+		deleteAllCommentsForCreatedImage: {
+			run: async (createdImageId) => {
+				const initialLength = comments_created_image.length;
+				const filtered = comments_created_image.filter(comment => comment.created_image_id !== Number(createdImageId));
+				comments_created_image.length = 0;
+				comments_created_image.push(...filtered);
+				return { changes: initialLength - comments_created_image.length };
+			}
+		},
+		selectLatestCreatedImageComments: {
+			all: async () => {
+				// Keep mock adapter minimal for now.
+				// (Mock comment creation/listing isn't fully implemented yet.)
+				return [];
 			}
 		},
 		selectUserCredits: {
@@ -826,6 +953,188 @@ export function openDb() {
 				toRow.updated_at = nowIso;
 				return { fromBalance: fromRow.balance, toBalance: toRow.balance };
 			}
+		},
+		deleteUserAndCleanup: {
+			run: async (rawUserId) => {
+				const userId = Number(rawUserId);
+				if (!Number.isFinite(userId) || userId <= 0) {
+					const err = new Error("Invalid user id");
+					err.code = "INVALID_USER_ID";
+					throw err;
+				}
+
+				const changes = {};
+				const before = (arr) => arr.length;
+
+				const userImageIds = new Set(
+					created_images
+						.filter((img) => Number(img?.user_id) === userId)
+						.map((img) => Number(img?.id))
+						.filter((id) => Number.isFinite(id) && id > 0)
+				);
+
+				// Content referencing user's created images
+				{
+					const b = before(feed_items);
+					for (let i = feed_items.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(feed_items[i]?.created_image_id))) {
+							feed_items.splice(i, 1);
+						}
+					}
+					changes.feed_items_for_user_images = b - feed_items.length;
+				}
+
+				{
+					const b = before(likes_created_image);
+					for (let i = likes_created_image.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(likes_created_image[i]?.created_image_id))) {
+							likes_created_image.splice(i, 1);
+						}
+					}
+					changes.likes_on_user_images = b - likes_created_image.length;
+				}
+
+				{
+					const b = before(comments_created_image);
+					for (let i = comments_created_image.length - 1; i >= 0; i -= 1) {
+						if (userImageIds.has(Number(comments_created_image[i]?.created_image_id))) {
+							comments_created_image.splice(i, 1);
+						}
+					}
+					changes.comments_on_user_images = b - comments_created_image.length;
+				}
+
+				// User's own interactions on other content
+				{
+					const b = before(likes_created_image);
+					for (let i = likes_created_image.length - 1; i >= 0; i -= 1) {
+						if (Number(likes_created_image[i]?.user_id) === userId) {
+							likes_created_image.splice(i, 1);
+						}
+					}
+					changes.likes_by_user = b - likes_created_image.length;
+				}
+
+				{
+					const b = before(comments_created_image);
+					for (let i = comments_created_image.length - 1; i >= 0; i -= 1) {
+						if (Number(comments_created_image[i]?.user_id) === userId) {
+							comments_created_image.splice(i, 1);
+						}
+					}
+					changes.comments_by_user = b - comments_created_image.length;
+				}
+
+				// User-owned content
+				{
+					const b = before(created_images);
+					for (let i = created_images.length - 1; i >= 0; i -= 1) {
+						if (Number(created_images[i]?.user_id) === userId) {
+							created_images.splice(i, 1);
+						}
+					}
+					changes.created_images = b - created_images.length;
+				}
+
+				{
+					const b = before(creations);
+					for (let i = creations.length - 1; i >= 0; i -= 1) {
+						if (Number(creations[i]?.user_id) === userId) {
+							creations.splice(i, 1);
+						}
+					}
+					changes.creations = b - creations.length;
+				}
+
+				// Server ownership and membership
+				{
+					const b = before(server_members);
+					for (let i = server_members.length - 1; i >= 0; i -= 1) {
+						if (Number(server_members[i]?.user_id) === userId) {
+							server_members.splice(i, 1);
+						}
+					}
+					changes.server_memberships = b - server_members.length;
+				}
+
+				{
+					const b = before(servers);
+					for (let i = servers.length - 1; i >= 0; i -= 1) {
+						if (Number(servers[i]?.user_id) === userId) {
+							servers.splice(i, 1);
+						}
+					}
+					changes.servers_owned = b - servers.length;
+				}
+
+				// Notifications and sessions/credits
+				{
+					const b = before(notifications);
+					for (let i = notifications.length - 1; i >= 0; i -= 1) {
+						if (Number(notifications[i]?.user_id) === userId) {
+							notifications.splice(i, 1);
+						}
+					}
+					changes.notifications = b - notifications.length;
+				}
+
+				{
+					const b = before(sessions);
+					for (let i = sessions.length - 1; i >= 0; i -= 1) {
+						if (Number(sessions[i]?.user_id) === userId) {
+							sessions.splice(i, 1);
+						}
+					}
+					changes.sessions = b - sessions.length;
+				}
+
+				{
+					const b = before(user_credits);
+					for (let i = user_credits.length - 1; i >= 0; i -= 1) {
+						if (Number(user_credits[i]?.user_id) === userId) {
+							user_credits.splice(i, 1);
+						}
+					}
+					changes.user_credits = b - user_credits.length;
+				}
+
+				// Social graph + profile
+				{
+					const b = before(user_follows);
+					for (let i = user_follows.length - 1; i >= 0; i -= 1) {
+						if (
+							Number(user_follows[i]?.follower_id) === userId ||
+							Number(user_follows[i]?.following_id) === userId
+						) {
+							user_follows.splice(i, 1);
+						}
+					}
+					changes.user_follows = b - user_follows.length;
+				}
+
+				{
+					const b = before(user_profiles);
+					for (let i = user_profiles.length - 1; i >= 0; i -= 1) {
+						if (Number(user_profiles[i]?.user_id) === userId) {
+							user_profiles.splice(i, 1);
+						}
+					}
+					changes.user_profile = b - user_profiles.length;
+				}
+
+				// Finally delete user row
+				{
+					const b = before(users);
+					for (let i = users.length - 1; i >= 0; i -= 1) {
+						if (Number(users[i]?.id) === userId) {
+							users.splice(i, 1);
+						}
+					}
+					changes.user = b - users.length;
+				}
+
+				return { changes };
+			}
 		}
 	};
 
@@ -879,7 +1188,7 @@ export function openDb() {
 				targetArray = user_follows;
 				break;
 			default:
-				console.warn(`Unknown table: ${tableName}`);
+				// console.warn(`Unknown table: ${tableName}`);
 				return;
 		}
 
@@ -959,9 +1268,9 @@ export function openDb() {
 				// On Vercel or other read-only filesystems, we can't write files
 				// Return a URL anyway - the image data is stored in the database record
 				// The image won't be accessible via filesystem, but the database entry will exist
-				console.warn(`Warning: Could not write image file ${filename}: ${error.message}`);
-				console.warn("Image metadata will be stored, but file will not be persisted.");
-				console.warn("For production on Vercel, use Supabase adapter with SUPABASE_URL and SUPABASE_ANON_KEY.");
+				// console.warn(`Warning: Could not write image file ${filename}: ${error.message}`);
+				// console.warn("Image metadata will be stored, but file will not be persisted.");
+				// console.warn("For production on Vercel, use Supabase adapter with SUPABASE_URL and SUPABASE_ANON_KEY.");
 				// Return a URL that indicates the file isn't available
 				return `/images/created/${filename}`;
 			}

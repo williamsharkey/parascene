@@ -1,8 +1,58 @@
 import express from "express";
 import { buildProviderHeaders, resolveProviderAuthToken } from "./utils/providerAuth.js";
 
-export default function createAdminRoutes({ queries }) {
+export default function createAdminRoutes({ queries, storage }) {
 	const router = express.Router();
+
+	function safeJsonParse(value, fallback) {
+		if (value == null) return fallback;
+		if (typeof value === "object") return value;
+		if (typeof value !== "string") return fallback;
+		const trimmed = value.trim();
+		if (!trimmed) return fallback;
+		try {
+			return JSON.parse(trimmed);
+		} catch {
+			return fallback;
+		}
+	}
+
+	function normalizeProfileRow(row) {
+		if (!row) {
+			return {
+				user_name: null,
+				display_name: null,
+				about: null,
+				socials: {},
+				avatar_url: null,
+				cover_image_url: null,
+				badges: [],
+				meta: {},
+				created_at: null,
+				updated_at: null
+			};
+		}
+		return {
+			user_name: row.user_name ?? null,
+			display_name: row.display_name ?? null,
+			about: row.about ?? null,
+			socials: safeJsonParse(row.socials, {}),
+			avatar_url: row.avatar_url ?? null,
+			cover_image_url: row.cover_image_url ?? null,
+			badges: safeJsonParse(row.badges, []),
+			meta: safeJsonParse(row.meta, {}),
+			created_at: row.created_at ?? null,
+			updated_at: row.updated_at ?? null
+		};
+	}
+
+	function normalizeUsername(input) {
+		const raw = typeof input === "string" ? input.trim() : "";
+		if (!raw) return null;
+		const normalized = raw.toLowerCase();
+		if (!/^[a-z0-9][a-z0-9_]{2,23}$/.test(normalized)) return null;
+		return normalized;
+	}
 
 	async function requireAdmin(req, res) {
 		if (!req.auth?.userId) {
@@ -24,6 +74,26 @@ export default function createAdminRoutes({ queries }) {
 		return user;
 	}
 
+	function extractGenericKey(url) {
+		const raw = typeof url === "string" ? url.trim() : "";
+		if (!raw) return null;
+		if (!raw.startsWith("/api/images/generic/")) return null;
+		const tail = raw.slice("/api/images/generic/".length);
+		if (!tail) return null;
+		// Decode each path segment to rebuild the storage key safely.
+		const segments = tail
+			.split("/")
+			.filter(Boolean)
+			.map((seg) => {
+				try {
+					return decodeURIComponent(seg);
+				} catch {
+					return seg;
+				}
+			});
+		return segments.join("/");
+	}
+
 	router.get("/admin/users", async (req, res) => {
 		const user = await requireAdmin(req, res);
 		if (!user) return;
@@ -42,6 +112,147 @@ export default function createAdminRoutes({ queries }) {
 		);
 
 		res.json({ users: usersWithCredits });
+	});
+
+	// Admin-only: delete a user and clean up related content (likes, comments, images, etc).
+	router.delete("/admin/users/:id", async (req, res) => {
+		const admin = await requireAdmin(req, res);
+		if (!admin) return;
+
+		const targetUserId = Number.parseInt(String(req.params?.id || ""), 10);
+		if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+			return res.status(400).json({ error: "Invalid user id" });
+		}
+
+		if (Number(targetUserId) === Number(admin.id)) {
+			return res.status(400).json({ error: "Refusing to delete current admin user" });
+		}
+
+		if (!queries?.deleteUserAndCleanup?.run) {
+			return res.status(500).json({ error: "User deletion not available" });
+		}
+
+		const target = await queries.selectUserById.get(targetUserId);
+		if (!target) {
+			return res.status(404).json({ error: "User not found" });
+		}
+
+		// Pre-fetch assets to delete from storage (best-effort, after DB cleanup).
+		let createdImages = [];
+		try {
+			if (queries.selectCreatedImagesForUser?.all) {
+				createdImages = await queries.selectCreatedImagesForUser.all(targetUserId);
+			}
+		} catch {
+			createdImages = [];
+		}
+
+		let profileRow = null;
+		try {
+			profileRow = await queries.selectUserProfileByUserId?.get?.(targetUserId);
+		} catch {
+			profileRow = null;
+		}
+
+		const avatarKey = extractGenericKey(profileRow?.avatar_url);
+		const coverKey = extractGenericKey(profileRow?.cover_image_url);
+		const imageFilenames = (Array.isArray(createdImages) ? createdImages : [])
+			.map((img) => String(img?.filename || "").trim())
+			.filter(Boolean);
+
+		let cleanupResult;
+		try {
+			cleanupResult = await queries.deleteUserAndCleanup.run(targetUserId);
+		} catch (error) {
+			return res.status(500).json({ error: "Failed to delete user", message: error?.message || String(error) });
+		}
+
+		// Best-effort storage cleanup: created images + profile images.
+		if (storage?.deleteImage) {
+			for (const filename of imageFilenames) {
+				try {
+					await storage.deleteImage(filename);
+				} catch {
+					// ignore
+				}
+			}
+		}
+		if (storage?.deleteGenericImage) {
+			for (const key of [avatarKey, coverKey].filter(Boolean)) {
+				try {
+					await storage.deleteGenericImage(key);
+				} catch {
+					// ignore
+				}
+			}
+		}
+
+		return res.json({
+			ok: true,
+			deleted_user_id: targetUserId,
+			result: cleanupResult ?? null
+		});
+	});
+
+	// Admin-only: override a user's username (write-once for normal users).
+	router.put("/admin/users/:id/username", async (req, res) => {
+		const admin = await requireAdmin(req, res);
+		if (!admin) return;
+
+		const targetUserId = Number.parseInt(String(req.params?.id || ""), 10);
+		if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+			return res.status(400).json({ error: "Invalid user id" });
+		}
+
+		const target = await queries.selectUserById.get(targetUserId);
+		if (!target) {
+			return res.status(404).json({ error: "User not found" });
+		}
+
+		const rawUserName = req.body?.user_name ?? req.body?.username;
+		const userName = normalizeUsername(rawUserName);
+		if (!userName) {
+			return res.status(400).json({
+				error: "Invalid username",
+				message: "Username must be 3-24 chars, lowercase letters/numbers/underscore, starting with a letter/number."
+			});
+		}
+
+		// Uniqueness check
+		if (queries.selectUserProfileByUsername?.get) {
+			const existing = await queries.selectUserProfileByUsername.get(userName);
+			if (existing && Number(existing.user_id) !== Number(targetUserId)) {
+				return res.status(409).json({ error: "Username already taken" });
+			}
+		}
+
+		if (!queries.upsertUserProfile?.run) {
+			return res.status(500).json({ error: "Profile storage not available" });
+		}
+
+		// Preserve existing profile fields; only update username.
+		const existingRow = await queries.selectUserProfileByUserId?.get(targetUserId);
+		const existingProfile = normalizeProfileRow(existingRow);
+
+		const nextMeta = {
+			...(typeof existingProfile.meta === "object" && existingProfile.meta ? existingProfile.meta : {})
+		};
+
+		const payload = {
+			user_name: userName,
+			display_name: existingProfile.display_name ?? null,
+			about: existingProfile.about ?? null,
+			socials: typeof existingProfile.socials === "object" && existingProfile.socials ? existingProfile.socials : {},
+			avatar_url: existingProfile.avatar_url ?? null,
+			cover_image_url: existingProfile.cover_image_url ?? null,
+			badges: Array.isArray(existingProfile.badges) ? existingProfile.badges : [],
+			meta: nextMeta
+		};
+
+		await queries.upsertUserProfile.run(targetUserId, payload);
+
+		const updated = await queries.selectUserProfileByUserId?.get(targetUserId);
+		return res.json({ ok: true, profile: normalizeProfileRow(updated) });
 	});
 
 	router.get("/admin/moderation", async (req, res) => {

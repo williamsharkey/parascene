@@ -43,7 +43,7 @@ export default function createFollowsRoutes({ queries }) {
 			const result = await queries.insertUserFollow.run(viewerId, targetUserId);
 			return res.json({ ok: true, changed: Number(result?.changes ?? 0) > 0 });
 		} catch (error) {
-			console.error("Error following user:", error);
+			// console.error("Error following user:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -74,7 +74,7 @@ export default function createFollowsRoutes({ queries }) {
 			const result = await queries.deleteUserFollow.run(viewerId, targetUserId);
 			return res.json({ ok: true, changed: Number(result?.changes ?? 0) > 0 });
 		} catch (error) {
-			console.error("Error unfollowing user:", error);
+			// console.error("Error unfollowing user:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -102,7 +102,7 @@ export default function createFollowsRoutes({ queries }) {
 			const followers = await queries.selectUserFollowers.all(targetUserId);
 			return res.json({ followers: Array.isArray(followers) ? followers : [] });
 		} catch (error) {
-			console.error("Error loading followers:", error);
+			// console.error("Error loading followers:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});
@@ -130,7 +130,7 @@ export default function createFollowsRoutes({ queries }) {
 			const following = await queries.selectUserFollowing.all(targetUserId);
 			return res.json({ following: Array.isArray(following) ? following : [] });
 		} catch (error) {
-			console.error("Error loading following:", error);
+			// console.error("Error loading following:", error);
 			return res.status(500).json({ error: "Internal server error" });
 		}
 	});

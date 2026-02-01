@@ -162,7 +162,7 @@ export default function createProviderRoutes({ queries }) {
 
 			return res.status(201).json({ provider });
 		} catch (dbError) {
-			console.error('Error inserting provider:', dbError);
+			// console.error('Error inserting provider:', dbError);
 			return res.status(500).json({
 				error: "Failed to register provider",
 				message: dbError.message

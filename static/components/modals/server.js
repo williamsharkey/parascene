@@ -26,20 +26,30 @@ function renderProviderCapabilities(container, capabilities) {
 			const methodCard = document.createElement("div");
 			methodCard.className = "method-card";
 
-			// Add preview image if available
-			if (method.preview) {
-				const previewImg = document.createElement("img");
-				previewImg.src = method.preview;
-				previewImg.alt = `${method.name || methodKey} preview`;
-				previewImg.className = "method-preview";
-				previewImg.onerror = function() { this.style.display = 'none'; };
-				methodCard.appendChild(previewImg);
-			}
+			const methodHeader = document.createElement("div");
+			methodHeader.className = "method-header";
 
 			const methodName = document.createElement("div");
 			methodName.className = "method-name";
 			methodName.textContent = method.name || methodKey;
-			methodCard.appendChild(methodName);
+			methodHeader.appendChild(methodName);
+
+			const intentList = Array.isArray(method?.intents)
+				? method.intents.filter(v => typeof v === 'string' && v.trim().length > 0).map(v => v.trim())
+				: (typeof method?.intent === 'string' && method.intent.trim().length > 0 ? [method.intent.trim()] : []);
+			if (intentList.length > 0) {
+				const intents = document.createElement('div');
+				intents.className = 'method-intents';
+				intentList.forEach(intent => {
+					const badge = document.createElement('span');
+					badge.className = 'method-intent-badge';
+					badge.textContent = intent;
+					intents.appendChild(badge);
+				});
+				methodHeader.appendChild(intents);
+			}
+
+			methodCard.appendChild(methodHeader);
 
 			const methodDesc = document.createElement("div");
 			methodDesc.className = "method-desc";
@@ -147,7 +157,7 @@ class AppModalServer extends HTMLElement {
 
 	async open({ mode, serverId = null } = {}) {
 		if (!['add', 'edit', 'view'].includes(mode)) {
-			console.error('Invalid mode:', mode);
+			// console.error('Invalid mode:', mode);
 			return;
 		}
 
@@ -219,7 +229,7 @@ class AppModalServer extends HTMLElement {
 			const data = await response.json();
 			this.serverData = data.server;
 		} catch (error) {
-			console.error('Error loading server:', error);
+			// console.error('Error loading server:', error);
 			alert('Failed to load server details');
 			this.close();
 		}
@@ -478,8 +488,34 @@ class AppModalServer extends HTMLElement {
 				.method-name {
 					font-weight: 600;
 					font-size: 1.05rem;
-					margin-bottom: 0.5rem;
 					color: var(--text);
+				}
+
+				.method-header {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: 12px;
+					margin-bottom: 0.5rem;
+				}
+
+				.method-intents {
+					display: flex;
+					flex-wrap: wrap;
+					gap: 6px;
+					justify-content: flex-end;
+				}
+
+				.method-intent-badge {
+					font-size: 0.75rem;
+					padding: 0.25rem 0.6rem;
+					border-radius: 999px;
+					font-weight: 600;
+					background: var(--surface);
+					border: 1px solid var(--border);
+					color: var(--text-muted);
+					font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+					white-space: nowrap;
 				}
 
 				.method-desc {
@@ -559,70 +595,6 @@ class AppModalServer extends HTMLElement {
 					color: var(--text-muted);
 				}
 
-				.fetch-info-row {
-					display: flex;
-					justify-content: flex-start;
-				}
-
-				.btn-fetch-info {
-					padding: 0.625rem 1rem;
-					border-radius: 6px;
-					border: 1px solid var(--border);
-					background: var(--surface-strong);
-					color: var(--text);
-					font-size: 0.875rem;
-					font-weight: 500;
-					font-family: inherit;
-					cursor: pointer;
-					transition: background 0.2s ease;
-				}
-
-				.btn-fetch-info:hover:not(:disabled) {
-					background: var(--surface);
-				}
-
-				.btn-fetch-info:disabled {
-					opacity: 0.6;
-					cursor: not-allowed;
-				}
-
-				.server-branding {
-					display: flex;
-					flex-direction: column;
-					align-items: center;
-					gap: 0.75rem;
-					margin-bottom: 0.5rem;
-				}
-
-				.server-branding-banner {
-					width: 100%;
-					max-height: 120px;
-					object-fit: cover;
-					border-radius: 8px;
-				}
-
-				.server-branding-icon {
-					width: 64px;
-					height: 64px;
-					border-radius: 12px;
-					object-fit: cover;
-				}
-
-				.server-branding-name {
-					font-size: 1.1rem;
-					font-weight: 600;
-					color: var(--text);
-					margin-top: 0.25rem;
-				}
-
-				.method-preview {
-					width: 100%;
-					max-width: 200px;
-					height: auto;
-					border-radius: 6px;
-					margin-bottom: 0.75rem;
-				}
-
 				.server-success {
 					padding: 1rem;
 					background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -665,7 +637,10 @@ class AppModalServer extends HTMLElement {
 		if (body) {
 			body.innerHTML = html`
 				<form class="server-modal-form" data-server-form>
-					<div id="server-branding-container" class="server-branding" style="display: none;"></div>
+					<label>
+						Name
+						<input type="text" name="name" required placeholder="Server Name" />
+					</label>
 					<label>
 						Server URL
 						<input type="url" name="server_url" required placeholder="https://your-server.vercel.app/api" />
@@ -674,14 +649,6 @@ class AppModalServer extends HTMLElement {
 						Auth Token (optional)
 						<input type="text" name="auth_token" placeholder="Auth token" />
 					</label>
-					<div class="fetch-info-row">
-						<button type="button" class="btn-fetch-info" data-fetch-info-btn>Fetch Server Info</button>
-					</div>
-					<div id="fetch-status-container"></div>
-					<label>
-						Name
-						<input type="text" name="name" required placeholder="Server Name" />
-					</label>
 					<label>
 						Description (optional)
 						<textarea name="description" placeholder="Server description"></textarea>
@@ -689,12 +656,6 @@ class AppModalServer extends HTMLElement {
 					<div id="test-results-container"></div>
 				</form>
 			`;
-
-			// Setup fetch info button
-			const fetchInfoBtn = body.querySelector('[data-fetch-info-btn]');
-			if (fetchInfoBtn) {
-				fetchInfoBtn.addEventListener('click', () => this.handleFetchInfo());
-			}
 		}
 
 		if (actions) {
@@ -725,31 +686,16 @@ class AppModalServer extends HTMLElement {
 		const body = this.shadowRoot.querySelector('[data-modal-body]');
 		const actions = this.shadowRoot.querySelector('[data-modal-actions]');
 
-		if (title) title.textContent = `Edit Server: ${this.serverData.name}`;
+		if (title) title.textContent = this.serverData.name;
 		if (body) {
 			const resolvedAuthToken = typeof this.serverData?.auth_token === "string" && this.serverData.auth_token.trim()
 				? this.serverData.auth_token.trim()
 				: "";
 
 			const isSpecial = this.serverData.id === 1;
-			const config = this.serverData.server_config || {};
-
-			// Build branding HTML if available
-			let brandingHtml = '';
-			if (config.icon || config.banner) {
-				brandingHtml = '<div class="server-branding" style="display: flex;">';
-				if (config.banner) {
-					brandingHtml += `<img src="${this.escapeHtml(config.banner)}" alt="Server banner" class="server-branding-banner" onerror="this.style.display='none'" />`;
-				}
-				if (config.icon) {
-					brandingHtml += `<img src="${this.escapeHtml(config.icon)}" alt="Server icon" onerror="this.style.display='none'" class="server-branding-icon" />`;
-				}
-				brandingHtml += '</div>';
-			}
 
 			body.innerHTML = html`
 				<form class="server-modal-form" data-server-form>
-					${brandingHtml}
 					<label>
 						Name
 						<input type="text" name="name" required value="${this.escapeHtml(this.serverData.name || '')}" />
@@ -836,23 +782,8 @@ class AppModalServer extends HTMLElement {
 		if (title) title.textContent = this.serverData.name || 'Server Details';
 		if (body) {
 			const isSpecial = this.serverData.id === 1;
-			const config = this.serverData.server_config || {};
-
-			// Build branding HTML if available
-			let brandingHtml = '';
-			if (config.icon || config.banner) {
-				brandingHtml = '<div class="server-branding" style="display: flex;">';
-				if (config.banner) {
-					brandingHtml += `<img src="${this.escapeHtml(config.banner)}" alt="Server banner" class="server-branding-banner" onerror="this.style.display='none'" />`;
-				}
-				if (config.icon) {
-					brandingHtml += `<img src="${this.escapeHtml(config.icon)}" alt="Server icon" class="server-branding-icon" onerror="this.style.display='none'" />`;
-				}
-				brandingHtml += '</div>';
-			}
 
 			body.innerHTML = html`
-				${brandingHtml}
 				<div class="server-details">
 					<div class="server-detail-row">
 						<strong>Status</strong>
@@ -997,109 +928,6 @@ class AppModalServer extends HTMLElement {
 					<div class="server-error">✗ ${error.message || 'Failed to test server'}</div>
 				`;
 				target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-			}
-		}
-	}
-
-	async handleFetchInfo() {
-		const form = this.shadowRoot.querySelector('[data-server-form]');
-		if (!form) return;
-
-		const serverUrl = form.querySelector('input[name="server_url"]')?.value?.trim();
-		const authToken = form.querySelector('input[name="auth_token"]')?.value?.trim() || '';
-
-		if (!serverUrl) {
-			alert('Please enter a server URL');
-			return;
-		}
-
-		const fetchBtn = this.shadowRoot.querySelector('[data-fetch-info-btn]');
-		const statusContainer = this.shadowRoot.querySelector('#fetch-status-container');
-		const brandingContainer = this.shadowRoot.querySelector('#server-branding-container');
-
-		if (fetchBtn) {
-			fetchBtn.disabled = true;
-			fetchBtn.textContent = 'Fetching...';
-		}
-
-		if (statusContainer) {
-			statusContainer.innerHTML = '<div class="server-loading">Fetching server info...</div>';
-		}
-
-		try {
-			const testUrl = serverUrl.startsWith('http') ? serverUrl : `https://${serverUrl}`;
-			const response = await fetch(testUrl, {
-				method: 'GET',
-				headers: {
-					'Accept': 'application/json',
-					...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
-				},
-				signal: AbortSignal.timeout(10000)
-			});
-
-			if (!response.ok) {
-				throw new Error(`Server returned error: ${response.status} ${response.statusText}`);
-			}
-
-			const capabilities = await response.json();
-			if (!capabilities.methods || typeof capabilities.methods !== 'object') {
-				throw new Error("Server response missing or invalid 'methods' field");
-			}
-
-			// Auto-fill name if provided and field is empty
-			const nameInput = form.querySelector('input[name="name"]');
-			if (nameInput && capabilities.name && !nameInput.value.trim()) {
-				nameInput.value = capabilities.name;
-			}
-
-			// Auto-fill description if provided and field is empty
-			const descInput = form.querySelector('textarea[name="description"]');
-			if (descInput && capabilities.description && !descInput.value.trim()) {
-				descInput.value = capabilities.description;
-			}
-
-			// Display branding if available
-			if (brandingContainer && (capabilities.icon || capabilities.banner)) {
-				let brandingHtml = '';
-
-				if (capabilities.banner) {
-					brandingHtml += `<img src="${this.escapeHtml(capabilities.banner)}" alt="Server banner" class="server-branding-banner" onerror="this.style.display='none'" />`;
-				}
-
-				if (capabilities.icon) {
-					brandingHtml += `<img src="${this.escapeHtml(capabilities.icon)}" alt="Server icon" class="server-branding-icon" onerror="this.style.display='none'" />`;
-				}
-
-				if (capabilities.name) {
-					brandingHtml += `<div class="server-branding-name">${this.escapeHtml(capabilities.name)}</div>`;
-				}
-
-				brandingContainer.innerHTML = brandingHtml;
-				brandingContainer.style.display = 'flex';
-			}
-
-			// Store capabilities for later
-			this._fetchedCapabilities = capabilities;
-
-			if (statusContainer) {
-				statusContainer.innerHTML = html`
-					<div class="server-success">✓ Server info fetched successfully</div>
-				`;
-				renderProviderCapabilities(statusContainer, capabilities);
-			}
-		} catch (error) {
-			if (statusContainer) {
-				statusContainer.innerHTML = html`
-					<div class="server-error">✗ ${error.message || 'Failed to fetch server info'}</div>
-				`;
-			}
-			if (brandingContainer) {
-				brandingContainer.style.display = 'none';
-			}
-		} finally {
-			if (fetchBtn) {
-				fetchBtn.disabled = false;
-				fetchBtn.textContent = 'Fetch Server Info';
 			}
 		}
 	}
@@ -1315,6 +1143,7 @@ class AppModalServer extends HTMLElement {
 
 			this.close();
 			document.dispatchEvent(new CustomEvent('server-updated'));
+			window.location.reload();
 		} catch (error) {
 			alert(error.message || 'Failed to join server');
 		}
@@ -1341,6 +1170,7 @@ class AppModalServer extends HTMLElement {
 
 			this.close();
 			document.dispatchEvent(new CustomEvent('server-updated'));
+			window.location.reload();
 		} catch (error) {
 			alert(error.message || 'Failed to leave server');
 		}

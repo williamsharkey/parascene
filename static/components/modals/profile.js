@@ -146,7 +146,7 @@ class AppModalProfile extends HTMLElement {
 			}
 			this.profileLoadedAt = Date.now();
 		} catch (error) {
-			console.error('Error loading profile:', error);
+			// console.error('Error loading profile:', error);
 			if (!silent && !this.profileData) {
 				content.innerHTML = html`<p style="color: var(--text-muted);">Failed to load profile information.</p>`;
 			}

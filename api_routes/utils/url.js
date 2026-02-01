@@ -1,7 +1,14 @@
-// Returns the base URL (homepage) for the application
-// Use this to construct full URLs by combining with paths (e.g., new URL("/creations/123", getBaseAppUrl()))
 export function getBaseAppUrl() {
-	return "https://parascene.crosshj.com";
+	if (process.env.VERCEL_ENV === "production") {
+		return "https://parascene.crosshj.com";
+	}
+
+	if (process.env.VERCEL_URL) {
+		return `https://${process.env.VERCEL_URL}`;
+	}
+
+	const port = Number(process.env.PORT) || 2367;
+	return `http://localhost:${port}`;
 }
 
 export function getThumbnailUrl(url) {

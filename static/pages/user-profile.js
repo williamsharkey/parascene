@@ -1,4 +1,4 @@
-import { formatDate } from '../shared/datetime.js';
+import { formatDate, formatDateTime, formatRelativeTime } from '../shared/datetime.js';
 import { fetchJsonWithStatusDeduped } from '../shared/api.js';
 import { getAvatarColor } from '../shared/avatar.js';
 
@@ -94,7 +94,7 @@ function normalizeWebsite(raw) {
 	}
 }
 
-function renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows }) {
+function renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows, isAdmin = false }) {
 	const fallbackName =
 		(user?.email_prefix && String(user.email_prefix).trim()) ||
 		(isSelf && user?.email ? String(user.email).split('@')[0] : '') ||
@@ -109,6 +109,8 @@ function renderProfilePage(container, { user, profile, stats, isSelf, viewerFoll
 	const website = normalizeWebsite(profile?.socials?.website);
 	const avatarUrl = typeof profile?.avatar_url === 'string' ? profile.avatar_url.trim() : '';
 	const coverUrl = typeof profile?.cover_image_url === 'string' ? profile.cover_image_url.trim() : '';
+	const userNameValue = profile?.user_name && String(profile.user_name).trim() ? String(profile.user_name).trim() : '';
+	const userNameLocked = Boolean(userNameValue);
 
 	const avatarInitial = displayName.trim().charAt(0).toUpperCase() || '?';
 	const avatarColor = getAvatarColor(profile?.user_name || user?.email_prefix || user?.email || String(user?.id || ''));
@@ -182,7 +184,7 @@ function renderProfilePage(container, { user, profile, stats, isSelf, viewerFoll
 		</div>
 
 		<div class="user-profile-content">
-			${isSelf ? html`
+			${(isSelf || isAdmin) ? html`
 				<div class="user-profile-tabs">
 					<button type="button" class="user-profile-tab is-active" data-tab="published">Published</button>
 					<button type="button" class="user-profile-tab" data-tab="all">All</button>
@@ -209,8 +211,12 @@ function renderProfilePage(container, { user, profile, stats, isSelf, viewerFoll
 						<div class="user-profile-form-section">
 						<div class="field">
 							<label>Username</label>
-							<input name="user_name" placeholder="e.g. oceanman" value="${escapeHtml(profile?.user_name || '')}">
-							<div class="user-profile-help">3–24 characters. Lowercase letters, numbers, and underscores only.</div>
+							<input name="user_name" placeholder="e.g. oceanman" value="${escapeHtml(userNameValue)}" ${userNameLocked ? 'disabled' : ''}>
+							<div class="user-profile-help">
+								${userNameLocked
+			? 'Username is permanent and cannot be changed.'
+			: '3–24 characters. Lowercase letters, numbers, and underscores only. This cannot be changed later.'}
+							</div>
 						</div>
 						<div class="field">
 							<label>Display name</label>
@@ -314,7 +320,7 @@ function setRouteMediaBackgroundImage(mediaEl, url) {
 	probe.src = url;
 }
 
-function renderImageGrid(grid, images) {
+function renderImageGrid(grid, images, showBadge = false) {
 	if (!grid) return;
 
 	const list = Array.isArray(images) ? images : [];
@@ -350,12 +356,36 @@ function renderImageGrid(grid, images) {
 			window.location.href = `/creations/${item.id}`;
 		});
 
+		const isPublished = item.published === true || item.published === 1;
+		let publishedBadge = '';
+		let publishedInfo = '';
+
+		if (isPublished && showBadge) {
+			publishedBadge = html`
+				<div class="creation-published-badge" title="Published">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="2" y1="12" x2="22" y2="12"></line>
+						<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+					</svg>
+				</div>
+			`;
+		}
+
+		if (isPublished && item.published_at) {
+			const publishedDate = new Date(item.published_at);
+			const publishedTimeAgo = formatRelativeTime(publishedDate);
+			publishedInfo = html`<div class="route-meta" title="${formatDateTime(publishedDate)}">Published ${publishedTimeAgo}</div>`;
+		}
+
 		card.innerHTML = html`
 			<div class="route-media" aria-hidden="true"></div>
+			${publishedBadge}
 			<div class="route-details">
 				<div class="route-details-content">
-					<div class="route-title">${escapeHtml(item.title || 'Creation')}</div>
+					<div class="route-title">${escapeHtml(item.title || 'Untitled')}</div>
 					<div class="route-summary">${escapeHtml(item.width)} × ${escapeHtml(item.height)}px</div>
+					${publishedInfo}
 					<div class="route-meta">${escapeHtml(formatDate(item.created_at) || '')}</div>
 				</div>
 			</div>
@@ -427,19 +457,30 @@ async function init() {
 	const isSelf = Boolean(summary.is_self);
 	const viewerFollows = Boolean(summary.viewer_follows);
 
+	// Get current user to check admin role
+	let isAdmin = false;
+	try {
+		const currentUser = await fetchJsonWithStatusDeduped('/api/profile', { credentials: 'include' }, { windowMs: 500 });
+		if (currentUser.ok && currentUser.data) {
+			isAdmin = currentUser.data.role === 'admin';
+		}
+	} catch {
+		// ignore errors
+	}
+
 	// Normalize json fields in case adapter returned strings (sqlite)
 	profile.socials = safeJsonParse(profile.socials, {});
 	profile.badges = safeJsonParse(profile.badges, []);
 	profile.meta = safeJsonParse(profile.meta, {});
 
-	renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows });
+	renderProfilePage(container, { user, profile, stats, isSelf, viewerFollows, isAdmin });
 
 	const grid = container.querySelector('[data-profile-grid]');
 	const tabButtons = Array.from(container.querySelectorAll('.user-profile-tab'));
 	const overlay = container.querySelector('[data-profile-edit-overlay]');
 
 	const publishedImages = await loadUserImages(targetUserId, { includeAll: false }).catch(() => []);
-	renderImageGrid(grid, publishedImages);
+	renderImageGrid(grid, publishedImages, false);
 
 	let allImagesCache = null;
 
@@ -453,15 +494,15 @@ async function init() {
 
 			grid.innerHTML = html`<div class="route-empty route-empty-image-grid route-loading"><div class="route-loading-spinner" aria-label="Loading" role="status"></div></div>`;
 
-			if (tab === 'all' && isSelf) {
+			if (tab === 'all' && (isSelf || isAdmin)) {
 				if (!allImagesCache) {
 					allImagesCache = await loadUserImages(targetUserId, { includeAll: true }).catch(() => []);
 				}
-				renderImageGrid(grid, allImagesCache);
+				renderImageGrid(grid, allImagesCache, true);
 				return;
 			}
 
-			renderImageGrid(grid, publishedImages);
+			renderImageGrid(grid, publishedImages, false);
 		});
 	});
 

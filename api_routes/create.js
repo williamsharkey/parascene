@@ -2,7 +2,11 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getThumbnailUrl } from "./utils/url.js";
-import { buildProviderHeaders } from "./utils/providerAuth.js";
+import { getBaseAppUrl } from "./utils/url.js";
+import { runCreationJob, PROVIDER_TIMEOUT_MS } from "./utils/creationJob.js";
+import { scheduleCreationJob } from "./utils/scheduleCreationJob.js";
+import { verifyQStashRequest } from "./utils/qstashVerification.js";
+import { ACTIVE_SHARE_VERSION, mintShareToken, verifyShareToken } from "./utils/shareLink.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,12 +32,23 @@ export default function createCreateRoutes({ queries, storage }) {
 				return res.status(404).json({ error: "Image not found" });
 			}
 
-			// Check access: user owns the image OR image is published
+			// Check access: user owns the image OR image is published OR user is admin
 			const userId = req.auth?.userId;
 			const isOwner = userId && image.user_id === userId;
 			const isPublished = image.published === 1 || image.published === true;
 
-			if (!isOwner && !isPublished) {
+			// Get user to check admin role
+			let isAdmin = false;
+			if (userId && !isOwner && !isPublished) {
+				try {
+					const user = await queries.selectUserById.get(userId);
+					isAdmin = user?.role === 'admin';
+				} catch {
+					// ignore errors checking user
+				}
+			}
+
+			if (!isOwner && !isPublished && !isAdmin) {
 				return res.status(403).json({ error: "Access denied" });
 			}
 
@@ -45,7 +60,7 @@ export default function createCreateRoutes({ queries, storage }) {
 			res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
 			res.send(imageBuffer);
 		} catch (error) {
-			console.error("Error serving image:", error);
+			// console.error("Error serving image:", error);
 			if (error.message && error.message.includes("not found")) {
 				return res.status(404).json({ error: "Image not found" });
 			}
@@ -68,18 +83,55 @@ export default function createCreateRoutes({ queries, storage }) {
 		return user;
 	}
 
+	function parseMeta(raw) {
+		if (raw == null) return null;
+		if (typeof raw === "object") return raw;
+		if (typeof raw !== "string") return null;
+		try {
+			return JSON.parse(raw);
+		} catch {
+			return null;
+		}
+	}
+
+	function nowIso() {
+		return new Date().toISOString();
+	}
+
+	function toParasceneImageUrl(raw) {
+		const base = "https://parascene.crosshj.com";
+		if (typeof raw !== "string") return null;
+		const value = raw.trim();
+		if (!value) return null;
+		try {
+			const parsed = new URL(value, base);
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+			return `${base}${parsed.pathname}${parsed.search}${parsed.hash}`;
+		} catch {
+			return null;
+		}
+	}
+
 	// POST /api/create - Create a new image
 	router.post("/api/create", async (req, res) => {
 		const user = await requireUser(req, res);
 		if (!user) return;
 
-		const { server_id, method, args } = req.body;
+		const { server_id, method, args, creation_token, retry_of_id, mutate_of_id } = req.body;
+		const safeArgs = args && typeof args === "object" ? { ...args } : {};
 
 		// Validate required fields
 		if (!server_id || !method) {
 			return res.status(400).json({
 				error: "Missing required fields",
 				message: "server_id and method are required"
+			});
+		}
+
+		if (typeof creation_token !== "string" || creation_token.trim().length < 10) {
+			return res.status(400).json({
+				error: "Missing required fields",
+				message: "creation_token is required"
 			});
 		}
 
@@ -130,135 +182,211 @@ export default function createCreateRoutes({ queries, storage }) {
 				});
 			}
 
-			// Deduct credits before creating the image
+			const started_at = nowIso();
+			const timeout_at = new Date(Date.now() + PROVIDER_TIMEOUT_MS + 2000).toISOString();
+			const placeholderFilename = `creating_${user.id}_${Date.now()}.png`;
+			const meta = {
+				creation_token: creation_token.trim(),
+				server_id: Number(server_id),
+				server_name: typeof server.name === "string" ? server.name : null,
+				server_url: server.server_url,
+				method,
+				method_name: typeof methodConfig.name === "string" && methodConfig.name.trim()
+					? methodConfig.name.trim()
+					: null,
+				args: safeArgs,
+				started_at,
+				timeout_at,
+				credit_cost: CREATION_CREDIT_COST,
+			};
+
+			// Mutate lineage: create/extend meta.history
+			if (mutate_of_id != null && Number.isFinite(Number(mutate_of_id))) {
+				const sourceId = Number(mutate_of_id);
+
+				let source = await queries.selectCreatedImageById.get(sourceId, user.id);
+				if (!source) {
+					const any = await queries.selectCreatedImageByIdAnyUser?.get(sourceId);
+					if (any) {
+						const isPublished = any.published === 1 || any.published === true;
+						const isAdmin = user.role === 'admin';
+						if (isPublished || isAdmin) {
+							source = any;
+						}
+					}
+				}
+
+				if (!source) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+
+				const sourceMeta = parseMeta(source.meta) || {};
+				const prior = Array.isArray(sourceMeta.history) ? sourceMeta.history : null;
+				const priorIds = Array.isArray(prior)
+					? prior.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+					: [];
+				meta.history = [...priorIds, sourceId];
+				meta.mutate_of_id = sourceId;
+
+				// Normalize image_url for mutate flows only.
+				if (typeof safeArgs.image_url === "string") {
+					const normalized = toParasceneImageUrl(safeArgs.image_url);
+					if (normalized) {
+						safeArgs.image_url = normalized;
+						meta.args.image_url = normalized;
+					}
+				}
+			}
+
+			// Retry in place: reuse the same creation row instead of inserting a new one
+			if (retry_of_id != null && Number.isFinite(Number(retry_of_id))) {
+				const existingId = Number(retry_of_id);
+				const image = await queries.selectCreatedImageById.get(existingId, user.id);
+				if (!image) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				const status = image.status || "completed";
+				if (status === "completed") {
+					return res.status(400).json({
+						error: "Cannot retry",
+						message: "Only failed or timed-out creations can be retried"
+					});
+				}
+				if (status === "creating") {
+					const existingMeta = parseMeta(image.meta) || {};
+					const timeoutAt = existingMeta.timeout_at ? new Date(existingMeta.timeout_at).getTime() : NaN;
+					if (!Number.isFinite(timeoutAt) || Date.now() <= timeoutAt) {
+						return res.status(400).json({
+							error: "Cannot retry",
+							message: "Creation is still in progress"
+						});
+					}
+				}
+				const existingMeta = parseMeta(image.meta) || {};
+				// Preserve existing history on retries (including mutated creations).
+				if (Array.isArray(existingMeta.history)) {
+					meta.history = existingMeta.history;
+				}
+				// Refund previous attempt if it was never refunded (so we don't double-charge)
+				if (existingMeta.credits_refunded !== true && Number(existingMeta.credit_cost) > 0) {
+					await queries.updateUserCreditsBalance.run(user.id, Number(existingMeta.credit_cost));
+				}
+				await queries.updateUserCreditsBalance.run(user.id, -CREATION_CREDIT_COST);
+				await queries.resetCreatedImageForRetry.run(existingId, user.id, {
+					meta,
+					filename: placeholderFilename
+				});
+				await scheduleCreationJob({
+					payload: {
+						created_image_id: existingId,
+						user_id: user.id,
+						server_id: Number(server_id),
+						method,
+						args: safeArgs,
+						credit_cost: CREATION_CREDIT_COST,
+					},
+					runCreationJob: ({ payload }) => runCreationJob({ queries, storage, payload }),
+				});
+				const updatedCredits = await queries.selectUserCredits.get(user.id);
+				return res.json({
+					id: existingId,
+					status: "creating",
+					created_at: started_at,
+					meta,
+					credits_remaining: updatedCredits?.balance ?? 0
+				});
+			}
+
+			// New creation: insert a durable row BEFORE provider call
 			await queries.updateUserCreditsBalance.run(user.id, -CREATION_CREDIT_COST);
 
-			// Call provider server
-			let imageBuffer;
-			let color = null;
-			let width = 1024;
-			let height = 1024;
-			let suggestedTitle = null;
-			let suggestedDescription = null;
-			let seed = null;
-
-			try {
-				// Convert relative URLs to absolute for internal hosted servers
-				let providerUrl = server.server_url;
-				if (providerUrl.startsWith('/')) {
-					const protocol = req.protocol || 'http';
-					const host = req.get('host') || 'localhost:3000';
-					providerUrl = `${protocol}://${host}${providerUrl}`;
-				}
-
-				const providerResponse = await fetch(providerUrl, {
-					method: 'POST',
-					headers: buildProviderHeaders({
-						'Content-Type': 'application/json',
-						'Accept': 'image/png'
-					}, server.auth_token),
-					body: JSON.stringify({
-						method: method,
-						args: args || {}
-					}),
-					signal: AbortSignal.timeout(30000) // 30 second timeout
-				});
-
-				if (!providerResponse.ok) {
-					// Refund credits on provider error
-					await queries.updateUserCreditsBalance.run(user.id, CREATION_CREDIT_COST);
-					return res.status(502).json({
-						error: "Provider server error",
-						message: `Provider server returned error: ${providerResponse.status} ${providerResponse.statusText}`
-					});
-				}
-
-				// Get image buffer from response
-				imageBuffer = Buffer.from(await providerResponse.arrayBuffer());
-
-				// Try to get metadata from headers if available (all optional)
-				const headerColor = providerResponse.headers.get('X-Image-Color');
-				const headerWidth = providerResponse.headers.get('X-Image-Width');
-				const headerHeight = providerResponse.headers.get('X-Image-Height');
-				const headerName = providerResponse.headers.get('X-Image-Name');
-				const headerDescription = providerResponse.headers.get('X-Image-Description');
-				const headerSeed = providerResponse.headers.get('X-Image-Seed');
-
-				if (headerColor) color = headerColor;
-				if (headerWidth) width = parseInt(headerWidth, 10);
-				if (headerHeight) height = parseInt(headerHeight, 10);
-				if (headerName) suggestedTitle = headerName;
-				if (headerDescription) suggestedDescription = decodeURIComponent(headerDescription);
-				if (headerSeed) seed = String(headerSeed);
-			} catch (fetchError) {
-				// Refund credits on fetch error
-				await queries.updateUserCreditsBalance.run(user.id, CREATION_CREDIT_COST);
-
-				if (fetchError.name === 'AbortError') {
-					return res.status(504).json({
-						error: "Provider server timeout",
-						message: "Provider server did not respond within 30 seconds"
-					});
-				}
-				return res.status(502).json({
-					error: "Failed to connect to provider server",
-					message: fetchError.message
-				});
-			}
-
-			// Create unique filename
-			const timestamp = Date.now();
-			const random = Math.random().toString(36).substring(2, 9);
-			const filename = `${user.id}_${timestamp}_${random}.png`;
-
-			// Upload image using storage adapter
-			const imageUrl = await storage.uploadImage(imageBuffer, filename);
-
-			// Create entry in database with completed status
-			// Seed is optional - only stored if provider sends X-Image-Seed header
 			const result = await queries.insertCreatedImage.run(
 				user.id,
-				filename,
-				imageUrl,
-				width,
-				height,
-				color,
-				'completed',
-				seed
+				placeholderFilename,
+				"", // file_path placeholder (schema requires non-null)
+				1024,
+				1024,
+				null,
+				"creating",
+				meta
 			);
 
-			// Credit server owner (30% of what user was charged)
-			const ownerCredits = CREATION_CREDIT_COST * 0.3;
-			if (server.user_id && ownerCredits > 0) {
-				// Initialize owner credits if needed
-				let ownerCreditsRecord = await queries.selectUserCredits.get(server.user_id);
-				if (!ownerCreditsRecord) {
-					await queries.insertUserCredits.run(server.user_id, 0, null);
-				}
-				await queries.updateUserCreditsBalance.run(server.user_id, ownerCredits);
-			}
+			const createdImageId = result.insertId;
 
-			// Get updated credit balance
+			await scheduleCreationJob({
+				payload: {
+					created_image_id: createdImageId,
+					user_id: user.id,
+					server_id: Number(server_id),
+					method,
+					args: safeArgs,
+					credit_cost: CREATION_CREDIT_COST,
+				},
+				runCreationJob: ({ payload }) => runCreationJob({ queries, storage, payload }),
+			});
+
 			const updatedCredits = await queries.selectUserCredits.get(user.id);
 
-			// Return with completed status
-			// Include suggested_title and suggested_description if provider sent them (optional)
-			res.json({
-				id: result.insertId,
-				filename,
-				url: imageUrl,
-				color,
-				width,
-				height,
-				status: 'completed',
-				created_at: new Date().toISOString(),
-				credits_remaining: updatedCredits?.balance ?? 0,
-				suggested_title: suggestedTitle,
-				suggested_description: suggestedDescription
+			return res.json({
+				id: createdImageId,
+				status: "creating",
+				created_at: started_at,
+				meta,
+				credits_remaining: updatedCredits?.balance ?? 0
 			});
 		} catch (error) {
-			console.error("Error initiating image creation:", error);
+			// console.error("Error initiating image creation:", error);
 			return res.status(500).json({ error: "Failed to initiate image creation", message: error.message });
+		}
+	});
+
+	router.post("/api/create/worker", async (req, res) => {
+		// Disable caching for this endpoint - QStash webhooks should never be cached
+		res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+		res.setHeader("Pragma", "no-cache");
+		res.setHeader("Expires", "0");
+
+		const logCreation = (...args) => {
+			console.log("[Creation]", ...args);
+		};
+		const logCreationError = (...args) => {
+			console.error("[Creation]", ...args);
+		};
+
+		try {
+			logCreation("Worker endpoint called", {
+				has_body: !!req.body,
+				created_image_id: req.body?.created_image_id,
+				user_id: req.body?.user_id,
+				path: req.path,
+				originalUrl: req.originalUrl,
+				method: req.method
+			});
+
+			if (!process.env.UPSTASH_QSTASH_TOKEN) {
+				logCreationError("QStash not configured");
+				return res.status(503).json({ error: "QStash not configured" });
+			}
+
+			logCreation("Verifying QStash signature");
+			const isValid = await verifyQStashRequest(req);
+			if (!isValid) {
+				logCreationError("Invalid QStash signature");
+				return res.status(401).json({ error: "Invalid QStash signature" });
+			}
+
+			logCreation("QStash signature verified, running job");
+			await runCreationJob({ queries, storage, payload: req.body });
+			logCreation("Worker job completed successfully");
+			return res.json({ ok: true });
+		} catch (error) {
+			logCreationError("Worker failed with error:", {
+				error: error.message,
+				stack: error.stack,
+				name: error.name
+			});
+			console.error("Error running create worker:", error);
+			return res.status(500).json({ ok: false, error: "Worker failed" });
 		}
 	});
 
@@ -272,27 +400,30 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			// Transform to include URLs (use file_path from DB which now contains the URL)
 			const imagesWithUrls = images.map((img) => {
-				const url = img.file_path || storage.getImageUrl(img.filename);
+				const status = img.status || 'completed';
+				const url = status === "completed" ? (img.file_path || storage.getImageUrl(img.filename)) : null;
+				const meta = parseMeta(img.meta);
 				return {
 					id: img.id,
 					filename: img.filename,
 					url,
-					thumbnail_url: getThumbnailUrl(url),
+					thumbnail_url: url ? getThumbnailUrl(url) : null,
 					width: img.width,
 					height: img.height,
 					color: img.color,
-					status: img.status || 'completed', // Default to completed for backward compatibility
+					status, // Default to completed for backward compatibility
 					created_at: img.created_at,
 					published: img.published === 1 || img.published === true,
 					published_at: img.published_at || null,
 					title: img.title || null,
-					description: img.description || null
+					description: img.description || null,
+					meta
 				};
 			});
 
 			return res.json({ images: imagesWithUrls });
 		} catch (error) {
-			console.error("Error fetching images:", error);
+			// console.error("Error fetching images:", error);
 			return res.status(500).json({ error: "Failed to fetch images" });
 		}
 	});
@@ -309,11 +440,37 @@ export default function createCreateRoutes({ queries, storage }) {
 				user.id
 			);
 
-			// If not found as owner, check if it exists and is published
+			let shareAccess = null;
+
+			// If not found as owner, check if it exists and is either published or user is admin
 			if (!image) {
 				const anyImage = await queries.selectCreatedImageByIdAnyUser.get(req.params.id);
-				if (anyImage && (anyImage.published === 1 || anyImage.published === true)) {
-					image = anyImage;
+				if (anyImage) {
+					const isPublished = anyImage.published === 1 || anyImage.published === true;
+					const isAdmin = user.role === 'admin';
+					// Optional: allow view-only access via external share token (for signed-in non-owners).
+					if (!isPublished && !isAdmin) {
+						let shareVersion = String(req.headers["x-share-version"] || "");
+						let shareToken = String(req.headers["x-share-token"] || "");
+						if (shareVersion && shareToken) {
+							const verified = verifyShareToken({ version: shareVersion, token: shareToken });
+							if (verified.ok && Number(verified.imageId) === Number(anyImage.id)) {
+								const status = anyImage.status || "completed";
+								if (status === "completed") {
+									shareAccess = { version: shareVersion, token: shareToken };
+									image = anyImage;
+								}
+							}
+						}
+					}
+
+					if (!image && (isPublished || isAdmin)) {
+						image = anyImage;
+					} else {
+						if (!image) {
+							return res.status(404).json({ error: "Image not found" });
+						}
+					}
 				} else {
 					return res.status(404).json({ error: "Image not found" });
 				}
@@ -334,31 +491,26 @@ export default function createCreateRoutes({ queries, storage }) {
 			const viewerLiked = Boolean(viewerLikedRow?.viewer_liked);
 
 			const isPublished = image.published === 1 || image.published === true;
-			let description = typeof image.description === "string" ? image.description.trim() : "";
-			if (!description && isPublished && queries.selectFeedItemByCreatedImageId?.get) {
-				try {
-					const feedItem = await queries.selectFeedItemByCreatedImageId.get(image.id);
-					const summary = typeof feedItem?.summary === "string" ? feedItem.summary.trim() : "";
-					if (summary) {
-						description = summary;
-					}
-				} catch {
-					// ignore fallback failures
-				}
-			}
+			// Always read description from created_image, not from feed_item
+			// (feed_item may be deleted when un-publishing)
+			const description = typeof image.description === "string" ? image.description.trim() : "";
+			const meta = parseMeta(image.meta);
 
-			// Only include seed if user is the owner (private to creator)
-			const isOwner = user.id === image.user_id;
+			const status = image.status || 'completed';
+			const url = status === "completed"
+				? (shareAccess
+					? `/api/share/${encodeURIComponent(shareAccess.version)}/${encodeURIComponent(shareAccess.token)}/image`
+					: (image.file_path || storage.getImageUrl(image.filename)))
+				: null;
 
 			return res.json({
 				id: image.id,
 				filename: image.filename,
-				url: image.file_path || storage.getImageUrl(image.filename), // Use stored URL or generate one
+				url, // Use stored URL or generate one
 				width: image.width,
 				height: image.height,
 				color: image.color,
-				seed: isOwner ? (image.seed || null) : null,
-				status: image.status || 'completed',
+				status,
 				created_at: image.created_at,
 				published: isPublished,
 				published_at: image.published_at || null,
@@ -367,6 +519,7 @@ export default function createCreateRoutes({ queries, storage }) {
 				like_count: likeCount,
 				viewer_liked: viewerLiked,
 				user_id: image.user_id,
+				meta,
 				creator: creator ? {
 					id: creator.id,
 					email: creator.email,
@@ -377,8 +530,104 @@ export default function createCreateRoutes({ queries, storage }) {
 				} : null
 			});
 		} catch (error) {
-			console.error("Error fetching image:", error);
+			// console.error("Error fetching image:", error);
 			return res.status(500).json({ error: "Failed to fetch image" });
+		}
+	});
+
+	// POST /api/create/images/:id/share - Mint an external share URL (no DB write)
+	router.post("/api/create/images/:id/share", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		try {
+			const id = Number(req.params.id);
+			if (!Number.isFinite(id) || id <= 0) {
+				return res.status(400).json({ error: "Invalid creation id" });
+			}
+
+			// First try as owner.
+			let image = await queries.selectCreatedImageById?.get(id, user.id);
+
+			// If not owner, allow if published or admin.
+			if (!image) {
+				const any = await queries.selectCreatedImageByIdAnyUser?.get(id);
+				if (!any) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				const isPublished = any.published === 1 || any.published === true;
+				const isAdmin = user.role === "admin";
+				if (!isPublished && !isAdmin) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				image = any;
+			}
+
+			const status = image.status || "completed";
+			if (status !== "completed") {
+				return res.status(400).json({ error: "Only completed images can be shared" });
+			}
+
+			const token = mintShareToken({
+				version: ACTIVE_SHARE_VERSION,
+				imageId: id,
+				sharedByUserId: Number(user.id)
+			});
+			const bust = Math.floor(Date.now() / 1000).toString(36);
+			const base = getBaseAppUrl();
+			const url = `${base}/s/${ACTIVE_SHARE_VERSION}/${token}/${bust}`;
+			return res.json({ url });
+		} catch (error) {
+			return res.status(500).json({ error: "Failed to mint share link" });
+		}
+	});
+
+	// POST /api/create/images/:id/retry - "Retry" means: mark stale creating as failed (no provider retry)
+	router.post("/api/create/images/:id/retry", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		try {
+			const image = await queries.selectCreatedImageById.get(req.params.id, user.id);
+			if (!image) {
+				return res.status(404).json({ error: "Image not found" });
+			}
+
+			const meta = parseMeta(image.meta) || {};
+			const status = image.status || "completed";
+			const timeoutAt = meta?.timeout_at ? new Date(meta.timeout_at).getTime() : NaN;
+			const isPastTimeout = Number.isFinite(timeoutAt) && Date.now() > timeoutAt;
+
+			if (status === "completed") {
+				return res.status(400).json({ error: "Cannot retry a completed image" });
+			}
+
+			if (status === "creating" && !isPastTimeout) {
+				return res.status(400).json({ error: "Creation is still in progress" });
+			}
+
+			const nextMeta = {
+				...meta,
+				failed_at: nowIso(),
+				error_code: meta?.error_code || (status === "creating" ? "timeout" : "provider_error"),
+				error: meta?.error || (status === "creating" ? "Timed out" : "Failed"),
+			};
+
+			await queries.updateCreatedImageJobFailed.run(Number(req.params.id), user.id, { meta: nextMeta });
+
+			// If it was stuck creating and credits were never refunded, refund once.
+			const creditCost = Number(nextMeta?.credit_cost ?? 0);
+			if (status === "creating" && creditCost > 0 && nextMeta.credits_refunded !== true) {
+				await queries.updateUserCreditsBalance.run(user.id, creditCost);
+				await queries.updateCreatedImageJobFailed.run(Number(req.params.id), user.id, {
+					meta: { ...nextMeta, credits_refunded: true }
+				});
+			}
+
+			return res.json({ ok: true });
+		} catch (error) {
+			// console.error("Error retrying image:", error);
+			return res.status(500).json({ error: "Failed to retry image" });
 		}
 	});
 
@@ -454,8 +703,183 @@ export default function createCreateRoutes({ queries, storage }) {
 				description: updatedImage.description
 			});
 		} catch (error) {
-			console.error("Error publishing image:", error);
+			// console.error("Error publishing image:", error);
 			return res.status(500).json({ error: "Failed to publish image" });
+		}
+	});
+
+	// PUT /api/create/images/:id - Update a creation's title/description
+	router.put("/api/create/images/:id", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		try {
+			const { title, description } = req.body;
+
+			if (!title || title.trim() === '') {
+				return res.status(400).json({ error: "Title is required" });
+			}
+
+			// Get the image to verify ownership or admin status
+			const image = await queries.selectCreatedImageById.get(
+				req.params.id,
+				user.id
+			);
+
+			// If not found as owner, check if it exists and user is admin
+			let anyImage = null;
+			if (!image) {
+				anyImage = await queries.selectCreatedImageByIdAnyUser?.get(req.params.id);
+				if (!anyImage) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				// Only admins can edit images they don't own
+				if (user.role !== 'admin') {
+					return res.status(403).json({ error: "Forbidden: You can only edit your own creations" });
+				}
+			}
+
+			const targetImage = image || anyImage;
+			const isPublished = targetImage.published === 1 || targetImage.published === true;
+
+			if (!isPublished) {
+				return res.status(400).json({ error: "Can only edit published creations" });
+			}
+
+			const isAdmin = user.role === 'admin';
+			const isOwner = image && image.user_id === user.id;
+
+			// Update the image
+			const updateResult = await queries.updateCreatedImage.run(
+				req.params.id,
+				user.id,
+				title.trim(),
+				description ? description.trim() : null,
+				isAdmin
+			);
+
+			if (updateResult.changes === 0) {
+				return res.status(500).json({ error: "Failed to update image" });
+			}
+
+			// Update the associated feed item if it exists
+			const feedItem = await queries.selectFeedItemByCreatedImageId?.get(parseInt(req.params.id));
+			if (feedItem) {
+				await queries.updateFeedItem?.run(
+					parseInt(req.params.id),
+					title.trim(),
+					description ? description.trim() : ''
+				);
+			}
+
+			// Get updated image
+			const updatedImage = isOwner
+				? await queries.selectCreatedImageById.get(req.params.id, user.id)
+				: await queries.selectCreatedImageByIdAnyUser?.get(req.params.id);
+
+			return res.json({
+				id: updatedImage.id,
+				filename: updatedImage.filename,
+				url: updatedImage.file_path || storage.getImageUrl(updatedImage.filename),
+				width: updatedImage.width,
+				height: updatedImage.height,
+				color: updatedImage.color,
+				status: updatedImage.status || 'completed',
+				created_at: updatedImage.created_at,
+				published: updatedImage.published === 1 || updatedImage.published === true,
+				published_at: updatedImage.published_at,
+				title: updatedImage.title,
+				description: updatedImage.description
+			});
+		} catch (error) {
+			// console.error("Error updating image:", error);
+			return res.status(500).json({ error: "Failed to update image" });
+		}
+	});
+
+	// POST /api/create/images/:id/unpublish - Un-publish a creation
+	router.post("/api/create/images/:id/unpublish", async (req, res) => {
+		const user = await requireUser(req, res);
+		if (!user) return;
+
+		try {
+			// Get the image to verify ownership or admin status
+			const image = await queries.selectCreatedImageById.get(
+				req.params.id,
+				user.id
+			);
+
+			// If not found as owner, check if it exists and user is admin
+			let anyImage = null;
+			if (!image) {
+				anyImage = await queries.selectCreatedImageByIdAnyUser?.get(req.params.id);
+				if (!anyImage) {
+					return res.status(404).json({ error: "Image not found" });
+				}
+				// Only admins can unpublish images they don't own
+				if (user.role !== 'admin') {
+					return res.status(403).json({ error: "Forbidden: You can only unpublish your own creations" });
+				}
+			}
+
+			const targetImage = image || anyImage;
+			const isPublished = targetImage.published === 1 || targetImage.published === true;
+
+			if (!isPublished) {
+				return res.status(400).json({ error: "Image is not published" });
+			}
+
+			const isAdmin = user.role === 'admin';
+			const isOwner = image && image.user_id === user.id;
+
+			// Un-publish the image
+			const unpublishResult = await queries.unpublishCreatedImage.run(
+				req.params.id,
+				user.id,
+				isAdmin
+			);
+
+			if (unpublishResult.changes === 0) {
+				return res.status(500).json({ error: "Failed to unpublish image" });
+			}
+
+			// Delete the associated feed item if it exists
+			if (queries.deleteFeedItemByCreatedImageId) {
+				await queries.deleteFeedItemByCreatedImageId.run(parseInt(req.params.id));
+			}
+
+			// Delete all likes for this created image
+			if (queries.deleteAllLikesForCreatedImage) {
+				await queries.deleteAllLikesForCreatedImage.run(parseInt(req.params.id));
+			}
+
+			// Delete all comments for this created image
+			if (queries.deleteAllCommentsForCreatedImage) {
+				await queries.deleteAllCommentsForCreatedImage.run(parseInt(req.params.id));
+			}
+
+			// Get updated image
+			const updatedImage = isOwner
+				? await queries.selectCreatedImageById.get(req.params.id, user.id)
+				: await queries.selectCreatedImageByIdAnyUser?.get(req.params.id);
+
+			return res.json({
+				id: updatedImage.id,
+				filename: updatedImage.filename,
+				url: updatedImage.file_path || storage.getImageUrl(updatedImage.filename),
+				width: updatedImage.width,
+				height: updatedImage.height,
+				color: updatedImage.color,
+				status: updatedImage.status || 'completed',
+				created_at: updatedImage.created_at,
+				published: false,
+				published_at: null,
+				title: updatedImage.title,
+				description: updatedImage.description
+			});
+		} catch (error) {
+			// console.error("Error unpublishing image:", error);
+			return res.status(500).json({ error: "Failed to unpublish image" });
 		}
 	});
 
@@ -480,12 +904,25 @@ export default function createCreateRoutes({ queries, storage }) {
 				return res.status(400).json({ error: "Cannot delete published images" });
 			}
 
+			// Allow delete for failed, or creating past timeout, or unpublished completed.
+			const meta = parseMeta(image.meta);
+			const status = image.status || "completed";
+			if (status === "creating") {
+				const timeoutAt = meta?.timeout_at ? new Date(meta.timeout_at).getTime() : NaN;
+				if (!Number.isFinite(timeoutAt) || Date.now() <= timeoutAt) {
+					return res.status(400).json({ error: "Cannot delete an in-progress creation" });
+				}
+			}
+
 			// Delete the image file from storage
 			try {
-				await storage.deleteImage(image.filename);
+				// Only delete underlying file if we actually have one.
+				if (image.filename && image.file_path) {
+					await storage.deleteImage(image.filename);
+				}
 			} catch (storageError) {
 				// Log but don't fail if file doesn't exist
-				console.warn(`Warning: Could not delete image file ${image.filename}:`, storageError.message);
+				// console.warn(`Warning: Could not delete image file ${image.filename}:`, storageError.message);
 			}
 
 			// Delete the database record
@@ -500,7 +937,7 @@ export default function createCreateRoutes({ queries, storage }) {
 
 			return res.json({ success: true, message: "Image deleted successfully" });
 		} catch (error) {
-			console.error("Error deleting image:", error);
+			// console.error("Error deleting image:", error);
 			return res.status(500).json({ error: "Failed to delete image" });
 		}
 	});

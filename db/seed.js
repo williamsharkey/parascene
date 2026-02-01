@@ -455,9 +455,9 @@ export async function seedDatabase(dbInstance) {
 			checkExists: async () => await queries.selectTemplates.all()
 		});
 
-		console.log("Seed complete.");
+		// console.log("Seed complete.");
 	} catch (error) {
-		console.error("Seed error:", error);
+		// console.error("Seed error:", error);
 		throw error;
 	}
 }
